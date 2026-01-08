@@ -9,6 +9,9 @@ const MONSTER_MANUAL_MODULE = "dnd-monster-manual";
 // Cache for the monster index
 let monsterIndexCache = null;
 
+// Lock to prevent double execution
+let isProcessing = false;
+
 /**
  * Log a message with the module prefix
  * @param {string} message - The message to log
@@ -250,13 +253,20 @@ async function replaceToken(tokenDoc, compendiumEntry, pack) {
   let worldActor = game.actors.find(a => {
     if (a.name !== compendiumActor.name) return false;
 
-    // Check for sourceId flag (set by Foundry on import)
-    const sourceId = a.getFlag("core", "sourceId");
-    if (sourceId === compendiumActor.uuid) return true;
-
-    // Also check _stats.compendiumSource for newer Foundry versions
+    // Check _stats.compendiumSource first (v12+ preferred method, avoids deprecation warning)
     const compendiumSource = a._stats?.compendiumSource;
     if (compendiumSource === compendiumActor.uuid) return true;
+
+    // Fallback: check flags.core.sourceId for older imports (may trigger deprecation warning in v12+)
+    // Only check if _stats.compendiumSource is not set
+    if (!compendiumSource) {
+      try {
+        const sourceId = a.flags?.core?.sourceId;
+        if (sourceId === compendiumActor.uuid) return true;
+      } catch (e) {
+        // Ignore errors from flag access
+      }
+    }
 
     return false;
   });
@@ -291,12 +301,6 @@ async function replaceToken(tokenDoc, compendiumEntry, pack) {
     actorId: worldActor.id,
     actorLink: false
   };
-
-  // Verify the old token still exists before deletion
-  const tokenStillExists = canvas.scene.tokens.has(tokenDoc.id);
-  if (!tokenStillExists) {
-    throw new Error(`Token "${originalName}" no longer exists in scene`);
-  }
 
   // Delete the old token
   await canvas.scene.deleteEmbeddedDocuments("Token", [tokenDoc.id]);
@@ -372,6 +376,12 @@ function validatePrerequisites() {
  * Main function to replace all NPC tokens in the scene
  */
 async function replaceNPCTokens() {
+  // Prevent double execution
+  if (isProcessing) {
+    log("Already processing tokens, ignoring duplicate call");
+    return;
+  }
+
   // Validate prerequisites
   if (!validatePrerequisites()) {
     return;
@@ -387,7 +397,7 @@ async function replaceNPCTokens() {
   // Load the monster index
   const index = await loadMonsterIndex(pack);
 
-  // Get NPC tokens from the scene
+  // Get NPC tokens from the scene - store IDs to track which ones we've processed
   const npcTokens = getNPCTokensFromScene();
   if (npcTokens.length === 0) {
     ui.notifications.info(game.i18n.localize("NPC_REPLACER.NoTokens"));
@@ -403,49 +413,71 @@ async function replaceNPCTokens() {
     return;
   }
 
+  // Set processing lock AFTER confirmation (so user can cancel and retry)
+  isProcessing = true;
+
   // Track results
   let replaced = 0;
   const notFound = [];
   const errors = [];
+  const processedIds = new Set(); // Track processed token IDs to avoid duplicates
 
   // Show progress notification
   ui.notifications.info(game.i18n.format("NPC_REPLACER.Processing", { count: npcTokens.length }));
 
-  // Process each token
-  for (const tokenDoc of npcTokens) {
-    try {
-      const creatureName = tokenDoc.actor?.name || tokenDoc.name;
-      const match = findInMonsterManual(creatureName, index);
-
-      if (match) {
-        await replaceToken(tokenDoc, match, pack);
-        replaced++;
-      } else {
-        notFound.push(creatureName);
-        log(`No match found for: ${creatureName}`);
+  try {
+    // Process each token
+    for (const tokenDoc of npcTokens) {
+      // Skip if already processed (handles duplicate entries)
+      if (processedIds.has(tokenDoc.id)) {
+        log(`Skipping already processed token: ${tokenDoc.name}`);
+        continue;
       }
-    } catch (error) {
-      logError(`Error replacing token ${tokenDoc.name}`, error);
-      errors.push(tokenDoc.name);
+
+      // Check if token still exists in scene BEFORE processing
+      if (!canvas.scene.tokens.has(tokenDoc.id)) {
+        log(`Token "${tokenDoc.name}" no longer exists, skipping`);
+        continue;
+      }
+
+      processedIds.add(tokenDoc.id);
+
+      try {
+        const creatureName = tokenDoc.actor?.name || tokenDoc.name;
+        const match = findInMonsterManual(creatureName, index);
+
+        if (match) {
+          await replaceToken(tokenDoc, match, pack);
+          replaced++;
+        } else {
+          notFound.push(creatureName);
+        }
+      } catch (error) {
+        logError(`Error replacing token ${tokenDoc.name}`, error);
+        errors.push(tokenDoc.name);
+      }
     }
-  }
 
-  // Report results
-  if (replaced > 0) {
-    ui.notifications.info(game.i18n.format("NPC_REPLACER.Complete", { count: replaced }));
-  }
+    // Report results
+    if (replaced > 0) {
+      ui.notifications.info(game.i18n.format("NPC_REPLACER.Complete", { count: replaced }));
+    }
 
-  if (notFound.length > 0) {
-    ui.notifications.warn(game.i18n.format("NPC_REPLACER.NotFoundCount", { count: notFound.length }));
-    log("Creatures not found in Monster Manual:", notFound);
-  }
+    if (notFound.length > 0) {
+      ui.notifications.warn(game.i18n.format("NPC_REPLACER.NotFoundCount", { count: notFound.length }));
+      log("Creatures not found in Monster Manual:", notFound);
+    }
 
-  if (errors.length > 0) {
-    ui.notifications.error(game.i18n.format("NPC_REPLACER.ErrorCount", { count: errors.length }));
-    log("Errors occurred with tokens:", errors);
-  }
+    if (errors.length > 0) {
+      ui.notifications.error(game.i18n.format("NPC_REPLACER.ErrorCount", { count: errors.length }));
+      log("Errors occurred with tokens:", errors);
+    }
 
-  log(`Replacement complete: ${replaced} replaced, ${notFound.length} not found, ${errors.length} errors`);
+    log(`Replacement complete: ${replaced} replaced, ${notFound.length} not found, ${errors.length} errors`);
+  } finally {
+    // Always release the lock
+    isProcessing = false;
+  }
 }
 
 /**
@@ -458,8 +490,8 @@ function registerControlButton(controls) {
     icon: "fas fa-sync-alt",
     button: true,
     visible: game.user.isGM,
-    onClick: () => replaceNPCTokens(),
-    onChange: () => replaceNPCTokens() // v13 compatibility - some versions prefer onChange
+    onClick: () => replaceNPCTokens()
+    // Note: Do NOT add onChange - it causes double execution with onClick
   };
 
   // Foundry v13+ uses object structure
