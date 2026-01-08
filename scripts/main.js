@@ -8,6 +8,16 @@ const MODULE_ID = "npc-token-replacer";
 // Known official WOTC module prefixes for auto-detection
 const WOTC_MODULE_PREFIXES = ["dnd-", "dnd5e"];
 
+// Compendium priority levels (higher = preferred)
+// Priority 1: SRD (lowest - fallback)
+// Priority 2: Monster Manual (medium - core monsters)
+// Priority 3: Adventures and expansions (highest - most specific)
+const COMPENDIUM_PRIORITIES = {
+  "dnd5e": 1,                    // SRD - lowest priority
+  "dnd-monster-manual": 2,       // Monster Manual - medium priority
+  // All other dnd- modules get priority 3 (adventures/expansions)
+};
+
 // Cache for the combined monster index from all selected compendiums
 let monsterIndexCache = null;
 
@@ -43,6 +53,29 @@ function log(message, data = null) {
  */
 function logError(message, error) {
   console.error(`${MODULE_ID} | ${message}`, error);
+}
+
+/**
+ * Get the priority of a compendium pack
+ * Higher priority = preferred when multiple matches exist
+ * @param {CompendiumCollection} pack - The compendium pack
+ * @returns {number} Priority level (1=lowest, 3=highest)
+ */
+function getCompendiumPriority(pack) {
+  const packageName = pack.metadata.packageName || "";
+
+  // Check if we have a specific priority defined
+  if (COMPENDIUM_PRIORITIES.hasOwnProperty(packageName)) {
+    return COMPENDIUM_PRIORITIES[packageName];
+  }
+
+  // Default: all other dnd- modules get highest priority (adventures/expansions)
+  if (packageName.startsWith("dnd-")) {
+    return 3;
+  }
+
+  // Fallback for unknown packages
+  return 1;
 }
 
 /**
@@ -216,21 +249,27 @@ async function loadMonsterIndex(forceReload = false) {
 
   const combinedIndex = [];
 
-  for (const pack of enabledPacks) {
+  // Sort packs by priority for logging (highest first)
+  const sortedPacks = [...enabledPacks].sort((a, b) => getCompendiumPriority(b) - getCompendiumPriority(a));
+
+  for (const pack of sortedPacks) {
     try {
       await pack.getIndex({ fields: ["name", "type"] });
+      const priority = getCompendiumPriority(pack);
+      const priorityLabel = priority === 3 ? "HIGH" : priority === 2 ? "MEDIUM" : "LOW";
       const packEntries = pack.index.contents.map(entry => ({
         entry: entry,
         pack: pack
       }));
       combinedIndex.push(...packEntries);
-      log(`  Loaded ${pack.index.size} entries from ${pack.metadata.label}`);
+      log(`  [${priorityLabel}] Loaded ${pack.index.size} entries from ${pack.metadata.label}`);
     } catch (error) {
       logError(`Failed to load index from ${pack.collection}`, error);
     }
   }
 
   log(`Total: ${combinedIndex.length} entries from all compendiums`);
+  log("Priority order: Adventures/Expansions (HIGH) > Monster Manual (MEDIUM) > SRD (LOW)");
   monsterIndexCache = combinedIndex;
 
   return monsterIndexCache;
@@ -442,7 +481,28 @@ function escapeHtml(str) {
 }
 
 /**
+ * Select the best match from a list of matches based on compendium priority
+ * @param {Array} matches - Array of {entry, pack} objects
+ * @returns {Object|null} The best match or null if empty
+ */
+function selectBestMatch(matches) {
+  if (!matches || matches.length === 0) return null;
+  if (matches.length === 1) return matches[0];
+
+  // Sort by priority (highest first) and return the best
+  matches.sort((a, b) => getCompendiumPriority(b.pack) - getCompendiumPriority(a.pack));
+
+  const best = matches[0];
+  if (matches.length > 1) {
+    log(`  Multiple matches found, selected highest priority: ${best.pack.metadata.label} (priority ${getCompendiumPriority(best.pack)})`);
+  }
+
+  return best;
+}
+
+/**
  * Find a creature in the combined compendium index
+ * Prioritizes matches from adventures/expansions > Monster Manual > SRD
  * @param {string} creatureName - The creature name to search for
  * @param {Array} index - Array of {entry, pack} objects from loadMonsterIndex()
  * @returns {Object|null} Object with {entry, pack} or null if not found
@@ -455,10 +515,11 @@ function findInMonsterManual(creatureName, index) {
     return null;
   }
 
-  // Exact match first
-  let match = index.find(item => normalizeName(item.entry.name) === normalizedSearch);
-  if (match) {
-    log(`Exact match found: "${creatureName}" -> "${match.entry.name}" (${match.pack.metadata.label})`);
+  // Exact match first - find ALL exact matches and select best by priority
+  let matches = index.filter(item => normalizeName(item.entry.name) === normalizedSearch);
+  if (matches.length > 0) {
+    const match = selectBestMatch(matches);
+    log(`Exact match found: "${creatureName}" -> "${match.entry.name}" (${match.pack.metadata.label}, priority ${getCompendiumPriority(match.pack)})`);
     return match;
   }
 
@@ -474,9 +535,10 @@ function findInMonsterManual(creatureName, index) {
     const variant = transform(normalizedSearch);
     // Only check if variant is different from original
     if (variant !== normalizedSearch && variant.length > 0) {
-      match = index.find(item => normalizeName(item.entry.name) === variant);
-      if (match) {
-        log(`Variant match found: "${creatureName}" -> "${match.entry.name}" (${match.pack.metadata.label})`);
+      matches = index.filter(item => normalizeName(item.entry.name) === variant);
+      if (matches.length > 0) {
+        const match = selectBestMatch(matches);
+        log(`Variant match found: "${creatureName}" -> "${match.entry.name}" (${match.pack.metadata.label}, priority ${getCompendiumPriority(match.pack)})`);
         return match;
       }
     }
@@ -486,7 +548,7 @@ function findInMonsterManual(creatureName, index) {
   // Also require word boundary matching to prevent "Rat" matching "Pirate"
   const MIN_PARTIAL_LENGTH = 4;
   if (normalizedSearch.length >= MIN_PARTIAL_LENGTH) {
-    match = index.find(item => {
+    matches = index.filter(item => {
       const entryName = normalizeName(item.entry.name);
       if (entryName.length < MIN_PARTIAL_LENGTH) return false;
 
@@ -499,8 +561,9 @@ function findInMonsterManual(creatureName, index) {
              entryWords.some(ew => searchWords.includes(ew) && ew.length >= MIN_PARTIAL_LENGTH);
     });
 
-    if (match) {
-      log(`Partial match found: "${creatureName}" -> "${match.entry.name}" (${match.pack.metadata.label})`);
+    if (matches.length > 0) {
+      const match = selectBestMatch(matches);
+      log(`Partial match found: "${creatureName}" -> "${match.entry.name}" (${match.pack.metadata.label}, priority ${getCompendiumPriority(match.pack)})`);
       return match;
     }
   }

@@ -7,6 +7,7 @@ A Foundry VTT module that automatically replaces NPC tokens in your scene with o
 - **One-Click Replacement**: Adds a button to the Token Controls toolbar for easy access
 - **Automatic Compendium Detection**: Automatically detects all installed official D&D content (Monster Manual, Adventures, etc.)
 - **Multi-Compendium Support**: Search across multiple official D&D compendiums simultaneously
+- **Smart Priority System**: Prefers adventure/expansion creatures over Monster Manual over SRD
 - **Configurable Compendium Selection**: Choose which compendiums to use via settings
 - **Preserves Token Properties**: Maintains position, elevation, dimensions, visibility, rotation, and disposition
 - **Confirmation Dialog**: Shows a list of tokens to be replaced before proceeding
@@ -19,19 +20,29 @@ A Foundry VTT module that automatically replaces NPC tokens in your scene with o
 
 The module automatically detects and supports all official Wizards of the Coast content for Foundry VTT:
 
-| Module ID | Content |
-|-----------|---------|
-| `dnd-monster-manual` | Monster Manual (2024) |
-| `dnd-players-handbook` | Player's Handbook (2024) |
-| `dnd-dungeon-masters-guide` | Dungeon Master's Guide (2024) |
-| `dnd-tashas-cauldron` | Tasha's Cauldron of Everything |
-| `dnd-phandelver-below` | Phandelver and Below: The Shattered Obelisk |
-| `dnd-tomb-annihilation` | Tomb of Annihilation |
-| `dnd-adventures-faerun` | Forgotten Realms: Adventures in Faerun |
-| `dnd-heroes-faerun` | Forgotten Realms: Heroes of Faerun |
-| `dnd-heroes-borderlands` | Heroes of the Borderlands |
-| `dnd-forge-artificer` | Eberron: Forge of the Artificer |
-| `dnd5e` | D&D 5e System SRD Monsters |
+| Module ID | Content | Priority |
+|-----------|---------|----------|
+| `dnd-phandelver-below` | Phandelver and Below: The Shattered Obelisk | HIGH |
+| `dnd-tomb-annihilation` | Tomb of Annihilation | HIGH |
+| `dnd-adventures-faerun` | Forgotten Realms: Adventures in Faerun | HIGH |
+| `dnd-heroes-faerun` | Forgotten Realms: Heroes of Faerun | HIGH |
+| `dnd-heroes-borderlands` | Heroes of the Borderlands | HIGH |
+| `dnd-forge-artificer` | Eberron: Forge of the Artificer | HIGH |
+| `dnd-tashas-cauldron` | Tasha's Cauldron of Everything | HIGH |
+| `dnd-players-handbook` | Player's Handbook (2024) | HIGH |
+| `dnd-dungeon-masters-guide` | Dungeon Master's Guide (2024) | HIGH |
+| `dnd-monster-manual` | Monster Manual (2024) | MEDIUM |
+| `dnd5e` | D&D 5e System SRD Monsters | LOW |
+
+### Compendium Priority System
+
+When the same creature exists in multiple compendiums, the module uses a priority system to select the best match:
+
+1. **HIGH Priority** (Adventures & Expansions): Creatures from adventure modules and expansion books are preferred as they often have more specific or updated stats
+2. **MEDIUM Priority** (Monster Manual): The core Monster Manual is used when adventure-specific versions aren't available
+3. **LOW Priority** (SRD): The free SRD content is used as a fallback when no premium content is available
+
+This ensures you always get the best available token art and creature data!
 
 New official content is automatically detected - no module updates required!
 
