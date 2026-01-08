@@ -95,6 +95,21 @@ async function loadMonsterIndex(pack, forceReload = false) {
 }
 
 /**
+ * Get the full path of a folder (including parent folders)
+ * @param {Folder} folder - The folder to get the path for
+ * @returns {string} The full path
+ */
+function getFolderPath(folder) {
+  const parts = [folder.name];
+  let parent = folder.folder;
+  while (parent) {
+    parts.unshift(parent.name);
+    parent = parent.folder;
+  }
+  return "/" + parts.join("/");
+}
+
+/**
  * Get or create the folder for Monster Manual imports
  * Looks for existing monster folders and creates a subfolder with "MonsterManual" suffix
  * @returns {Promise<Folder|null>} The folder to use for imports
@@ -107,38 +122,68 @@ async function getOrCreateImportFolder() {
 
   const FOLDER_NAME = "MonsterManual";
 
+  log("Scanning Actor folders for import destination...");
+
+  // Get all Actor folders for logging
+  const actorFolders = game.folders.filter(f => f.type === "Actor");
+  log(`Found ${actorFolders.length} Actor folders in world`);
+
+  // Log all existing folders
+  if (actorFolders.length > 0) {
+    log("Existing Actor folders:");
+    actorFolders.forEach(f => {
+      const path = getFolderPath(f);
+      log(`  - ${path} (id: ${f.id})`);
+    });
+  }
+
   // Check if our folder already exists
+  log(`Searching for existing "${FOLDER_NAME}" folder...`);
   let folder = game.folders.find(f =>
     f.type === "Actor" &&
     f.name === FOLDER_NAME
   );
 
   if (folder) {
-    log(`Using existing folder: ${folder.name}`);
+    log(`Found existing folder: ${getFolderPath(folder)}`);
     importFolderCache = folder;
     return folder;
   }
+  log(`Folder "${FOLDER_NAME}" not found`);
 
   // Look for existing monster-related folders to use as parent
   const monsterFolderPatterns = [
-    /monster/i,
-    /creature/i,
-    /npc/i,
-    /bestiary/i,
-    /enemy/i,
-    /enemies/i
+    { pattern: /monster/i, name: "monster" },
+    { pattern: /creature/i, name: "creature" },
+    { pattern: /npc/i, name: "npc" },
+    { pattern: /bestiary/i, name: "bestiary" },
+    { pattern: /enemy/i, name: "enemy" },
+    { pattern: /enemies/i, name: "enemies" }
   ];
 
+  log("Searching for monster-related parent folder...");
   let parentFolder = null;
-  for (const pattern of monsterFolderPatterns) {
-    parentFolder = game.folders.find(f =>
+  for (const { pattern, name } of monsterFolderPatterns) {
+    log(`  Checking pattern: "${name}"...`);
+    const matchingFolders = game.folders.filter(f =>
       f.type === "Actor" &&
-      pattern.test(f.name) &&
-      !f.folder // Top-level folder
+      pattern.test(f.name)
     );
-    if (parentFolder) {
-      log(`Found existing monster folder: ${parentFolder.name}`);
-      break;
+
+    if (matchingFolders.length > 0) {
+      log(`    Found ${matchingFolders.length} matching folder(s):`);
+      matchingFolders.forEach(f => {
+        log(`      - ${getFolderPath(f)}${f.folder ? "" : " (top-level)"}`);
+      });
+
+      // Prefer top-level folders
+      parentFolder = matchingFolders.find(f => !f.folder);
+      if (parentFolder) {
+        log(`  Selected top-level folder: ${getFolderPath(parentFolder)}`);
+        break;
+      }
+    } else {
+      log(`    No folders matching "${name}"`);
     }
   }
 
@@ -146,21 +191,26 @@ async function getOrCreateImportFolder() {
   let folderName = FOLDER_NAME;
   if (parentFolder) {
     folderName = `${parentFolder.name} - ${FOLDER_NAME}`;
+    log(`Will create folder "${folderName}" inside "${parentFolder.name}"`);
+  } else {
+    log(`No monster folder found, will create "${folderName}" at root level`);
   }
 
   // Check if this combined name already exists
+  log(`Checking if "${folderName}" already exists...`);
   folder = game.folders.find(f =>
     f.type === "Actor" &&
     f.name === folderName
   );
 
   if (folder) {
-    log(`Using existing folder: ${folder.name}`);
+    log(`Found existing folder: ${getFolderPath(folder)}`);
     importFolderCache = folder;
     return folder;
   }
 
   // Create the new folder
+  log(`Creating new folder: "${folderName}"...`);
   try {
     folder = await Folder.create({
       name: folderName,
@@ -168,7 +218,7 @@ async function getOrCreateImportFolder() {
       parent: parentFolder?.id || null,
       color: "#7a1010" // Dark red for monsters
     });
-    log(`Created new folder: ${folder.name}`);
+    log(`Created new folder: ${getFolderPath(folder)}`);
     importFolderCache = folder;
     return folder;
   } catch (error) {
@@ -373,8 +423,10 @@ async function replaceToken(tokenDoc, compendiumEntry, pack) {
     log(`Using existing imported actor "${worldActor.name}"`);
   }
 
-  // Get the prototype token data from the world actor
-  const prototypeToken = worldActor.prototypeToken.toObject();
+  // IMPORTANT: Always use the COMPENDIUM actor's prototypeToken to get the correct Monster Manual 2024 token image
+  // The world actor might have been imported from a different source (old SRD) with different token art
+  const prototypeToken = compendiumActor.prototypeToken.toObject();
+  log(`Using token image from compendium: ${prototypeToken.texture?.src || 'default'}`);
 
   // Prepare new token data, merging prototype with original properties
   const newTokenData = {
