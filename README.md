@@ -22,25 +22,26 @@ The module automatically detects and supports all official Wizards of the Coast 
 
 | Module ID | Content | Priority |
 |-----------|---------|----------|
-| `dnd-phandelver-below` | Phandelver and Below: The Shattered Obelisk | HIGH |
-| `dnd-tomb-annihilation` | Tomb of Annihilation | HIGH |
-| `dnd-adventures-faerun` | Forgotten Realms: Adventures in Faerun | HIGH |
-| `dnd-heroes-faerun` | Forgotten Realms: Heroes of Faerun | HIGH |
-| `dnd-heroes-borderlands` | Heroes of the Borderlands | HIGH |
-| `dnd-forge-artificer` | Eberron: Forge of the Artificer | HIGH |
-| `dnd-tashas-cauldron` | Tasha's Cauldron of Everything | HIGH |
-| `dnd-players-handbook` | Player's Handbook (2024) | HIGH |
-| `dnd-dungeon-masters-guide` | Dungeon Master's Guide (2024) | HIGH |
-| `dnd-monster-manual` | Monster Manual (2024) | MEDIUM |
-| `dnd5e` | D&D 5e System SRD Monsters | LOW |
+| `dnd-phandelver-below` | Phandelver and Below: The Shattered Obelisk | 4-ADVENTURE |
+| `dnd-tomb-annihilation` | Tomb of Annihilation | 4-ADVENTURE |
+| `dnd-adventures-faerun` | Forgotten Realms: Adventures in Faerun | 4-ADVENTURE |
+| `dnd-heroes-faerun` | Forgotten Realms: Heroes of Faerun | 4-ADVENTURE |
+| `dnd-heroes-borderlands` | Heroes of the Borderlands | 4-ADVENTURE |
+| `dnd-tashas-cauldron` | Tasha's Cauldron of Everything | 3-EXPANSION |
+| `dnd-forge-artificer` | Eberron: Forge of the Artificer | 3-EXPANSION |
+| `dnd-monster-manual` | Monster Manual (2024) | 2-CORE |
+| `dnd-players-handbook` | Player's Handbook (2024) | 2-CORE |
+| `dnd-dungeon-masters-guide` | Dungeon Master's Guide (2024) | 2-CORE |
+| `dnd5e` | D&D 5e System SRD Monsters | 1-SRD |
 
 ### Compendium Priority System
 
-When the same creature exists in multiple compendiums, the module uses a priority system to select the best match:
+When the same creature exists in multiple compendiums, the module uses a 4-tier priority system to select the best match:
 
-1. **HIGH Priority** (Adventures & Expansions): Creatures from adventure modules and expansion books are preferred as they often have more specific or updated stats
-2. **MEDIUM Priority** (Monster Manual): The core Monster Manual is used when adventure-specific versions aren't available
-3. **LOW Priority** (SRD): The free SRD content is used as a fallback when no premium content is available
+1. **Priority 4 - ADVENTURE**: Creatures from adventure modules (Phandelver, Tomb of Annihilation, etc.) are preferred as they have adventure-specific versions
+2. **Priority 3 - EXPANSION**: Expansion books (Tasha's Cauldron, Forge of Artificer) provide updated or variant creatures
+3. **Priority 2 - CORE**: Core rulebooks (Monster Manual, PHB, DMG) provide the standard creature stats
+4. **Priority 1 - SRD**: The free SRD content is used as a fallback when no premium content is available
 
 This ensures you always get the best available token art and creature data!
 

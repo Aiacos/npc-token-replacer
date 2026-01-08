@@ -10,12 +10,28 @@ const WOTC_MODULE_PREFIXES = ["dnd-", "dnd5e"];
 
 // Compendium priority levels (higher = preferred)
 // Priority 1: SRD (lowest - fallback)
-// Priority 2: Monster Manual (medium - core monsters)
-// Priority 3: Adventures and expansions (highest - most specific)
+// Priority 2: Core Rulebooks (Monster Manual, PHB, DMG)
+// Priority 3: Expansions (Tasha's, Forge of Artificer, etc.)
+// Priority 4: Adventures (highest - most specific content)
 const COMPENDIUM_PRIORITIES = {
-  "dnd5e": 1,                    // SRD - lowest priority
-  "dnd-monster-manual": 2,       // Monster Manual - medium priority
-  // All other dnd- modules get priority 3 (adventures/expansions)
+  // SRD - lowest priority (fallback)
+  "dnd5e": 1,
+
+  // Core Rulebooks - base priority
+  "dnd-monster-manual": 2,
+  "dnd-players-handbook": 2,
+  "dnd-dungeon-masters-guide": 2,
+
+  // Expansions - medium priority
+  "dnd-tashas-cauldron": 3,
+  "dnd-forge-artificer": 3,
+
+  // Adventures - highest priority (these get priority 4 by default if not listed)
+  "dnd-phandelver-below": 4,
+  "dnd-tomb-annihilation": 4,
+  "dnd-adventures-faerun": 4,
+  "dnd-heroes-faerun": 4,
+  "dnd-heroes-borderlands": 4,
 };
 
 // Cache for the combined monster index from all selected compendiums
@@ -59,22 +75,22 @@ function logError(message, error) {
  * Get the priority of a compendium pack
  * Higher priority = preferred when multiple matches exist
  * @param {CompendiumCollection} pack - The compendium pack
- * @returns {number} Priority level (1=lowest, 3=highest)
+ * @returns {number} Priority level (1=SRD, 2=Core, 3=Expansions, 4=Adventures)
  */
 function getCompendiumPriority(pack) {
   const packageName = pack.metadata.packageName || "";
 
   // Check if we have a specific priority defined
-  if (COMPENDIUM_PRIORITIES.hasOwnProperty(packageName)) {
+  if (packageName in COMPENDIUM_PRIORITIES) {
     return COMPENDIUM_PRIORITIES[packageName];
   }
 
-  // Default: all other dnd- modules get highest priority (adventures/expansions)
+  // Default for unknown dnd- modules: assume they are adventures (highest priority)
   if (packageName.startsWith("dnd-")) {
-    return 3;
+    return 4;
   }
 
-  // Fallback for unknown packages
+  // Fallback for unknown packages (non-WOTC)
   return 1;
 }
 
@@ -103,8 +119,9 @@ function detectWOTCCompendiums() {
   log(`Found ${wotcPacks.length} official D&D Actor compendiums:`);
   wotcPacks.forEach(pack => {
     const priority = getCompendiumPriority(pack);
-    const priorityLabel = priority === 3 ? "HIGH" : priority === 2 ? "MEDIUM" : "LOW";
-    log(`  - ${pack.collection} (${pack.metadata.label}) [package: ${pack.metadata.packageName}, priority: ${priorityLabel}]`);
+    const priorityLabels = { 1: "SRD", 2: "CORE", 3: "EXPANSION", 4: "ADVENTURE" };
+    const priorityLabel = priorityLabels[priority] || "UNKNOWN";
+    log(`  - ${pack.collection} (${pack.metadata.label}) [package: ${pack.metadata.packageName}, priority: ${priority}-${priorityLabel}]`);
   });
 
   wotcCompendiumsCache = wotcPacks;
@@ -258,20 +275,21 @@ async function loadMonsterIndex(forceReload = false) {
     try {
       await pack.getIndex({ fields: ["name", "type"] });
       const priority = getCompendiumPriority(pack);
-      const priorityLabel = priority === 3 ? "HIGH" : priority === 2 ? "MEDIUM" : "LOW";
+      const priorityLabels = { 1: "SRD", 2: "CORE", 3: "EXPANSION", 4: "ADVENTURE" };
+      const priorityLabel = priorityLabels[priority] || "UNKNOWN";
       const packEntries = pack.index.contents.map(entry => ({
         entry: entry,
         pack: pack
       }));
       combinedIndex.push(...packEntries);
-      log(`  [${priorityLabel}] Loaded ${pack.index.size} entries from ${pack.metadata.label}`);
+      log(`  [${priority}-${priorityLabel}] Loaded ${pack.index.size} entries from ${pack.metadata.label}`);
     } catch (error) {
       logError(`Failed to load index from ${pack.collection}`, error);
     }
   }
 
   log(`Total: ${combinedIndex.length} entries from all compendiums`);
-  log("Priority order: Adventures/Expansions (HIGH) > Monster Manual (MEDIUM) > SRD (LOW)");
+  log("Priority order: Adventures (4) > Expansions (3) > Core Rulebooks (2) > SRD (1)");
   monsterIndexCache = combinedIndex;
 
   return monsterIndexCache;
