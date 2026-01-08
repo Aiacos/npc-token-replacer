@@ -1,0 +1,60 @@
+<form>
+  <div class="form-group">
+    <label>
+      <input type="checkbox" name="useAll" {{#if useAll}}checked{{/if}}>
+      {{localize "NPC_REPLACER.Settings.CompendiumSelector.UseAll"}}
+    </label>
+    <p class="hint">{{localize "NPC_REPLACER.Settings.CompendiumSelector.UseAllHint"}}</p>
+  </div>
+
+  <hr>
+
+  <div class="form-group compendium-list" {{#if useAll}}style="opacity: 0.5; pointer-events: none;"{{/if}}>
+    <label>{{localize "NPC_REPLACER.Settings.CompendiumSelector.SelectCompendiums"}}</label>
+    {{#each compendiums}}
+    <div class="compendium-item">
+      <label>
+        <input type="checkbox" name="compendium-{{id}}" {{#if enabled}}checked{{/if}}>
+        <strong>{{name}}</strong>
+        <span class="module-name">({{module}})</span>
+      </label>
+    </div>
+    {{/each}}
+  </div>
+</form>
+
+<style>
+  .compendium-list {
+    max-height: 300px;
+    overflow-y: auto;
+    border: 1px solid var(--color-border-light-tertiary);
+    padding: 0.5rem;
+    margin-top: 0.5rem;
+  }
+  .compendium-item {
+    padding: 0.25rem 0;
+  }
+  .compendium-item label {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    cursor: pointer;
+  }
+  .compendium-item .module-name {
+    color: var(--color-text-dark-secondary);
+    font-size: 0.85em;
+  }
+</style>
+
+<script>
+  document.querySelector('input[name="useAll"]').addEventListener('change', function(e) {
+    const compendiumList = document.querySelector('.compendium-list');
+    if (e.target.checked) {
+      compendiumList.style.opacity = '0.5';
+      compendiumList.style.pointerEvents = 'none';
+    } else {
+      compendiumList.style.opacity = '1';
+      compendiumList.style.pointerEvents = 'auto';
+    }
+  });
+</script>

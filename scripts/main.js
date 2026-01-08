@@ -1,13 +1,18 @@
 /**
  * NPC Token Replacer
- * A Foundry VTT module that replaces NPC tokens with official Monster Manual 2024 versions
+ * A Foundry VTT module that replaces NPC tokens with official D&D compendium versions
  */
 
 const MODULE_ID = "npc-token-replacer";
-const MONSTER_MANUAL_MODULE = "dnd-monster-manual";
 
-// Cache for the monster index
+// Known official WOTC module prefixes for auto-detection
+const WOTC_MODULE_PREFIXES = ["dnd-", "dnd5e"];
+
+// Cache for the combined monster index from all selected compendiums
 let monsterIndexCache = null;
+
+// Cache for detected WOTC compendiums
+let wotcCompendiumsCache = null;
 
 // Cache for the import folder
 let importFolderCache = null;
@@ -41,9 +46,57 @@ function logError(message, error) {
 }
 
 /**
+ * Detect all available WOTC Actor compendiums
+ * @returns {CompendiumCollection[]} Array of WOTC compendium packs with Actor documents
+ */
+function detectWOTCCompendiums() {
+  if (wotcCompendiumsCache) {
+    return wotcCompendiumsCache;
+  }
+
+  log("Detecting official D&D compendiums...");
+
+  const wotcPacks = game.packs.filter(pack => {
+    // Only Actor compendiums
+    if (pack.documentName !== "Actor") return false;
+
+    // Check if package name starts with known WOTC prefixes
+    const packageName = pack.metadata.packageName || "";
+    const isWotc = WOTC_MODULE_PREFIXES.some(prefix => packageName.startsWith(prefix));
+
+    return isWotc;
+  });
+
+  log(`Found ${wotcPacks.length} official D&D Actor compendiums:`);
+  wotcPacks.forEach(pack => {
+    log(`  - ${pack.collection} (${pack.metadata.label})`);
+  });
+
+  wotcCompendiumsCache = wotcPacks;
+  return wotcPacks;
+}
+
+/**
+ * Get the list of enabled compendiums based on settings
+ * @returns {CompendiumCollection[]} Array of enabled compendium packs
+ */
+function getEnabledCompendiums() {
+  const allPacks = detectWOTCCompendiums();
+  const enabledPackIds = game.settings.get(MODULE_ID, "enabledCompendiums");
+
+  // If no specific selection, use all available
+  if (!enabledPackIds || enabledPackIds.length === 0 || enabledPackIds.includes("all")) {
+    return allPacks;
+  }
+
+  return allPacks.filter(pack => enabledPackIds.includes(pack.collection));
+}
+
+/**
  * Register module settings
  */
 function registerSettings() {
+  // Token variation mode setting
   game.settings.register(MODULE_ID, "tokenVariationMode", {
     name: game.i18n.localize("NPC_REPLACER.Settings.VariationMode.Name"),
     hint: game.i18n.localize("NPC_REPLACER.Settings.VariationMode.Hint"),
@@ -57,61 +110,128 @@ function registerSettings() {
     },
     default: "sequential"
   });
+
+  // Enabled compendiums setting (stored as array of pack IDs)
+  game.settings.register(MODULE_ID, "enabledCompendiums", {
+    name: game.i18n.localize("NPC_REPLACER.Settings.EnabledCompendiums.Name"),
+    hint: game.i18n.localize("NPC_REPLACER.Settings.EnabledCompendiums.Hint"),
+    scope: "world",
+    config: false, // We'll use a custom form for this
+    type: Array,
+    default: ["all"]
+  });
+
+  // Register the settings menu for compendium selection
+  game.settings.registerMenu(MODULE_ID, "compendiumSelector", {
+    name: game.i18n.localize("NPC_REPLACER.Settings.CompendiumSelector.Name"),
+    label: game.i18n.localize("NPC_REPLACER.Settings.CompendiumSelector.Label"),
+    hint: game.i18n.localize("NPC_REPLACER.Settings.CompendiumSelector.Hint"),
+    icon: "fas fa-book",
+    type: CompendiumSelectorForm,
+    restricted: true
+  });
 }
 
 /**
- * Get the Monster Manual compendium pack
- * @returns {CompendiumCollection|null} The compendium pack or null if not found
+ * Custom form for selecting which compendiums to use
  */
-function getMonsterManualPack() {
-  // Try to find the Actor compendium from the Monster Manual module
-  const pack = game.packs.find(p =>
-    p.metadata.packageName === MONSTER_MANUAL_MODULE &&
-    p.documentName === "Actor"
-  );
-
-  if (!pack) {
-    // Try alternative pack names
-    const alternativeNames = [
-      `${MONSTER_MANUAL_MODULE}.monsters`,
-      `${MONSTER_MANUAL_MODULE}.monster-manual`,
-      `${MONSTER_MANUAL_MODULE}.actors`
-    ];
-
-    for (const packName of alternativeNames) {
-      const altPack = game.packs.get(packName);
-      if (altPack) {
-        log(`Found Monster Manual pack: ${packName}`);
-        return altPack;
-      }
-    }
-
-    log("Available packs from Monster Manual module:",
-      game.packs.filter(p => p.metadata.packageName === MONSTER_MANUAL_MODULE).map(p => p.collection)
-    );
-
-    return null;
+class CompendiumSelectorForm extends FormApplication {
+  static get defaultOptions() {
+    return foundry.utils.mergeObject(super.defaultOptions, {
+      id: "npc-replacer-compendium-selector",
+      title: game.i18n.localize("NPC_REPLACER.Settings.CompendiumSelector.Title"),
+      template: `modules/${MODULE_ID}/templates/compendium-selector.html`,
+      width: 500,
+      height: "auto",
+      closeOnSubmit: true
+    });
   }
 
-  log(`Found Monster Manual pack: ${pack.collection}`);
-  return pack;
+  getData() {
+    const allPacks = detectWOTCCompendiums();
+    const enabledPackIds = game.settings.get(MODULE_ID, "enabledCompendiums");
+    const useAll = !enabledPackIds || enabledPackIds.length === 0 || enabledPackIds.includes("all");
+
+    return {
+      useAll: useAll,
+      compendiums: allPacks.map(pack => ({
+        id: pack.collection,
+        name: pack.metadata.label,
+        module: pack.metadata.packageName,
+        enabled: useAll || enabledPackIds.includes(pack.collection)
+      }))
+    };
+  }
+
+  async _updateObject(event, formData) {
+    const useAll = formData.useAll;
+
+    if (useAll) {
+      await game.settings.set(MODULE_ID, "enabledCompendiums", ["all"]);
+    } else {
+      // Collect all checked compendiums
+      const enabled = [];
+      for (const [key, value] of Object.entries(formData)) {
+        if (key.startsWith("compendium-") && value) {
+          enabled.push(key.replace("compendium-", ""));
+        }
+      }
+      await game.settings.set(MODULE_ID, "enabledCompendiums", enabled);
+    }
+
+    // Clear cache to reload with new settings
+    monsterIndexCache = null;
+    log("Compendium settings updated, cache cleared");
+  }
 }
 
 /**
- * Load the monster index from the compendium
- * @param {CompendiumCollection} pack - The compendium pack
- * @param {boolean} forceReload - Force reload even if cached
- * @returns {Promise<Collection>} The compendium index
+ * Get the Monster Manual compendium pack (legacy, for backwards compatibility)
+ * @returns {CompendiumCollection|null} The first enabled compendium pack or null if none found
+ * @deprecated Use getEnabledCompendiums() instead
  */
-async function loadMonsterIndex(pack, forceReload = false) {
+function getMonsterManualPack() {
+  const packs = getEnabledCompendiums();
+  return packs.length > 0 ? packs[0] : null;
+}
+
+/**
+ * Load the combined monster index from all enabled compendiums
+ * @param {boolean} forceReload - Force reload even if cached
+ * @returns {Promise<Array>} Array of {entry, pack} objects
+ */
+async function loadMonsterIndex(forceReload = false) {
   if (monsterIndexCache && !forceReload) {
     return monsterIndexCache;
   }
 
-  log("Loading monster index from compendium...");
-  await pack.getIndex({ fields: ["name", "type"] });
-  monsterIndexCache = pack.index;
-  log(`Loaded ${monsterIndexCache.size} entries from Monster Manual`);
+  const enabledPacks = getEnabledCompendiums();
+
+  if (enabledPacks.length === 0) {
+    log("No enabled compendiums found");
+    return [];
+  }
+
+  log(`Loading monster index from ${enabledPacks.length} compendium(s)...`);
+
+  const combinedIndex = [];
+
+  for (const pack of enabledPacks) {
+    try {
+      await pack.getIndex({ fields: ["name", "type"] });
+      const packEntries = pack.index.contents.map(entry => ({
+        entry: entry,
+        pack: pack
+      }));
+      combinedIndex.push(...packEntries);
+      log(`  Loaded ${pack.index.size} entries from ${pack.metadata.label}`);
+    } catch (error) {
+      logError(`Failed to load index from ${pack.collection}`, error);
+    }
+  }
+
+  log(`Total: ${combinedIndex.length} entries from all compendiums`);
+  monsterIndexCache = combinedIndex;
 
   return monsterIndexCache;
 }
@@ -322,10 +442,10 @@ function escapeHtml(str) {
 }
 
 /**
- * Find a creature in the Monster Manual index
+ * Find a creature in the combined compendium index
  * @param {string} creatureName - The creature name to search for
- * @param {Collection} index - The compendium index
- * @returns {Object|null} The matching entry or null
+ * @param {Array} index - Array of {entry, pack} objects from loadMonsterIndex()
+ * @returns {Object|null} Object with {entry, pack} or null if not found
  */
 function findInMonsterManual(creatureName, index) {
   const normalizedSearch = normalizeName(creatureName);
@@ -336,9 +456,9 @@ function findInMonsterManual(creatureName, index) {
   }
 
   // Exact match first
-  let match = index.find(e => normalizeName(e.name) === normalizedSearch);
+  let match = index.find(item => normalizeName(item.entry.name) === normalizedSearch);
   if (match) {
-    log(`Exact match found: "${creatureName}" -> "${match.name}"`);
+    log(`Exact match found: "${creatureName}" -> "${match.entry.name}" (${match.pack.metadata.label})`);
     return match;
   }
 
@@ -354,9 +474,9 @@ function findInMonsterManual(creatureName, index) {
     const variant = transform(normalizedSearch);
     // Only check if variant is different from original
     if (variant !== normalizedSearch && variant.length > 0) {
-      match = index.find(e => normalizeName(e.name) === variant);
+      match = index.find(item => normalizeName(item.entry.name) === variant);
       if (match) {
-        log(`Variant match found: "${creatureName}" -> "${match.name}"`);
+        log(`Variant match found: "${creatureName}" -> "${match.entry.name}" (${match.pack.metadata.label})`);
         return match;
       }
     }
@@ -366,8 +486,8 @@ function findInMonsterManual(creatureName, index) {
   // Also require word boundary matching to prevent "Rat" matching "Pirate"
   const MIN_PARTIAL_LENGTH = 4;
   if (normalizedSearch.length >= MIN_PARTIAL_LENGTH) {
-    match = index.find(e => {
-      const entryName = normalizeName(e.name);
+    match = index.find(item => {
+      const entryName = normalizeName(item.entry.name);
       if (entryName.length < MIN_PARTIAL_LENGTH) return false;
 
       // Check if one name starts with the other (word boundary)
@@ -380,7 +500,7 @@ function findInMonsterManual(creatureName, index) {
     });
 
     if (match) {
-      log(`Partial match found: "${creatureName}" -> "${match.name}"`);
+      log(`Partial match found: "${creatureName}" -> "${match.entry.name}" (${match.pack.metadata.label})`);
       return match;
     }
   }
@@ -616,9 +736,9 @@ function validatePrerequisites() {
     return false;
   }
 
-  // Check if Monster Manual module is active
-  const monsterModule = game.modules.get(MONSTER_MANUAL_MODULE);
-  if (!monsterModule?.active) {
+  // Check if any WOTC modules with Actor compendiums are active
+  const wotcPacks = detectWOTCCompendiums();
+  if (wotcPacks.length === 0) {
     ui.notifications.error(game.i18n.localize("NPC_REPLACER.NoModule"));
     return false;
   }
@@ -641,15 +761,20 @@ async function replaceNPCTokens() {
     return;
   }
 
-  // Get the Monster Manual compendium
-  const pack = getMonsterManualPack();
-  if (!pack) {
+  // Check if any compendiums are available
+  const enabledPacks = getEnabledCompendiums();
+  if (enabledPacks.length === 0) {
     ui.notifications.error(game.i18n.localize("NPC_REPLACER.NoCompendium"));
     return;
   }
 
-  // Load the monster index
-  const index = await loadMonsterIndex(pack);
+  // Load the combined monster index from all enabled compendiums
+  const index = await loadMonsterIndex();
+
+  if (index.length === 0) {
+    ui.notifications.error(game.i18n.localize("NPC_REPLACER.NoCompendium"));
+    return;
+  }
 
   // Get NPC tokens from the scene - store IDs to track which ones we've processed
   const npcTokens = getNPCTokensFromScene();
@@ -704,7 +829,8 @@ async function replaceNPCTokens() {
         const match = findInMonsterManual(creatureName, index);
 
         if (match) {
-          await replaceToken(tokenDoc, match, pack);
+          // match is {entry, pack} - pass the entry and its source pack
+          await replaceToken(tokenDoc, match.entry, match.pack);
           replaced++;
         } else {
           notFound.push(creatureName);
@@ -777,26 +903,22 @@ Hooks.once("init", () => {
 Hooks.once("ready", () => {
   log("NPC Token Replacer is ready");
 
-  // Verify Monster Manual module is available
-  const monsterModule = game.modules.get(MONSTER_MANUAL_MODULE);
-  if (!monsterModule) {
-    log("Warning: Monster Manual 2024 module not found. Install it for this module to work.");
-  } else if (!monsterModule.active) {
-    log("Warning: Monster Manual 2024 module is installed but not active.");
+  // Detect available WOTC compendiums
+  const wotcPacks = detectWOTCCompendiums();
+
+  if (wotcPacks.length === 0) {
+    log("Warning: No official D&D compendiums found. Install official D&D content for this module to work.");
   } else {
-    log("Monster Manual 2024 module detected and active");
+    log(`Found ${wotcPacks.length} official D&D compendium(s)`);
 
     // Pre-cache the monster index (async, non-blocking)
-    const pack = getMonsterManualPack();
-    if (pack) {
-      loadMonsterIndex(pack)
-        .then(() => {
-          log("Monster index pre-cached successfully");
-        })
-        .catch(error => {
-          logError("Failed to pre-cache monster index", error);
-        });
-    }
+    loadMonsterIndex()
+      .then(() => {
+        log("Monster index pre-cached successfully");
+      })
+      .catch(error => {
+        logError("Failed to pre-cache monster index", error);
+      });
   }
 });
 
@@ -812,8 +934,11 @@ window.NPCTokenReplacer = {
   getNPCTokensFromScene,
   findInMonsterManual,
   getOrCreateImportFolder,
+  detectWOTCCompendiums,
+  getEnabledCompendiums,
   clearCache: () => {
     monsterIndexCache = null;
     importFolderCache = null;
+    wotcCompendiumsCache = null;
   }
 };

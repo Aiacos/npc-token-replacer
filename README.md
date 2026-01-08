@@ -1,21 +1,45 @@
 # NPC Token Replacer
 
-A Foundry VTT module that automatically replaces NPC tokens in your scene with the official Monster Manual D&D 2024 versions, preserving their position, elevation, dimensions, and visibility.
+A Foundry VTT module that automatically replaces NPC tokens in your scene with official D&D compendium versions, preserving their position, elevation, dimensions, and visibility.
 
 ## Features
 
 - **One-Click Replacement**: Adds a button to the Token Controls toolbar for easy access
-- **Automatic Matching**: Intelligently matches NPC names with Monster Manual entries
+- **Automatic Compendium Detection**: Automatically detects all installed official D&D content (Monster Manual, Adventures, etc.)
+- **Multi-Compendium Support**: Search across multiple official D&D compendiums simultaneously
+- **Configurable Compendium Selection**: Choose which compendiums to use via settings
 - **Preserves Token Properties**: Maintains position, elevation, dimensions, visibility, rotation, and disposition
 - **Confirmation Dialog**: Shows a list of tokens to be replaced before proceeding
 - **Detailed Logging**: Provides console logs for debugging and tracking
 - **Smart Name Matching**: Handles variations in creature names (e.g., "Goblin Warrior" matches "Goblin")
+- **Token Variation Mode**: Choose how to handle multiple token art variations (None/Sequential/Random)
+- **Folder Organization**: Automatically organizes imported monsters into folders
+
+## Supported Official D&D Content
+
+The module automatically detects and supports all official Wizards of the Coast content for Foundry VTT:
+
+| Module ID | Content |
+|-----------|---------|
+| `dnd-monster-manual` | Monster Manual (2024) |
+| `dnd-players-handbook` | Player's Handbook (2024) |
+| `dnd-dungeon-masters-guide` | Dungeon Master's Guide (2024) |
+| `dnd-tashas-cauldron` | Tasha's Cauldron of Everything |
+| `dnd-phandelver-below` | Phandelver and Below: The Shattered Obelisk |
+| `dnd-tomb-annihilation` | Tomb of Annihilation |
+| `dnd-adventures-faerun` | Forgotten Realms: Adventures in Faerun |
+| `dnd-heroes-faerun` | Forgotten Realms: Heroes of Faerun |
+| `dnd-heroes-borderlands` | Heroes of the Borderlands |
+| `dnd-forge-artificer` | Eberron: Forge of the Artificer |
+| `dnd5e` | D&D 5e System SRD Monsters |
+
+New official content is automatically detected - no module updates required!
 
 ## Requirements
 
 - **Foundry VTT**: Version 12 or higher (verified on v13)
 - **System**: D&D 5th Edition (dnd5e)
-- **Required Module**: [D&D Monster Manual 2024](https://foundryvtt.com/packages/dnd-monster-manual) - The official Monster Manual compendium module
+- **Official D&D Content**: At least one official D&D module with Actor compendiums (e.g., Monster Manual 2024)
 
 ## Installation
 
@@ -36,7 +60,7 @@ A Foundry VTT module that automatically replaces NPC tokens in your scene with t
 2. Click **Install Module**
 3. Paste the manifest URL in the **Manifest URL** field:
    ```
-   https://raw.githubusercontent.com/YOUR_USERNAME/npc-token-replacer/main/module.json
+   https://github.com/Aiacos/npc-token-replacer/releases/latest/download/module.json
    ```
 4. Click **Install**
 5. Enable the module in your world's module settings
@@ -49,7 +73,7 @@ A Foundry VTT module that automatically replaces NPC tokens in your scene with t
 4. A confirmation dialog will appear showing all NPC tokens that will be replaced
 5. Click **Replace Tokens** to proceed or **Cancel** to abort
 6. The module will:
-   - Find matching creatures in the Monster Manual 2024 compendium
+   - Search all enabled compendiums for matching creatures
    - Delete the original tokens
    - Create new tokens from the compendium with the original position, elevation, size, and visibility
 7. A notification will show the results
@@ -69,20 +93,47 @@ When replacing tokens, the following properties are preserved from the original 
 | Locked | Whether the token is locked |
 | Alpha | Token opacity |
 
+## Module Settings
+
+Access the module settings via **Game Settings** > **Configure Settings** > **Module Settings** > **NPC Token Replacer**.
+
+| Setting | Options | Description |
+|---------|---------|-------------|
+| Token Variation Mode | None, Sequential, Random | How to select token art when multiple variations are available |
+| Configure Compendiums | Button | Opens dialog to select which compendiums to use |
+
+### Token Variation Mode
+
+Some creatures have multiple token art variations. This setting controls how the module selects which variation to use:
+
+- **None**: Always use the first available variation
+- **Sequential** (default): Cycle through variations in order. If you have 5 Goblins in a scene, they'll get variations 1, 2, 3, 4, 5 (or wrap around if fewer variations exist)
+- **Random**: Randomly select a variation for each token
+
+### Compendium Selection
+
+By default, the module uses all available official D&D compendiums. You can configure this to use only specific compendiums:
+
+1. Open Module Settings
+2. Click **Configure Compendiums**
+3. Uncheck "Use all available compendiums"
+4. Select only the compendiums you want to use
+5. Click Save
+
 ## Name Matching
 
-The module uses intelligent name matching to find creatures in the Monster Manual:
+The module uses intelligent name matching to find creatures in the compendiums:
 
 1. **Exact Match**: First tries to find an exact name match
 2. **Variant Matching**: Removes common prefixes/suffixes:
-   - Prefixes: "Young", "Adult", "Ancient", "Elder"
-   - Suffixes: "Warrior", "Guard", "Scout", "Champion", "Leader", "Chief"
-3. **Partial Match**: Checks if names contain each other
+   - Prefixes: "Young", "Adult", "Ancient", "Elder", "Greater", "Lesser"
+   - Suffixes: "Warrior", "Guard", "Scout", "Champion", "Leader", "Chief", "Captain", "Shaman", "Berserker"
+3. **Partial Match**: Checks if names share significant words (4+ characters)
 
 ### Examples
 
-| Scene Token | Monster Manual Match |
-|-------------|---------------------|
+| Scene Token | Compendium Match |
+|-------------|------------------|
 | "Goblin" | "Goblin" |
 | "Goblin Warrior" | "Goblin" |
 | "Young Red Dragon" | "Red Dragon" |
@@ -96,16 +147,14 @@ For debugging or manual control, you can use these commands in the browser conso
 // Run the token replacement manually
 NPCTokenReplacer.replaceNPCTokens();
 
-// Get the Monster Manual compendium pack
-NPCTokenReplacer.getMonsterManualPack();
+// Get all detected WOTC compendiums
+NPCTokenReplacer.detectWOTCCompendiums();
+
+// Get currently enabled compendiums
+NPCTokenReplacer.getEnabledCompendiums();
 
 // Get all NPC tokens in the current scene
 NPCTokenReplacer.getNPCTokensFromScene();
-
-// Search for a creature in the monster index
-const pack = NPCTokenReplacer.getMonsterManualPack();
-const index = await pack.getIndex();
-NPCTokenReplacer.findInMonsterManual("Goblin", index);
 
 // Clear the cached monster index (forces reload)
 NPCTokenReplacer.clearCache();
@@ -113,17 +162,20 @@ NPCTokenReplacer.clearCache();
 
 ## Troubleshooting
 
-### "Monster Manual 2024 module is required but not active"
+### "No official D&D compendiums found"
 
-Make sure you have installed and enabled the official Monster Manual 2024 module from Foundry VTT.
+Make sure you have installed and enabled at least one official D&D module with Actor compendiums (e.g., Monster Manual 2024, Phandelver and Below, etc.).
 
-### "Monster Manual compendium not found"
+### "No compendiums available for token replacement"
 
-The module couldn't locate the monster compendium. Check the console (F12) for available pack names and report the issue.
+The module couldn't find any enabled compendiums. Check:
+1. You have official D&D content installed
+2. The compendiums are enabled in the module settings
+3. Check the console (F12) for detected compendiums
 
 ### Tokens not being matched
 
-Check the console log for details on which creatures weren't found. The matching algorithm tries to be flexible, but some custom or homebrew creatures may not have equivalents in the Monster Manual.
+Check the console log for details on which creatures weren't found. The matching algorithm tries to be flexible, but some custom or homebrew creatures may not have equivalents in the official compendiums.
 
 ### Some tokens show errors
 
@@ -141,9 +193,9 @@ If specific tokens fail to replace, check the console for error details. Common 
 ## Known Limitations
 
 - Only works with NPC-type actors (not characters or vehicles)
-- Requires the official Monster Manual 2024 module
-- Custom/homebrew creatures without Monster Manual equivalents will be skipped
-- Token art from the Monster Manual will replace any custom token art
+- Requires at least one official D&D module with Actor compendiums
+- Custom/homebrew creatures without official compendium equivalents will be skipped
+- Token art from the compendium will replace any custom token art
 
 ## Contributing
 
@@ -156,4 +208,4 @@ This module is released under the MIT License.
 ## Credits
 
 - Developed for use with Foundry Virtual Tabletop
-- Monster Manual 2024 content is owned by Wizards of the Coast
+- Official D&D content is owned by Wizards of the Coast

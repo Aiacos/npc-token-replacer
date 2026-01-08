@@ -5,16 +5,16 @@
     "Processing": "Processing {count} tokens...",
     "Complete": "Replaced {count} tokens successfully",
     "NoTokens": "No NPC tokens found in the current scene",
-    "NotFound": "Not found in Monster Manual: {name}",
-    "NotFoundCount": "{count} creatures not found in Monster Manual",
+    "NotFound": "Not found in compendiums: {name}",
+    "NotFoundCount": "{count} creatures not found in compendiums",
     "Error": "Error replacing token: {name}",
     "ErrorCount": "{count} errors occurred during replacement",
     "NoScene": "No active scene found",
-    "NoModule": "Monster Manual 2024 module is required but not active",
-    "NoCompendium": "Monster Manual compendium not found",
+    "NoModule": "No official D&D compendiums found. Install official D&D content (Monster Manual, Adventures, etc.)",
+    "NoCompendium": "No compendiums available for token replacement",
     "GMOnly": "Only the GM can replace tokens",
     "ConfirmTitle": "Confirm Token Replacement",
-    "ConfirmContent": "The following {count} NPC tokens will be replaced with Monster Manual 2024 versions:",
+    "ConfirmContent": "The following {count} NPC tokens will be replaced with official D&D versions:",
     "ConfirmProceed": "Do you want to proceed?",
     "ConfirmYes": "Replace Tokens",
     "ConfirmNo": "Cancel",
@@ -25,6 +25,19 @@
         "None": "None (always first)",
         "Sequential": "Sequential",
         "Random": "Random"
+      },
+      "EnabledCompendiums": {
+        "Name": "Enabled Compendiums",
+        "Hint": "Which compendiums to use for finding creature tokens."
+      },
+      "CompendiumSelector": {
+        "Name": "Select Compendiums",
+        "Label": "Configure Compendiums",
+        "Hint": "Choose which official D&D compendiums to search for creature tokens.",
+        "Title": "Compendium Selection",
+        "UseAll": "Use all available compendiums",
+        "UseAllHint": "Automatically use any official D&D compendiums that are installed and enabled.",
+        "SelectCompendiums": "Or select specific compendiums:"
       }
     }
   }
