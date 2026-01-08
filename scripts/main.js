@@ -135,11 +135,29 @@ function extractTokenProperties(tokenDoc) {
  * @returns {string} Normalized name
  */
 function normalizeName(name) {
+  if (!name) return '';
   return name
     .toLowerCase()
     .trim()
     .replace(/[^\w\s]/g, '') // Remove special characters
     .replace(/\s+/g, ' ');   // Normalize whitespace
+}
+
+/**
+ * Escape HTML special characters to prevent XSS
+ * @param {string} str - The string to escape
+ * @returns {string} Escaped string
+ */
+function escapeHtml(str) {
+  if (!str) return '';
+  const htmlEscapes = {
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&#39;'
+  };
+  return str.replace(/[&<>"']/g, char => htmlEscapes[char]);
 }
 
 /**
@@ -151,6 +169,11 @@ function normalizeName(name) {
 function findInMonsterManual(creatureName, index) {
   const normalizedSearch = normalizeName(creatureName);
 
+  if (!normalizedSearch) {
+    log(`Empty creature name provided`);
+    return null;
+  }
+
   // Exact match first
   let match = index.find(e => normalizeName(e.name) === normalizedSearch);
   if (match) {
@@ -158,30 +181,47 @@ function findInMonsterManual(creatureName, index) {
     return match;
   }
 
-  // Try without common suffixes/prefixes
-  const variants = [
-    normalizedSearch,
-    normalizedSearch.replace(/^(young|adult|ancient|elder)\s+/, ''),
-    normalizedSearch.replace(/\s+(warrior|guard|scout|champion|leader|chief)$/, ''),
+  // Try without common suffixes/prefixes (only check variants that differ from original)
+  const variantTransforms = [
+    name => name.replace(/^(young|adult|ancient|elder|greater|lesser)\s+/i, ''),
+    name => name.replace(/\s+(warrior|guard|scout|champion|leader|chief|captain|shaman|berserker)$/i, ''),
+    name => name.replace(/^(young|adult|ancient|elder|greater|lesser)\s+/i, '')
+                .replace(/\s+(warrior|guard|scout|champion|leader|chief|captain|shaman|berserker)$/i, ''),
   ];
 
-  for (const variant of variants) {
-    match = index.find(e => normalizeName(e.name) === variant);
-    if (match) {
-      log(`Variant match found: "${creatureName}" -> "${match.name}"`);
-      return match;
+  for (const transform of variantTransforms) {
+    const variant = transform(normalizedSearch);
+    // Only check if variant is different from original
+    if (variant !== normalizedSearch && variant.length > 0) {
+      match = index.find(e => normalizeName(e.name) === variant);
+      if (match) {
+        log(`Variant match found: "${creatureName}" -> "${match.name}"`);
+        return match;
+      }
     }
   }
 
-  // Partial match - creature name contains compendium entry name
-  match = index.find(e => {
-    const entryName = normalizeName(e.name);
-    return normalizedSearch.includes(entryName) || entryName.includes(normalizedSearch);
-  });
+  // Partial match - but only for names with 4+ characters to avoid false positives
+  // Also require word boundary matching to prevent "Rat" matching "Pirate"
+  const MIN_PARTIAL_LENGTH = 4;
+  if (normalizedSearch.length >= MIN_PARTIAL_LENGTH) {
+    match = index.find(e => {
+      const entryName = normalizeName(e.name);
+      if (entryName.length < MIN_PARTIAL_LENGTH) return false;
 
-  if (match) {
-    log(`Partial match found: "${creatureName}" -> "${match.name}"`);
-    return match;
+      // Check if one name starts with the other (word boundary)
+      const searchWords = normalizedSearch.split(' ');
+      const entryWords = entryName.split(' ');
+
+      // Check if the main creature type matches (usually first or last word)
+      return searchWords.some(sw => entryWords.includes(sw) && sw.length >= MIN_PARTIAL_LENGTH) ||
+             entryWords.some(ew => searchWords.includes(ew) && ew.length >= MIN_PARTIAL_LENGTH);
+    });
+
+    if (match) {
+      log(`Partial match found: "${creatureName}" -> "${match.name}"`);
+      return match;
+    }
   }
 
   log(`No match found for: "${creatureName}"`);
@@ -207,10 +247,19 @@ async function replaceToken(tokenDoc, compendiumEntry, pack) {
 
   // Check if we already have this actor imported (by name and source)
   // This avoids creating duplicate actors in the world
-  let worldActor = game.actors.find(a =>
-    a.name === compendiumActor.name &&
-    a.getFlag("core", "sourceId") === compendiumActor.uuid
-  );
+  let worldActor = game.actors.find(a => {
+    if (a.name !== compendiumActor.name) return false;
+
+    // Check for sourceId flag (set by Foundry on import)
+    const sourceId = a.getFlag("core", "sourceId");
+    if (sourceId === compendiumActor.uuid) return true;
+
+    // Also check _stats.compendiumSource for newer Foundry versions
+    const compendiumSource = a._stats?.compendiumSource;
+    if (compendiumSource === compendiumActor.uuid) return true;
+
+    return false;
+  });
 
   if (!worldActor) {
     // Import the actor from compendium using the standard Foundry API
@@ -260,7 +309,7 @@ async function replaceToken(tokenDoc, compendiumEntry, pack) {
  */
 async function showConfirmationDialog(tokens) {
   const tokenList = tokens
-    .map(t => `<li>${t.actor?.name || t.name}</li>`)
+    .map(t => `<li>${escapeHtml(t.actor?.name || t.name)}</li>`)
     .join('');
 
   const content = `
