@@ -9,6 +9,9 @@ const MONSTER_MANUAL_MODULE = "dnd-monster-manual";
 // Cache for the monster index
 let monsterIndexCache = null;
 
+// Cache for the import folder
+let importFolderCache = null;
+
 // Lock to prevent double execution
 let isProcessing = false;
 
@@ -89,6 +92,89 @@ async function loadMonsterIndex(pack, forceReload = false) {
   log(`Loaded ${monsterIndexCache.size} entries from Monster Manual`);
 
   return monsterIndexCache;
+}
+
+/**
+ * Get or create the folder for Monster Manual imports
+ * Looks for existing monster folders and creates a subfolder with "MonsterManual" suffix
+ * @returns {Promise<Folder|null>} The folder to use for imports
+ */
+async function getOrCreateImportFolder() {
+  // Return cached folder if available and still exists
+  if (importFolderCache && game.folders.has(importFolderCache.id)) {
+    return importFolderCache;
+  }
+
+  const FOLDER_NAME = "MonsterManual";
+
+  // Check if our folder already exists
+  let folder = game.folders.find(f =>
+    f.type === "Actor" &&
+    f.name === FOLDER_NAME
+  );
+
+  if (folder) {
+    log(`Using existing folder: ${folder.name}`);
+    importFolderCache = folder;
+    return folder;
+  }
+
+  // Look for existing monster-related folders to use as parent
+  const monsterFolderPatterns = [
+    /monster/i,
+    /creature/i,
+    /npc/i,
+    /bestiary/i,
+    /enemy/i,
+    /enemies/i
+  ];
+
+  let parentFolder = null;
+  for (const pattern of monsterFolderPatterns) {
+    parentFolder = game.folders.find(f =>
+      f.type === "Actor" &&
+      pattern.test(f.name) &&
+      !f.folder // Top-level folder
+    );
+    if (parentFolder) {
+      log(`Found existing monster folder: ${parentFolder.name}`);
+      break;
+    }
+  }
+
+  // Create the folder name based on parent
+  let folderName = FOLDER_NAME;
+  if (parentFolder) {
+    folderName = `${parentFolder.name} - ${FOLDER_NAME}`;
+  }
+
+  // Check if this combined name already exists
+  folder = game.folders.find(f =>
+    f.type === "Actor" &&
+    f.name === folderName
+  );
+
+  if (folder) {
+    log(`Using existing folder: ${folder.name}`);
+    importFolderCache = folder;
+    return folder;
+  }
+
+  // Create the new folder
+  try {
+    folder = await Folder.create({
+      name: folderName,
+      type: "Actor",
+      parent: parentFolder?.id || null,
+      color: "#7a1010" // Dark red for monsters
+    });
+    log(`Created new folder: ${folder.name}`);
+    importFolderCache = folder;
+    return folder;
+  } catch (error) {
+    logError("Failed to create import folder", error);
+    return null;
+  }
 }
 
 /**
@@ -272,12 +358,17 @@ async function replaceToken(tokenDoc, compendiumEntry, pack) {
   });
 
   if (!worldActor) {
+    // Get or create the import folder
+    const importFolder = await getOrCreateImportFolder();
+
     // Import the actor from compendium using the standard Foundry API
-    worldActor = await game.actors.importFromCompendium(pack, compendiumEntry._id);
+    // Pass the folder ID in the updateData parameter
+    const updateData = importFolder ? { folder: importFolder.id } : {};
+    worldActor = await game.actors.importFromCompendium(pack, compendiumEntry._id, updateData);
     if (!worldActor) {
       throw new Error(`Failed to import actor "${compendiumActor.name}" from compendium`);
     }
-    log(`Imported actor "${compendiumActor.name}" from compendium`);
+    log(`Imported actor "${compendiumActor.name}" from compendium into folder "${importFolder?.name || 'root'}"`);
   } else {
     log(`Using existing imported actor "${worldActor.name}"`);
   }
@@ -553,5 +644,9 @@ window.NPCTokenReplacer = {
   getMonsterManualPack,
   getNPCTokensFromScene,
   findInMonsterManual,
-  clearCache: () => { monsterIndexCache = null; }
+  getOrCreateImportFolder,
+  clearCache: () => {
+    monsterIndexCache = null;
+    importFolderCache = null;
+  }
 };
