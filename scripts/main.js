@@ -102,7 +102,9 @@ function detectWOTCCompendiums() {
 
   log(`Found ${wotcPacks.length} official D&D Actor compendiums:`);
   wotcPacks.forEach(pack => {
-    log(`  - ${pack.collection} (${pack.metadata.label})`);
+    const priority = getCompendiumPriority(pack);
+    const priorityLabel = priority === 3 ? "HIGH" : priority === 2 ? "MEDIUM" : "LOW";
+    log(`  - ${pack.collection} (${pack.metadata.label}) [package: ${pack.metadata.packageName}, priority: ${priorityLabel}]`);
   });
 
   wotcCompendiumsCache = wotcPacks;
@@ -489,13 +491,19 @@ function selectBestMatch(matches) {
   if (!matches || matches.length === 0) return null;
   if (matches.length === 1) return matches[0];
 
+  // Log all matches before sorting for debugging
+  log(`  Found ${matches.length} matches across compendiums:`);
+  matches.forEach(m => {
+    const pkgName = m.pack.metadata.packageName || "unknown";
+    const priority = getCompendiumPriority(m.pack);
+    log(`    - ${m.entry.name} from "${m.pack.metadata.label}" (package: ${pkgName}, priority: ${priority})`);
+  });
+
   // Sort by priority (highest first) and return the best
   matches.sort((a, b) => getCompendiumPriority(b.pack) - getCompendiumPriority(a.pack));
 
   const best = matches[0];
-  if (matches.length > 1) {
-    log(`  Multiple matches found, selected highest priority: ${best.pack.metadata.label} (priority ${getCompendiumPriority(best.pack)})`);
-  }
+  log(`  Selected: ${best.pack.metadata.label} (priority ${getCompendiumPriority(best.pack)})`);
 
   return best;
 }
