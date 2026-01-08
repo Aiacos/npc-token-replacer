@@ -17,6 +17,15 @@
     "ConfirmContent": "The following {count} NPC tokens will be replaced with Monster Manual 2024 versions:",
     "ConfirmProceed": "Do you want to proceed?",
     "ConfirmYes": "Replace Tokens",
-    "ConfirmNo": "Cancel"
+    "ConfirmNo": "Cancel",
+    "Settings": {
+      "VariationMode": {
+        "Name": "Token Variation Mode",
+        "Hint": "How to select token art when multiple variations are available for a creature.",
+        "None": "None (always first)",
+        "Sequential": "Sequential",
+        "Random": "Random"
+      }
+    }
   }
 }

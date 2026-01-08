@@ -15,6 +15,9 @@ let importFolderCache = null;
 // Lock to prevent double execution
 let isProcessing = false;
 
+// Sequential counter for token variations (reset each replacement session)
+let sequentialVariantCounter = 0;
+
 /**
  * Log a message with the module prefix
  * @param {string} message - The message to log
@@ -35,6 +38,25 @@ function log(message, data = null) {
  */
 function logError(message, error) {
   console.error(`${MODULE_ID} | ${message}`, error);
+}
+
+/**
+ * Register module settings
+ */
+function registerSettings() {
+  game.settings.register(MODULE_ID, "tokenVariationMode", {
+    name: game.i18n.localize("NPC_REPLACER.Settings.VariationMode.Name"),
+    hint: game.i18n.localize("NPC_REPLACER.Settings.VariationMode.Hint"),
+    scope: "world",
+    config: true,
+    type: String,
+    choices: {
+      "none": game.i18n.localize("NPC_REPLACER.Settings.VariationMode.None"),
+      "sequential": game.i18n.localize("NPC_REPLACER.Settings.VariationMode.Sequential"),
+      "random": game.i18n.localize("NPC_REPLACER.Settings.VariationMode.Random")
+    },
+    default: "sequential"
+  });
 }
 
 /**
@@ -435,7 +457,12 @@ async function replaceToken(tokenDoc, compendiumEntry, pack) {
     const originalPath = prototypeToken.texture.src;
     log(`Detected wildcard pattern in token path: ${originalPath}`);
 
-    // Try to resolve the wildcard by finding actual files
+    // Get the variation mode setting
+    const variationMode = game.settings.get(MODULE_ID, "tokenVariationMode");
+    log(`Token variation mode: ${variationMode}`);
+
+    // Find all available variants
+    const availableVariants = [];
     let resolvedPath = null;
 
     try {
@@ -447,7 +474,7 @@ async function replaceToken(tokenDoc, compendiumEntry, pack) {
 
       // Try common numbered variants (1, 2, 3, etc.)
       const extensions = ['.webp', '.png', '.jpg'];
-      const variants = ['1', '2', '01', '02', 'a', 'b', ''];
+      const variants = ['1', '2', '3', '4', '5', '01', '02', '03', '04', '05', 'a', 'b', 'c', 'd', 'e', ''];
 
       for (const variant of variants) {
         for (const ext of extensions) {
@@ -456,15 +483,41 @@ async function replaceToken(tokenDoc, compendiumEntry, pack) {
           try {
             const response = await fetch(testPath, { method: 'HEAD' });
             if (response.ok) {
-              resolvedPath = testPath;
-              log(`Resolved wildcard to: ${resolvedPath}`);
-              break;
+              availableVariants.push(testPath);
             }
           } catch (e) {
             // File doesn't exist, try next
           }
         }
-        if (resolvedPath) break;
+      }
+
+      log(`Found ${availableVariants.length} token variants for ${compendiumEntry.name}`);
+
+      // Select variant based on mode
+      if (availableVariants.length > 0) {
+        switch (variationMode) {
+          case "none":
+            // Always use the first variant
+            resolvedPath = availableVariants[0];
+            log(`Using first variant (none mode): ${resolvedPath}`);
+            break;
+
+          case "random":
+            // Pick a random variant
+            const randomIndex = Math.floor(Math.random() * availableVariants.length);
+            resolvedPath = availableVariants[randomIndex];
+            log(`Using random variant (${randomIndex + 1}/${availableVariants.length}): ${resolvedPath}`);
+            break;
+
+          case "sequential":
+          default:
+            // Use variants in sequence
+            const seqIndex = sequentialVariantCounter % availableVariants.length;
+            resolvedPath = availableVariants[seqIndex];
+            sequentialVariantCounter++;
+            log(`Using sequential variant (${seqIndex + 1}/${availableVariants.length}): ${resolvedPath}`);
+            break;
+        }
       }
     } catch (e) {
       logError("Error trying to resolve wildcard path", e);
@@ -617,6 +670,9 @@ async function replaceNPCTokens() {
   // Set processing lock AFTER confirmation (so user can cancel and retry)
   isProcessing = true;
 
+  // Reset sequential counter for this replacement session
+  sequentialVariantCounter = 0;
+
   // Track results
   let replaced = 0;
   const notFound = [];
@@ -712,6 +768,7 @@ function registerControlButton(controls) {
  */
 Hooks.once("init", () => {
   log("Initializing NPC Token Replacer");
+  registerSettings();
 });
 
 /**
