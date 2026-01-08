@@ -263,9 +263,10 @@ async function replaceToken(tokenDoc, compendiumEntry, pack) {
 
   if (!worldActor) {
     // Import the actor from compendium using the standard Foundry API
-    worldActor = await game.actors.importFromCompendium(pack, compendiumEntry._id, {}, {
-      keepId: false
-    });
+    worldActor = await game.actors.importFromCompendium(pack, compendiumEntry._id);
+    if (!worldActor) {
+      throw new Error(`Failed to import actor "${compendiumActor.name}" from compendium`);
+    }
     log(`Imported actor "${compendiumActor.name}" from compendium`);
   } else {
     log(`Using existing imported actor "${worldActor.name}"`);
@@ -291,11 +292,22 @@ async function replaceToken(tokenDoc, compendiumEntry, pack) {
     actorLink: false
   };
 
+  // Verify the old token still exists before deletion
+  const tokenStillExists = canvas.scene.tokens.has(tokenDoc.id);
+  if (!tokenStillExists) {
+    throw new Error(`Token "${originalName}" no longer exists in scene`);
+  }
+
   // Delete the old token
   await canvas.scene.deleteEmbeddedDocuments("Token", [tokenDoc.id]);
 
   // Create the new token
-  const [newToken] = await canvas.scene.createEmbeddedDocuments("Token", [newTokenData]);
+  const createdTokens = await canvas.scene.createEmbeddedDocuments("Token", [newTokenData]);
+  const newToken = createdTokens[0];
+
+  if (!newToken) {
+    throw new Error(`Failed to create new token for "${compendiumEntry.name}"`);
+  }
 
   log(`Successfully replaced "${originalName}" with "${compendiumEntry.name}"`);
 
@@ -440,28 +452,24 @@ async function replaceNPCTokens() {
  * Register the control button in the token controls
  */
 function registerControlButton(controls) {
+  const toolConfig = {
+    name: "npcReplacer",
+    title: game.i18n.localize("NPC_REPLACER.Button"),
+    icon: "fas fa-sync-alt",
+    button: true,
+    visible: game.user.isGM,
+    onClick: () => replaceNPCTokens(),
+    onChange: () => replaceNPCTokens() // v13 compatibility - some versions prefer onChange
+  };
+
   // Foundry v13+ uses object structure
-  if (controls.tokens) {
-    controls.tokens.tools.npcReplacer = {
-      name: "npcReplacer",
-      title: game.i18n.localize("NPC_REPLACER.Button"),
-      icon: "fas fa-sync-alt",
-      button: true,
-      visible: game.user.isGM,
-      onClick: () => replaceNPCTokens()
-    };
+  if (controls.tokens && typeof controls.tokens === "object" && !Array.isArray(controls.tokens)) {
+    controls.tokens.tools.npcReplacer = toolConfig;
   } else if (Array.isArray(controls)) {
     // Foundry v12 and earlier uses array structure
     const tokenControls = controls.find(c => c.name === "token");
-    if (tokenControls) {
-      tokenControls.tools.push({
-        name: "npcReplacer",
-        title: game.i18n.localize("NPC_REPLACER.Button"),
-        icon: "fas fa-sync-alt",
-        button: true,
-        visible: game.user.isGM,
-        onClick: () => replaceNPCTokens()
-      });
+    if (tokenControls && Array.isArray(tokenControls.tools)) {
+      tokenControls.tools.push(toolConfig);
     }
   }
 }
@@ -488,12 +496,16 @@ Hooks.once("ready", () => {
   } else {
     log("Monster Manual 2024 module detected and active");
 
-    // Pre-cache the monster index
+    // Pre-cache the monster index (async, non-blocking)
     const pack = getMonsterManualPack();
     if (pack) {
-      loadMonsterIndex(pack).then(() => {
-        log("Monster index pre-cached successfully");
-      });
+      loadMonsterIndex(pack)
+        .then(() => {
+          log("Monster index pre-cached successfully");
+        })
+        .catch(error => {
+          logError("Failed to pre-cache monster index", error);
+        });
     }
   }
 });
