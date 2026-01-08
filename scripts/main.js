@@ -428,6 +428,64 @@ async function replaceToken(tokenDoc, compendiumEntry, pack) {
   const prototypeToken = compendiumActor.prototypeToken.toObject();
   log(`Using token image from compendium: ${prototypeToken.texture?.src || 'default'}`);
 
+  // WORKAROUND: Handle wildcard patterns in token texture paths
+  // The Monster Manual 2024 module uses patterns like "specter-*.webp" for randomized tokens
+  // Foundry cannot load these directly, so we need to resolve or use a fallback
+  if (prototypeToken.texture?.src && prototypeToken.texture.src.includes('*')) {
+    const originalPath = prototypeToken.texture.src;
+    log(`Detected wildcard pattern in token path: ${originalPath}`);
+
+    // Try to resolve the wildcard by finding actual files
+    let resolvedPath = null;
+
+    try {
+      // Extract the directory and pattern
+      const lastSlash = originalPath.lastIndexOf('/');
+      const directory = originalPath.substring(0, lastSlash);
+      const filePattern = originalPath.substring(lastSlash + 1);
+      const baseName = filePattern.replace('*', '').replace('.webp', '').replace('.png', '').replace('.jpg', '');
+
+      // Try common numbered variants (1, 2, 3, etc.)
+      const extensions = ['.webp', '.png', '.jpg'];
+      const variants = ['1', '2', '01', '02', 'a', 'b', ''];
+
+      for (const variant of variants) {
+        for (const ext of extensions) {
+          const testPath = `${directory}/${baseName}${variant}${ext}`;
+          // Check if the file exists by trying to fetch it
+          try {
+            const response = await fetch(testPath, { method: 'HEAD' });
+            if (response.ok) {
+              resolvedPath = testPath;
+              log(`Resolved wildcard to: ${resolvedPath}`);
+              break;
+            }
+          } catch (e) {
+            // File doesn't exist, try next
+          }
+        }
+        if (resolvedPath) break;
+      }
+    } catch (e) {
+      logError("Error trying to resolve wildcard path", e);
+    }
+
+    // If we couldn't resolve, use the actor's portrait as fallback
+    if (!resolvedPath) {
+      const portraitPath = compendiumActor.img;
+      if (portraitPath && !portraitPath.includes('*')) {
+        resolvedPath = portraitPath;
+        log(`Using actor portrait as fallback: ${resolvedPath}`);
+      } else {
+        // Last resort: use mystery man token
+        resolvedPath = 'icons/svg/mystery-man.svg';
+        log(`Using default mystery-man token as last resort`);
+      }
+    }
+
+    prototypeToken.texture.src = resolvedPath;
+  }
+
   // Prepare new token data, merging prototype with original properties
   const newTokenData = {
     ...prototypeToken,
