@@ -124,12 +124,19 @@ Some creatures have multiple token art variations. This setting controls how the
 
 ### Compendium Selection
 
-By default, the module uses all available official D&D compendiums. You can configure this to use only specific compendiums:
+The module offers three compendium selection modes:
 
+| Mode | Description |
+|------|-------------|
+| **Core + Fallback Only** (Default) | Uses only SRD, Tasha's, Monster Manual, PHB, and DMG. Best for standard games. |
+| **All Compendiums** | Uses all installed official D&D compendiums including adventures and expansions. |
+| **Custom Selection** | Manually select which compendiums to use. |
+
+To configure:
 1. Open Module Settings
 2. Click **Configure Compendiums**
-3. Uncheck "Use all available compendiums"
-4. Select only the compendiums you want to use
+3. Select your preferred mode
+4. If using Custom Selection, check the specific compendiums you want
 5. Click Save
 
 ## Name Matching

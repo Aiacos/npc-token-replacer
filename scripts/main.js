@@ -141,15 +141,29 @@ function getEnabledCompendiums() {
     const settingValue = game.settings.get(MODULE_ID, "enabledCompendiums");
     enabledPackIds = typeof settingValue === "string" ? JSON.parse(settingValue) : settingValue;
   } catch (e) {
-    log("Error parsing enabledCompendiums setting, using all");
-    enabledPackIds = ["all"];
+    log("Error parsing enabledCompendiums setting, using default");
+    enabledPackIds = ["default"];
   }
 
-  // If no specific selection, use all available
-  if (!enabledPackIds || !Array.isArray(enabledPackIds) || enabledPackIds.length === 0 || enabledPackIds.includes("all")) {
+  // If no specific selection or empty, use default (Core + Fallback only)
+  if (!enabledPackIds || !Array.isArray(enabledPackIds) || enabledPackIds.length === 0) {
+    enabledPackIds = ["default"];
+  }
+
+  // "all" - use all available compendiums
+  if (enabledPackIds.includes("all")) {
+    log("Using all available compendiums");
     return allPacks;
   }
 
+  // "default" - only FALLBACK (priority 1) and CORE (priority 2) compendiums
+  if (enabledPackIds.includes("default")) {
+    const filtered = allPacks.filter(pack => getCompendiumPriority(pack) <= 2);
+    log(`Using default compendiums (Core + Fallback): ${filtered.map(p => p.metadata.label).join(", ")}`);
+    return filtered;
+  }
+
+  // Otherwise filter by specific compendium IDs
   const filtered = allPacks.filter(pack => enabledPackIds.includes(pack.collection));
   log(`Enabled compendiums: ${filtered.map(p => p.metadata.label).join(", ")}`);
   return filtered;
@@ -181,7 +195,7 @@ function registerSettings() {
     scope: "world",
     config: false, // We'll use a custom form for this
     type: String,
-    default: JSON.stringify(["all"])
+    default: JSON.stringify(["default"])
   });
 
   // Register the settings menu for compendium selection
@@ -219,34 +233,49 @@ class CompendiumSelectorForm extends FormApplication {
       const settingValue = game.settings.get(MODULE_ID, "enabledCompendiums");
       enabledPackIds = typeof settingValue === "string" ? JSON.parse(settingValue) : settingValue;
     } catch (e) {
-      enabledPackIds = ["all"];
+      enabledPackIds = ["default"];
     }
 
-    const useAll = !enabledPackIds || !Array.isArray(enabledPackIds) || enabledPackIds.length === 0 || enabledPackIds.includes("all");
+    // Determine current mode
+    let mode = "custom";
+    if (!enabledPackIds || !Array.isArray(enabledPackIds) || enabledPackIds.length === 0 || enabledPackIds.includes("default")) {
+      mode = "default";
+    } else if (enabledPackIds.includes("all")) {
+      mode = "all";
+    }
 
-    log("CompendiumSelectorForm getData:", { enabledPackIds, useAll });
+    log("CompendiumSelectorForm getData:", { enabledPackIds, mode });
+
+    const priorityLabels = { 1: "FALLBACK", 2: "CORE", 3: "EXPANSION", 4: "ADVENTURE" };
 
     return {
-      useAll: useAll,
-      compendiums: allPacks.map((pack, index) => ({
-        index: index,  // Use index instead of collection ID to avoid dot issues
-        id: pack.collection,
-        name: pack.metadata.label,
-        module: pack.metadata.packageName,
-        priority: getCompendiumPriority(pack),
-        enabled: useAll || enabledPackIds.includes(pack.collection)
-      }))
+      mode: mode,
+      compendiums: allPacks.map((pack, index) => {
+        const priority = getCompendiumPriority(pack);
+        return {
+          index: index,
+          id: pack.collection,
+          name: pack.metadata.label,
+          module: pack.metadata.packageName,
+          priority: priority,
+          priorityLabel: priorityLabels[priority] || "UNKNOWN",
+          enabled: mode === "all" || mode === "default" || enabledPackIds.includes(pack.collection),
+          isCoreFallback: priority <= 2
+        };
+      })
     };
   }
 
   async _updateObject(event, formData) {
     log("CompendiumSelectorForm formData:", formData);
 
-    const useAll = formData.useAll;
+    const mode = formData.mode;
     const allPacks = detectWOTCCompendiums();
 
     let enabledArray;
-    if (useAll) {
+    if (mode === "default") {
+      enabledArray = ["default"];
+    } else if (mode === "all") {
       enabledArray = ["all"];
     } else {
       // Collect all checked compendiums using index

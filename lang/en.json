@@ -35,9 +35,14 @@
         "Label": "Configure Compendiums",
         "Hint": "Choose which official D&D compendiums to search for creature tokens.",
         "Title": "Compendium Selection",
-        "UseAll": "Use all available compendiums",
-        "UseAllHint": "Automatically use any official D&D compendiums that are installed and enabled.",
-        "SelectCompendiums": "Or select specific compendiums:"
+        "ModeLabel": "Compendium Selection Mode",
+        "ModeDefault": "Core + Fallback Only (Recommended)",
+        "ModeDefaultHint": "Use only SRD, Tasha's Cauldron, Monster Manual, PHB, and DMG. Best for standard games.",
+        "ModeAll": "All Compendiums",
+        "ModeAllHint": "Use all installed official D&D compendiums including adventures and expansions.",
+        "ModeCustom": "Custom Selection",
+        "ModeCustomHint": "Manually select which compendiums to use from the list below.",
+        "SelectCompendiums": "Available Compendiums:"
       }
     }
   }

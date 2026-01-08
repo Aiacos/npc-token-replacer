@@ -1,22 +1,43 @@
 <form>
-  <div class="form-group">
-    <label>
-      <input type="checkbox" name="useAll" {{#if useAll}}checked{{/if}}>
-      {{localize "NPC_REPLACER.Settings.CompendiumSelector.UseAll"}}
-    </label>
-    <p class="hint">{{localize "NPC_REPLACER.Settings.CompendiumSelector.UseAllHint"}}</p>
+  <div class="form-group mode-selection">
+    <label>{{localize "NPC_REPLACER.Settings.CompendiumSelector.ModeLabel"}}</label>
+
+    <div class="mode-option">
+      <label>
+        <input type="radio" name="mode" value="default" {{#if (eq mode "default")}}checked{{/if}}>
+        <strong>{{localize "NPC_REPLACER.Settings.CompendiumSelector.ModeDefault"}}</strong>
+      </label>
+      <p class="hint">{{localize "NPC_REPLACER.Settings.CompendiumSelector.ModeDefaultHint"}}</p>
+    </div>
+
+    <div class="mode-option">
+      <label>
+        <input type="radio" name="mode" value="all" {{#if (eq mode "all")}}checked{{/if}}>
+        <strong>{{localize "NPC_REPLACER.Settings.CompendiumSelector.ModeAll"}}</strong>
+      </label>
+      <p class="hint">{{localize "NPC_REPLACER.Settings.CompendiumSelector.ModeAllHint"}}</p>
+    </div>
+
+    <div class="mode-option">
+      <label>
+        <input type="radio" name="mode" value="custom" {{#if (eq mode "custom")}}checked{{/if}}>
+        <strong>{{localize "NPC_REPLACER.Settings.CompendiumSelector.ModeCustom"}}</strong>
+      </label>
+      <p class="hint">{{localize "NPC_REPLACER.Settings.CompendiumSelector.ModeCustomHint"}}</p>
+    </div>
   </div>
 
   <hr>
 
-  <div class="form-group compendium-list" {{#if useAll}}style="opacity: 0.5; pointer-events: none;"{{/if}}>
+  <div class="form-group compendium-list" id="compendium-list">
     <label>{{localize "NPC_REPLACER.Settings.CompendiumSelector.SelectCompendiums"}}</label>
     {{#each compendiums}}
-    <div class="compendium-item">
+    <div class="compendium-item {{#if isCoreFallback}}core-fallback{{else}}expansion-adventure{{/if}}">
       <label>
         <input type="checkbox" name="compendium-{{index}}" {{#if enabled}}checked{{/if}}>
         <strong>{{name}}</strong>
-        <span class="module-name">({{module}}) - Priority: {{priority}}</span>
+        <span class="priority-badge priority-{{priority}}">{{priorityLabel}}</span>
+        <span class="module-name">({{module}})</span>
       </label>
     </div>
     {{/each}}
@@ -24,12 +45,39 @@
 </form>
 
 <style>
+  .mode-selection {
+    margin-bottom: 1rem;
+  }
+  .mode-option {
+    padding: 0.5rem 0;
+    padding-left: 0.5rem;
+    border-left: 3px solid transparent;
+  }
+  .mode-option:has(input:checked) {
+    border-left-color: var(--color-border-highlight);
+    background: var(--color-bg-option);
+  }
+  .mode-option label {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    cursor: pointer;
+  }
+  .mode-option .hint {
+    margin: 0.25rem 0 0 1.5rem;
+    font-size: 0.85em;
+    color: var(--color-text-dark-secondary);
+  }
   .compendium-list {
     max-height: 300px;
     overflow-y: auto;
     border: 1px solid var(--color-border-light-tertiary);
     padding: 0.5rem;
     margin-top: 0.5rem;
+  }
+  .compendium-list.disabled {
+    opacity: 0.5;
+    pointer-events: none;
   }
   .compendium-item {
     padding: 0.25rem 0;
@@ -44,17 +92,52 @@
     color: var(--color-text-dark-secondary);
     font-size: 0.85em;
   }
+  .priority-badge {
+    font-size: 0.7em;
+    padding: 0.1rem 0.4rem;
+    border-radius: 3px;
+    font-weight: bold;
+  }
+  .priority-badge.priority-1 {
+    background: #666;
+    color: white;
+  }
+  .priority-badge.priority-2 {
+    background: #2a7c2a;
+    color: white;
+  }
+  .priority-badge.priority-3 {
+    background: #7c5a2a;
+    color: white;
+  }
+  .priority-badge.priority-4 {
+    background: #7a1010;
+    color: white;
+  }
+  .compendium-item.expansion-adventure {
+    opacity: 0.7;
+  }
 </style>
 
 <script>
-  document.querySelector('input[name="useAll"]').addEventListener('change', function(e) {
-    const compendiumList = document.querySelector('.compendium-list');
-    if (e.target.checked) {
-      compendiumList.style.opacity = '0.5';
-      compendiumList.style.pointerEvents = 'none';
-    } else {
-      compendiumList.style.opacity = '1';
-      compendiumList.style.pointerEvents = 'auto';
-    }
+  // Handle mode changes to enable/disable compendium list
+  document.querySelectorAll('input[name="mode"]').forEach(radio => {
+    radio.addEventListener('change', function(e) {
+      const compendiumList = document.getElementById('compendium-list');
+      if (e.target.value === 'custom') {
+        compendiumList.classList.remove('disabled');
+      } else {
+        compendiumList.classList.add('disabled');
+      }
+    });
   });
+
+  // Initialize state on load
+  (function() {
+    const selectedMode = document.querySelector('input[name="mode"]:checked');
+    const compendiumList = document.getElementById('compendium-list');
+    if (selectedMode && selectedMode.value !== 'custom') {
+      compendiumList.classList.add('disabled');
+    }
+  })();
 </script>
