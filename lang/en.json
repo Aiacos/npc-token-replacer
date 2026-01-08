@@ -1,0 +1,22 @@
+{
+  "NPC_REPLACER": {
+    "Title": "NPC Token Replacer",
+    "Button": "Replace NPC Tokens",
+    "Processing": "Processing {count} tokens...",
+    "Complete": "Replaced {count} tokens successfully",
+    "NoTokens": "No NPC tokens found in the current scene",
+    "NotFound": "Not found in Monster Manual: {name}",
+    "NotFoundCount": "{count} creatures not found in Monster Manual",
+    "Error": "Error replacing token: {name}",
+    "ErrorCount": "{count} errors occurred during replacement",
+    "NoScene": "No active scene found",
+    "NoModule": "Monster Manual 2024 module is required but not active",
+    "NoCompendium": "Monster Manual compendium not found",
+    "GMOnly": "Only the GM can replace tokens",
+    "ConfirmTitle": "Confirm Token Replacement",
+    "ConfirmContent": "The following {count} NPC tokens will be replaced with Monster Manual 2024 versions:",
+    "ConfirmProceed": "Do you want to proceed?",
+    "ConfirmYes": "Replace Tokens",
+    "ConfirmNo": "Cancel"
+  }
+}
