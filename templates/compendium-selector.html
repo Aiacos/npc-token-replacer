@@ -14,9 +14,9 @@
     {{#each compendiums}}
     <div class="compendium-item">
       <label>
-        <input type="checkbox" name="compendium-{{id}}" {{#if enabled}}checked{{/if}}>
+        <input type="checkbox" name="compendium-{{index}}" {{#if enabled}}checked{{/if}}>
         <strong>{{name}}</strong>
-        <span class="module-name">({{module}})</span>
+        <span class="module-name">({{module}}) - Priority: {{priority}}</span>
       </label>
     </div>
     {{/each}}

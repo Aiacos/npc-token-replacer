@@ -9,13 +9,14 @@ const MODULE_ID = "npc-token-replacer";
 const WOTC_MODULE_PREFIXES = ["dnd-", "dnd5e"];
 
 // Compendium priority levels (higher = preferred)
-// Priority 1: SRD (lowest - fallback)
+// Priority 1: SRD and Tasha's (lowest - fallback/options)
 // Priority 2: Core Rulebooks (Monster Manual, PHB, DMG)
-// Priority 3: Expansions (Tasha's, Forge of Artificer, etc.)
+// Priority 3: Expansions (Forge of Artificer, etc.)
 // Priority 4: Adventures (highest - most specific content)
 const COMPENDIUM_PRIORITIES = {
-  // SRD - lowest priority (fallback)
+  // SRD and Tasha's - lowest priority (fallback/options)
   "dnd5e": 1,
+  "dnd-tashas-cauldron": 1,
 
   // Core Rulebooks - base priority
   "dnd-monster-manual": 2,
@@ -23,7 +24,6 @@ const COMPENDIUM_PRIORITIES = {
   "dnd-dungeon-masters-guide": 2,
 
   // Expansions - medium priority
-  "dnd-tashas-cauldron": 3,
   "dnd-forge-artificer": 3,
 
   // Adventures - highest priority (these get priority 4 by default if not listed)
@@ -134,14 +134,25 @@ function detectWOTCCompendiums() {
  */
 function getEnabledCompendiums() {
   const allPacks = detectWOTCCompendiums();
-  const enabledPackIds = game.settings.get(MODULE_ID, "enabledCompendiums");
+
+  // Get the setting (stored as JSON string)
+  let enabledPackIds;
+  try {
+    const settingValue = game.settings.get(MODULE_ID, "enabledCompendiums");
+    enabledPackIds = typeof settingValue === "string" ? JSON.parse(settingValue) : settingValue;
+  } catch (e) {
+    log("Error parsing enabledCompendiums setting, using all");
+    enabledPackIds = ["all"];
+  }
 
   // If no specific selection, use all available
-  if (!enabledPackIds || enabledPackIds.length === 0 || enabledPackIds.includes("all")) {
+  if (!enabledPackIds || !Array.isArray(enabledPackIds) || enabledPackIds.length === 0 || enabledPackIds.includes("all")) {
     return allPacks;
   }
 
-  return allPacks.filter(pack => enabledPackIds.includes(pack.collection));
+  const filtered = allPacks.filter(pack => enabledPackIds.includes(pack.collection));
+  log(`Enabled compendiums: ${filtered.map(p => p.metadata.label).join(", ")}`);
+  return filtered;
 }
 
 /**
@@ -163,14 +174,14 @@ function registerSettings() {
     default: "sequential"
   });
 
-  // Enabled compendiums setting (stored as array of pack IDs)
+  // Enabled compendiums setting (stored as JSON string for reliability)
   game.settings.register(MODULE_ID, "enabledCompendiums", {
     name: game.i18n.localize("NPC_REPLACER.Settings.EnabledCompendiums.Name"),
     hint: game.i18n.localize("NPC_REPLACER.Settings.EnabledCompendiums.Hint"),
     scope: "world",
     config: false, // We'll use a custom form for this
-    type: Array,
-    default: ["all"]
+    type: String,
+    default: JSON.stringify(["all"])
   });
 
   // Register the settings menu for compendium selection
@@ -201,39 +212,66 @@ class CompendiumSelectorForm extends FormApplication {
 
   getData() {
     const allPacks = detectWOTCCompendiums();
-    const enabledPackIds = game.settings.get(MODULE_ID, "enabledCompendiums");
-    const useAll = !enabledPackIds || enabledPackIds.length === 0 || enabledPackIds.includes("all");
+
+    // Parse the JSON setting
+    let enabledPackIds;
+    try {
+      const settingValue = game.settings.get(MODULE_ID, "enabledCompendiums");
+      enabledPackIds = typeof settingValue === "string" ? JSON.parse(settingValue) : settingValue;
+    } catch (e) {
+      enabledPackIds = ["all"];
+    }
+
+    const useAll = !enabledPackIds || !Array.isArray(enabledPackIds) || enabledPackIds.length === 0 || enabledPackIds.includes("all");
+
+    log("CompendiumSelectorForm getData:", { enabledPackIds, useAll });
 
     return {
       useAll: useAll,
-      compendiums: allPacks.map(pack => ({
+      compendiums: allPacks.map((pack, index) => ({
+        index: index,  // Use index instead of collection ID to avoid dot issues
         id: pack.collection,
         name: pack.metadata.label,
         module: pack.metadata.packageName,
+        priority: getCompendiumPriority(pack),
         enabled: useAll || enabledPackIds.includes(pack.collection)
       }))
     };
   }
 
   async _updateObject(event, formData) {
-    const useAll = formData.useAll;
+    log("CompendiumSelectorForm formData:", formData);
 
+    const useAll = formData.useAll;
+    const allPacks = detectWOTCCompendiums();
+
+    let enabledArray;
     if (useAll) {
-      await game.settings.set(MODULE_ID, "enabledCompendiums", ["all"]);
+      enabledArray = ["all"];
     } else {
-      // Collect all checked compendiums
-      const enabled = [];
+      // Collect all checked compendiums using index
+      enabledArray = [];
       for (const [key, value] of Object.entries(formData)) {
         if (key.startsWith("compendium-") && value) {
-          enabled.push(key.replace("compendium-", ""));
+          const index = parseInt(key.replace("compendium-", ""));
+          if (!isNaN(index) && allPacks[index]) {
+            enabledArray.push(allPacks[index].collection);
+          }
         }
       }
-      await game.settings.set(MODULE_ID, "enabledCompendiums", enabled);
     }
+
+    // Save as JSON string
+    const jsonValue = JSON.stringify(enabledArray);
+    log("Saving enabledCompendiums:", jsonValue);
+    await game.settings.set(MODULE_ID, "enabledCompendiums", jsonValue);
 
     // Clear cache to reload with new settings
     monsterIndexCache = null;
+    wotcCompendiumsCache = null;
     log("Compendium settings updated, cache cleared");
+
+    ui.notifications.info("Compendium settings saved. The index will be reloaded on next use.");
   }
 }
 
