@@ -496,24 +496,54 @@ async function getOrCreateImportFolder() {
 }
 
 /**
- * Get all NPC tokens from the current scene
- * @returns {TokenDocument[]} Array of NPC token documents
+ * Get NPC tokens to process - selected tokens if any, otherwise all scene tokens
+ * @returns {{tokens: TokenDocument[], isSelection: boolean}} Object with tokens array and whether it's a selection
  */
-function getNPCTokensFromScene() {
+function getNPCTokensToProcess() {
   if (!canvas.scene) {
-    return [];
+    return { tokens: [], isSelection: false };
   }
 
-  const tokens = canvas.scene.tokens.contents;
+  // Check if there are selected tokens
+  const selectedTokens = canvas.tokens.controlled;
 
-  // Filter only NPC tokens
-  return tokens.filter(tokenDoc => {
+  if (selectedTokens.length > 0) {
+    // Filter selected tokens to only NPCs
+    const selectedNPCs = selectedTokens
+      .map(token => token.document)
+      .filter(tokenDoc => {
+        const actor = tokenDoc.actor;
+        if (!actor) return false;
+        return actor.type === "npc";
+      });
+
+    if (selectedNPCs.length > 0) {
+      log(`Using ${selectedNPCs.length} selected NPC token(s) out of ${selectedTokens.length} selected`);
+      return { tokens: selectedNPCs, isSelection: true };
+    }
+
+    // Selected tokens but none are NPCs - fall through to scene tokens
+    log("Selected tokens contain no NPCs, using all scene NPCs");
+  }
+
+  // No selection or no NPCs in selection - use all scene tokens
+  const allTokens = canvas.scene.tokens.contents;
+  const npcTokens = allTokens.filter(tokenDoc => {
     const actor = tokenDoc.actor;
     if (!actor) return false;
-
-    // In dnd5e system, NPCs have type "npc"
     return actor.type === "npc";
   });
+
+  return { tokens: npcTokens, isSelection: false };
+}
+
+/**
+ * Get all NPC tokens from the current scene (legacy function for compatibility)
+ * @returns {TokenDocument[]} Array of NPC token documents
+ * @deprecated Use getNPCTokensToProcess() instead
+ */
+function getNPCTokensFromScene() {
+  return getNPCTokensToProcess().tokens;
 }
 
 /**
@@ -903,7 +933,7 @@ function validatePrerequisites() {
 }
 
 /**
- * Main function to replace all NPC tokens in the scene
+ * Main function to replace NPC tokens (selected or all in scene)
  */
 async function replaceNPCTokens() {
   // Prevent double execution
@@ -932,14 +962,18 @@ async function replaceNPCTokens() {
     return;
   }
 
-  // Get NPC tokens from the scene - store IDs to track which ones we've processed
-  const npcTokens = getNPCTokensFromScene();
+  // Get NPC tokens to process (selected if any, otherwise all scene NPCs)
+  const { tokens: npcTokens, isSelection } = getNPCTokensToProcess();
   if (npcTokens.length === 0) {
-    ui.notifications.info(game.i18n.localize("NPC_REPLACER.NoTokens"));
+    const message = isSelection
+      ? game.i18n.localize("NPC_REPLACER.NoSelectedNPCs")
+      : game.i18n.localize("NPC_REPLACER.NoTokens");
+    ui.notifications.info(message);
     return;
   }
 
-  log(`Found ${npcTokens.length} NPC tokens in scene`);
+  const sourceDesc = isSelection ? "selected" : "in scene";
+  log(`Found ${npcTokens.length} NPC tokens ${sourceDesc}`);
 
   // Show confirmation dialog
   const confirmed = await showConfirmationDialog(npcTokens);

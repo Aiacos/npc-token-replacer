@@ -5,6 +5,7 @@
     "Processing": "Processing {count} tokens...",
     "Complete": "Replaced {count} tokens successfully",
     "NoTokens": "No NPC tokens found in the current scene",
+    "NoSelectedNPCs": "No NPC tokens in selection (select NPC tokens or deselect all to process entire scene)",
     "NotFound": "Not found in compendiums: {name}",
     "NotFoundCount": "{count} creatures not found in compendiums",
     "Error": "Error replacing token: {name}",

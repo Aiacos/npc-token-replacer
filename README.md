@@ -81,14 +81,20 @@ New official content is automatically detected - no module updates required!
 
 1. Open a scene with NPC tokens placed on it
 2. Select the **Token Controls** layer (the person icon in the left toolbar)
-3. Click the **Replace NPC Tokens** button (sync icon)
-4. A confirmation dialog will appear showing all NPC tokens that will be replaced
-5. Click **Replace Tokens** to proceed or **Cancel** to abort
-6. The module will:
+3. **Optional**: Select specific tokens to replace only those (if no tokens selected, all scene NPCs will be processed)
+4. Click the **Replace NPC Tokens** button (sync icon)
+5. A confirmation dialog will appear showing the NPC tokens that will be replaced
+6. Click **Replace Tokens** to proceed or **Cancel** to abort
+7. The module will:
    - Search all enabled compendiums for matching creatures
    - Delete the original tokens
    - Create new tokens from the compendium with the original position, elevation, size, and visibility
-7. A notification will show the results
+8. A notification will show the results
+
+### Selection Mode
+
+- **With selected tokens**: Only the selected NPC tokens will be replaced
+- **Without selection**: All NPC tokens in the scene will be replaced
 
 ## Token Properties Preserved
 
