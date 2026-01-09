@@ -119,7 +119,7 @@ function detectWOTCCompendiums() {
   log(`Found ${wotcPacks.length} official D&D Actor compendiums:`);
   wotcPacks.forEach(pack => {
     const priority = getCompendiumPriority(pack);
-    const priorityLabels = { 1: "SRD", 2: "CORE", 3: "EXPANSION", 4: "ADVENTURE" };
+    const priorityLabels = { 1: "FALLBACK", 2: "CORE", 3: "EXPANSION", 4: "ADVENTURE" };
     const priorityLabel = priorityLabels[priority] || "UNKNOWN";
     log(`  - ${pack.collection} (${pack.metadata.label}) [package: ${pack.metadata.packageName}, priority: ${priority}-${priorityLabel}]`);
   });
@@ -342,7 +342,7 @@ async function loadMonsterIndex(forceReload = false) {
     try {
       await pack.getIndex({ fields: ["name", "type"] });
       const priority = getCompendiumPriority(pack);
-      const priorityLabels = { 1: "SRD", 2: "CORE", 3: "EXPANSION", 4: "ADVENTURE" };
+      const priorityLabels = { 1: "FALLBACK", 2: "CORE", 3: "EXPANSION", 4: "ADVENTURE" };
       const priorityLabel = priorityLabels[priority] || "UNKNOWN";
       const packEntries = pack.index.contents.map(entry => ({
         entry: entry,
