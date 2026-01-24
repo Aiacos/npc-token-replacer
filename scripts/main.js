@@ -1,18 +1,43 @@
 /**
  * NPC Token Replacer
- * A Foundry VTT module that replaces NPC tokens with official D&D compendium versions
+ * A Foundry VTT module that replaces NPC tokens with official D&D compendium versions.
+ *
+ * @module npc-token-replacer
+ * @author Aiacos
+ * @version 1.3.0
+ * @license MIT
+ *
+ * Features:
+ * - Automatic detection of all installed WotC D&D compendiums
+ * - Multi-compendium search with priority-based selection
+ * - Smart name matching with variant transforms
+ * - Wildcard token art resolution with caching
+ * - Preserves token position, elevation, dimensions, and visibility
+ *
+ * @see {@link https://github.com/Aiacos/npc-token-replacer} Repository
  */
 
+/** @constant {string} MODULE_ID - The unique identifier for this Foundry VTT module */
 const MODULE_ID = "npc-token-replacer";
 
-// Known official WOTC module prefixes for auto-detection
+/**
+ * Known official WotC module prefixes used for auto-detection of D&D compendiums.
+ * @constant {string[]}
+ */
 const WOTC_MODULE_PREFIXES = ["dnd-", "dnd5e"];
 
-// Compendium priority levels (higher = preferred)
-// Priority 1: SRD and Tasha's (lowest - fallback/options)
-// Priority 2: Core Rulebooks (Monster Manual, PHB, DMG)
-// Priority 3: Expansions (Forge of Artificer, etc.)
-// Priority 4: Adventures (highest - most specific content)
+/**
+ * Compendium priority levels mapping package names to priority numbers.
+ * Higher priority = preferred when same creature exists in multiple sources.
+ *
+ * Priority levels:
+ * - 1: SRD and Tasha's (lowest - fallback/options)
+ * - 2: Core Rulebooks (Monster Manual, PHB, DMG)
+ * - 3: Expansions (Forge of Artificer, etc.)
+ * - 4: Adventures (highest - most specific content)
+ *
+ * @constant {Object.<string, number>}
+ */
 const COMPENDIUM_PRIORITIES = {
   // SRD and Tasha's - lowest priority (fallback/options)
   "dnd5e": 1,
@@ -31,23 +56,47 @@ const COMPENDIUM_PRIORITIES = {
   "dnd-tomb-annihilation": 4,
   "dnd-adventures-faerun": 4,
   "dnd-heroes-faerun": 4,
-  "dnd-heroes-borderlands": 4,
+  "dnd-heroes-borderlands": 4
 };
 
-// Cache for the combined monster index from all selected compendiums
+/**
+ * Module-level cache for the combined monster index from all selected compendiums.
+ * Contains array of {entry, pack} objects. Cleared when compendium settings change.
+ * @type {Array<{entry: Object, pack: CompendiumCollection}>|null}
+ */
 let monsterIndexCache = null;
 
-// Cache for detected WOTC compendiums
+/**
+ * Module-level cache for detected WotC compendiums.
+ * @type {CompendiumCollection[]|null}
+ */
 let wotcCompendiumsCache = null;
 
-// Cache for the import folder
+/**
+ * Module-level cache for the import folder where actors are stored.
+ * @type {Folder|null}
+ */
 let importFolderCache = null;
 
-// Lock to prevent double execution
+/**
+ * Lock flag to prevent concurrent execution of token replacement.
+ * @type {boolean}
+ */
 let isProcessing = false;
 
-// Sequential counter for token variations (reset each replacement session)
+/**
+ * Sequential counter for token variations. Incremented for each token with wildcard art.
+ * Reset to 0 at the start of each replacement session.
+ * @type {number}
+ */
 let sequentialVariantCounter = 0;
+
+/**
+ * Cache for discovered wildcard token art variants.
+ * Maps wildcard patterns (e.g., "tokens/specter-*.webp") to arrays of resolved file paths.
+ * @type {Map<string, string[]>}
+ */
+const wildcardVariantCache = new Map();
 
 /**
  * Log a message with the module prefix
@@ -140,7 +189,7 @@ function getEnabledCompendiums() {
   try {
     const settingValue = game.settings.get(MODULE_ID, "enabledCompendiums");
     enabledPackIds = typeof settingValue === "string" ? JSON.parse(settingValue) : settingValue;
-  } catch (e) {
+  } catch (_e) {
     log("Error parsing enabledCompendiums setting, using default");
     enabledPackIds = ["default"];
   }
@@ -210,9 +259,15 @@ function registerSettings() {
 }
 
 /**
- * Custom form for selecting which compendiums to use
+ * Custom FormApplication for selecting which D&D compendiums to use for token replacement.
+ * Provides three selection modes: Default (Core + Fallback), All, or Custom selection.
+ * @extends FormApplication
  */
 class CompendiumSelectorForm extends FormApplication {
+  /**
+   * Configure default options for the form application
+   * @returns {Object} Default options merged with FormApplication defaults
+   */
   static get defaultOptions() {
     return foundry.utils.mergeObject(super.defaultOptions, {
       id: "npc-replacer-compendium-selector",
@@ -224,6 +279,10 @@ class CompendiumSelectorForm extends FormApplication {
     });
   }
 
+  /**
+   * Prepare data for rendering the compendium selector form
+   * @returns {Object} Template data containing mode and compendiums array
+   */
   getData() {
     const allPacks = detectWOTCCompendiums();
 
@@ -232,7 +291,7 @@ class CompendiumSelectorForm extends FormApplication {
     try {
       const settingValue = game.settings.get(MODULE_ID, "enabledCompendiums");
       enabledPackIds = typeof settingValue === "string" ? JSON.parse(settingValue) : settingValue;
-    } catch (e) {
+    } catch (_e) {
       enabledPackIds = ["default"];
     }
 
@@ -249,15 +308,15 @@ class CompendiumSelectorForm extends FormApplication {
     const priorityLabels = { 1: "FALLBACK", 2: "CORE", 3: "EXPANSION", 4: "ADVENTURE" };
 
     return {
-      mode: mode,
+      mode,
       compendiums: allPacks.map((pack, index) => {
         const priority = getCompendiumPriority(pack);
         return {
-          index: index,
+          index,
           id: pack.collection,
           name: pack.metadata.label,
           module: pack.metadata.packageName,
-          priority: priority,
+          priority,
           priorityLabel: priorityLabels[priority] || "UNKNOWN",
           enabled: mode === "all" || mode === "default" || enabledPackIds.includes(pack.collection),
           isCoreFallback: priority <= 2
@@ -266,6 +325,12 @@ class CompendiumSelectorForm extends FormApplication {
     };
   }
 
+  /**
+   * Handle form submission and save compendium selection settings
+   * @param {Event} event - The form submission event
+   * @param {Object} formData - The form data containing mode and selected compendiums
+   * @returns {Promise<void>}
+   */
   async _updateObject(event, formData) {
     log("CompendiumSelectorForm formData:", formData);
 
@@ -345,8 +410,8 @@ async function loadMonsterIndex(forceReload = false) {
       const priorityLabels = { 1: "FALLBACK", 2: "CORE", 3: "EXPANSION", 4: "ADVENTURE" };
       const priorityLabel = priorityLabels[priority] || "UNKNOWN";
       const packEntries = pack.index.contents.map(entry => ({
-        entry: entry,
-        pack: pack
+        entry,
+        pack
       }));
       combinedIndex.push(...packEntries);
       log(`  [${priority}-${priorityLabel}] Loaded ${pack.index.size} entries from ${pack.metadata.label}`);
@@ -572,12 +637,12 @@ function extractTokenProperties(tokenDoc) {
  * @returns {string} Normalized name
  */
 function normalizeName(name) {
-  if (!name) return '';
+  if (!name) return "";
   return name
     .toLowerCase()
     .trim()
-    .replace(/[^\w\s]/g, '') // Remove special characters
-    .replace(/\s+/g, ' ');   // Normalize whitespace
+    .replace(/[^\w\s]/g, "") // Remove special characters
+    .replace(/\s+/g, " ");   // Normalize whitespace
 }
 
 /**
@@ -586,15 +651,127 @@ function normalizeName(name) {
  * @returns {string} Escaped string
  */
 function escapeHtml(str) {
-  if (!str) return '';
+  if (!str) return "";
   const htmlEscapes = {
-    '&': '&amp;',
-    '<': '&lt;',
-    '>': '&gt;',
-    '"': '&quot;',
-    "'": '&#39;'
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    '"': "&quot;",
+    "'": "&#39;"
   };
   return str.replace(/[&<>"']/g, char => htmlEscapes[char]);
+}
+
+/**
+ * Fetch with timeout to prevent hanging requests
+ * @param {string} url - URL to fetch
+ * @param {Object} options - Fetch options
+ * @param {number} timeoutMs - Timeout in milliseconds (default 3000)
+ * @returns {Promise<Response>} Fetch response
+ */
+async function fetchWithTimeout(url, options = {}, timeoutMs = 3000) {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    const response = await fetch(url, { ...options, signal: controller.signal });
+    return response;
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+
+/**
+ * Resolve wildcard token paths to actual file paths
+ * Uses caching to avoid repeated filesystem queries for the same pattern
+ * @param {string} wildcardPath - Path containing wildcard (e.g., "tokens/specter-*.webp")
+ * @returns {Promise<string[]>} Array of resolved file paths
+ */
+async function resolveWildcardVariants(wildcardPath) {
+  // Check cache first
+  if (wildcardVariantCache.has(wildcardPath)) {
+    log(`Using cached variants for: ${wildcardPath}`);
+    return wildcardVariantCache.get(wildcardPath);
+  }
+
+  const availableVariants = [];
+
+  // Extract directory and pattern
+  const lastSlash = wildcardPath.lastIndexOf("/");
+  const directory = wildcardPath.substring(0, lastSlash);
+  const filePattern = wildcardPath.substring(lastSlash + 1);
+
+  // Try FilePicker.browse() first (Foundry's native method)
+  // This is more efficient as it queries the server once
+  try {
+    if (typeof FilePicker !== "undefined" && FilePicker.browse) {
+      const result = await FilePicker.browse("data", directory);
+      if (result && result.files) {
+        // Convert wildcard pattern to regex
+        const regexPattern = filePattern
+          .replace(/[.+^${}()|[\]\\]/g, "\\$&")  // Escape special chars except *
+          .replace(/\*/g, ".*");  // Convert * to .*
+        const regex = new RegExp("^" + regexPattern + "$", "i");
+
+        for (const file of result.files) {
+          const fileName = file.substring(file.lastIndexOf("/") + 1);
+          if (regex.test(fileName)) {
+            availableVariants.push(file);
+          }
+        }
+
+        if (availableVariants.length > 0) {
+          log(`FilePicker found ${availableVariants.length} variants for: ${wildcardPath}`);
+          // Sort for consistent ordering
+          availableVariants.sort();
+          wildcardVariantCache.set(wildcardPath, availableVariants);
+          return availableVariants;
+        }
+      }
+    }
+  } catch (e) {
+    log(`FilePicker.browse failed, falling back to HEAD requests: ${e.message}`);
+  }
+
+  // Fallback: probe for common variant patterns using HEAD requests
+  // Extract base name from pattern
+  const baseName = filePattern.replace("*", "").replace(".webp", "").replace(".png", "").replace(".jpg", "");
+  const extensions = [".webp", ".png", ".jpg"];
+  const variants = ["1", "2", "3", "4", "5", "01", "02", "03", "04", "05", "a", "b", "c", "d", "e", ""];
+
+  // Batch requests in parallel for efficiency (max 10 concurrent)
+  const checkVariant = async (testPath) => {
+    try {
+      const response = await fetchWithTimeout(testPath, { method: "HEAD" });
+      return response.ok ? testPath : null;
+    } catch (_e) {
+      return null;
+    }
+  };
+
+  // Build list of paths to check
+  const pathsToCheck = [];
+  for (const variant of variants) {
+    for (const ext of extensions) {
+      pathsToCheck.push(`${directory}/${baseName}${variant}${ext}`);
+    }
+  }
+
+  // Process in batches of 10 to avoid overwhelming the server
+  const batchSize = 10;
+  for (let i = 0; i < pathsToCheck.length; i += batchSize) {
+    const batch = pathsToCheck.slice(i, i + batchSize);
+    const results = await Promise.all(batch.map(checkVariant));
+    for (const result of results) {
+      if (result) availableVariants.push(result);
+    }
+  }
+
+  log(`HEAD requests found ${availableVariants.length} variants for: ${wildcardPath}`);
+
+  // Cache the results (even if empty, to avoid repeated failed lookups)
+  wildcardVariantCache.set(wildcardPath, availableVariants);
+  return availableVariants;
 }
 
 /**
@@ -634,7 +811,7 @@ function findInMonsterManual(creatureName, index) {
   const normalizedSearch = normalizeName(creatureName);
 
   if (!normalizedSearch) {
-    log(`Empty creature name provided`);
+    log("Empty creature name provided");
     return null;
   }
 
@@ -647,11 +824,15 @@ function findInMonsterManual(creatureName, index) {
   }
 
   // Try without common suffixes/prefixes (only check variants that differ from original)
+  // Note: The combined transform (prefix + suffix) is intentionally included for cases like
+  // "Young Goblin Warrior" where removing only prefix or suffix doesn't match "Goblin"
+  const PREFIX_PATTERN = /^(young|adult|ancient|elder|greater|lesser)\s+/i;
+  const SUFFIX_PATTERN = /\s+(warrior|guard|scout|champion|leader|chief|captain|shaman|berserker)$/i;
+
   const variantTransforms = [
-    name => name.replace(/^(young|adult|ancient|elder|greater|lesser)\s+/i, ''),
-    name => name.replace(/\s+(warrior|guard|scout|champion|leader|chief|captain|shaman|berserker)$/i, ''),
-    name => name.replace(/^(young|adult|ancient|elder|greater|lesser)\s+/i, '')
-                .replace(/\s+(warrior|guard|scout|champion|leader|chief|captain|shaman|berserker)$/i, ''),
+    name => name.replace(PREFIX_PATTERN, ""),      // Remove prefix only
+    name => name.replace(SUFFIX_PATTERN, ""),      // Remove suffix only
+    name => name.replace(PREFIX_PATTERN, "").replace(SUFFIX_PATTERN, "")  // Remove both
   ];
 
   for (const transform of variantTransforms) {
@@ -676,8 +857,8 @@ function findInMonsterManual(creatureName, index) {
       if (entryName.length < MIN_PARTIAL_LENGTH) return false;
 
       // Check if one name starts with the other (word boundary)
-      const searchWords = normalizedSearch.split(' ');
-      const entryWords = entryName.split(' ');
+      const searchWords = normalizedSearch.split(" ");
+      const entryWords = entryName.split(" ");
 
       // Check if the main creature type matches (usually first or last word)
       return searchWords.some(sw => entryWords.includes(sw) && sw.length >= MIN_PARTIAL_LENGTH) ||
@@ -727,7 +908,7 @@ async function replaceToken(tokenDoc, compendiumEntry, pack) {
       try {
         const sourceId = a.flags?.core?.sourceId;
         if (sourceId === compendiumActor.uuid) return true;
-      } catch (e) {
+      } catch (_e) {
         // Ignore errors from flag access
       }
     }
@@ -746,7 +927,7 @@ async function replaceToken(tokenDoc, compendiumEntry, pack) {
     if (!worldActor) {
       throw new Error(`Failed to import actor "${compendiumActor.name}" from compendium`);
     }
-    log(`Imported actor "${compendiumActor.name}" from compendium into folder "${importFolder?.name || 'root'}"`);
+    log(`Imported actor "${compendiumActor.name}" from compendium into folder "${importFolder?.name || "root"}"`);
   } else {
     log(`Using existing imported actor "${worldActor.name}"`);
   }
@@ -754,12 +935,12 @@ async function replaceToken(tokenDoc, compendiumEntry, pack) {
   // IMPORTANT: Always use the COMPENDIUM actor's prototypeToken to get the correct Monster Manual 2024 token image
   // The world actor might have been imported from a different source (old SRD) with different token art
   const prototypeToken = compendiumActor.prototypeToken.toObject();
-  log(`Using token image from compendium: ${prototypeToken.texture?.src || 'default'}`);
+  log(`Using token image from compendium: ${prototypeToken.texture?.src || "default"}`);
 
   // WORKAROUND: Handle wildcard patterns in token texture paths
   // The Monster Manual 2024 module uses patterns like "specter-*.webp" for randomized tokens
   // Foundry cannot load these directly, so we need to resolve or use a fallback
-  if (prototypeToken.texture?.src && prototypeToken.texture.src.includes('*')) {
+  if (prototypeToken.texture?.src && prototypeToken.texture.src.includes("*")) {
     const originalPath = prototypeToken.texture.src;
     log(`Detected wildcard pattern in token path: ${originalPath}`);
 
@@ -767,35 +948,11 @@ async function replaceToken(tokenDoc, compendiumEntry, pack) {
     const variationMode = game.settings.get(MODULE_ID, "tokenVariationMode");
     log(`Token variation mode: ${variationMode}`);
 
-    // Find all available variants
-    const availableVariants = [];
     let resolvedPath = null;
 
     try {
-      // Extract the directory and pattern
-      const lastSlash = originalPath.lastIndexOf('/');
-      const directory = originalPath.substring(0, lastSlash);
-      const filePattern = originalPath.substring(lastSlash + 1);
-      const baseName = filePattern.replace('*', '').replace('.webp', '').replace('.png', '').replace('.jpg', '');
-
-      // Try common numbered variants (1, 2, 3, etc.)
-      const extensions = ['.webp', '.png', '.jpg'];
-      const variants = ['1', '2', '3', '4', '5', '01', '02', '03', '04', '05', 'a', 'b', 'c', 'd', 'e', ''];
-
-      for (const variant of variants) {
-        for (const ext of extensions) {
-          const testPath = `${directory}/${baseName}${variant}${ext}`;
-          // Check if the file exists by trying to fetch it
-          try {
-            const response = await fetch(testPath, { method: 'HEAD' });
-            if (response.ok) {
-              availableVariants.push(testPath);
-            }
-          } catch (e) {
-            // File doesn't exist, try next
-          }
-        }
-      }
+      // Use optimized variant resolution with caching
+      const availableVariants = await resolveWildcardVariants(originalPath);
 
       log(`Found ${availableVariants.length} token variants for ${compendiumEntry.name}`);
 
@@ -832,13 +989,13 @@ async function replaceToken(tokenDoc, compendiumEntry, pack) {
     // If we couldn't resolve, use the actor's portrait as fallback
     if (!resolvedPath) {
       const portraitPath = compendiumActor.img;
-      if (portraitPath && !portraitPath.includes('*')) {
+      if (portraitPath && !portraitPath.includes("*")) {
         resolvedPath = portraitPath;
         log(`Using actor portrait as fallback: ${resolvedPath}`);
       } else {
         // Last resort: use mystery man token
-        resolvedPath = 'icons/svg/mystery-man.svg';
-        log(`Using default mystery-man token as last resort`);
+        resolvedPath = "icons/svg/mystery-man.svg";
+        log("Using default mystery-man token as last resort");
       }
     }
 
@@ -886,7 +1043,7 @@ async function replaceToken(tokenDoc, compendiumEntry, pack) {
 async function showConfirmationDialog(tokens) {
   const tokenList = tokens
     .map(t => `<li>${escapeHtml(t.actor?.name || t.name)}</li>`)
-    .join('');
+    .join("");
 
   const content = `
     <p>${game.i18n.format("NPC_REPLACER.ConfirmContent", { count: tokens.length })}</p>
@@ -898,7 +1055,7 @@ async function showConfirmationDialog(tokens) {
 
   return Dialog.confirm({
     title: game.i18n.localize("NPC_REPLACER.ConfirmTitle"),
-    content: content,
+    content,
     yes: () => true,
     no: () => false,
     defaultYes: false
@@ -1130,5 +1287,6 @@ window.NPCTokenReplacer = {
     monsterIndexCache = null;
     importFolderCache = null;
     wotcCompendiumsCache = null;
+    wildcardVariantCache.clear();
   }
 };
