@@ -222,6 +222,81 @@ If specific tokens fail to replace, check the console for error details. Common 
 - Custom/homebrew creatures without official compendium equivalents will be skipped
 - Token art from the compendium will replace any custom token art
 
+## Architecture
+
+The module follows an object-oriented design with well-defined classes, each with a single responsibility. All logic is contained in `scripts/main.js` as plain JavaScript ES modules (no build system required).
+
+### Class Hierarchy
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                      NPCTokenReplacerController                 │
+│              (Main Facade - orchestrates all operations)        │
+└─────────────────────────────────────────────────────────────────┘
+                               │
+                               │ uses
+                               ▼
+    ┌──────────────────────────┼───────────────────────────┐
+    │                          │                           │
+    ▼                          ▼                           ▼
+┌────────────────┐   ┌─────────────────┐   ┌────────────────────┐
+│ CompendiumManager │ │  TokenReplacer   │ │   NameMatcher       │
+│ (compendiums)     │ │ (token ops)      │ │ (name matching)     │
+└────────────────┘   └─────────────────┘   └────────────────────┘
+    │                          │
+    │                          │ uses
+    │                          ▼
+    │                 ┌─────────────────┐
+    │                 │ WildcardResolver │
+    │                 │ (path resolution)│
+    │                 └─────────────────┘
+    │                          │
+    │                          │ uses
+    │                          ▼
+    │                 ┌─────────────────┐
+    │                 │  FolderManager   │
+    │                 │ (import folders) │
+    │                 └─────────────────┘
+    │                          │
+    └──────────────────────────┼───────────────────────────┐
+                               │                           │
+                               ▼                           ▼
+                        ┌────────────┐           ┌─────────────────────┐
+                        │   Logger   │           │ CompendiumSelectorForm│
+                        │ (logging)  │           │ (settings UI)        │
+                        └────────────┘           └─────────────────────┘
+```
+
+### Class Responsibilities
+
+| Class | Purpose |
+|-------|---------|
+| **NPCTokenReplacerController** | Main facade that orchestrates the token replacement workflow, validates prerequisites, and coordinates all operations |
+| **CompendiumManager** | Detects WotC compendiums, manages enabled compendiums, loads monster indexes, and handles compendium priorities |
+| **TokenReplacer** | Handles token replacement operations, imports actors to world, and creates new tokens with preserved properties |
+| **NameMatcher** | Normalizes creature names and matches them to compendium entries using multi-stage matching algorithms |
+| **WildcardResolver** | Resolves Monster Manual 2024 wildcard token paths (e.g., `specter-*.webp`) to actual image files |
+| **FolderManager** | Manages Actor folders for organizing compendium imports |
+| **Logger** | Provides centralized logging with consistent module prefix formatting |
+| **CompendiumSelectorForm** | Foundry FormApplication subclass for the compendium selection settings UI |
+
+### Design Patterns
+
+- **Facade Pattern**: `NPCTokenReplacerController` provides a simplified interface to the complex subsystem of classes
+- **Static Methods**: Most classes use static methods since they don't require instance state
+- **Private Fields**: ES6 private static fields (`#field`) ensure encapsulation and prevent external access to internal state
+- **Caching**: Multiple classes implement caching for performance (compendium indexes, folder references, wildcard paths)
+
+### Foundry Integration
+
+The module integrates with Foundry VTT through these hooks:
+
+- `Hooks.once("init")`: Registers module settings
+- `Hooks.once("ready")`: Initializes the controller and pre-caches monster indexes
+- `Hooks.on("getSceneControlButtons")`: Adds the toolbar button (handles both v12 and v13 API formats)
+
+A global debug API is exposed via `window.NPCTokenReplacer` for console access.
+
 ## Contributing
 
 Contributions are welcome! Please feel free to submit issues or pull requests.

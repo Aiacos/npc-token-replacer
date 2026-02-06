@@ -43,7 +43,8 @@
         "ModeAllHint": "Use all installed official D&D compendiums including adventures and expansions.",
         "ModeCustom": "Custom Selection",
         "ModeCustomHint": "Manually select which compendiums to use from the list below.",
-        "SelectCompendiums": "Available Compendiums:"
+        "SelectCompendiums": "Available Compendiums:",
+        "Saved": "Compendium settings saved. The index will be reloaded on next use."
       }
     }
   }

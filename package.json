@@ -1,0 +1,15 @@
+{
+  "name": "001-ricontrolla-il-progetto-correggi-gli-errori-rendil",
+  "version": "1.0.0",
+  "description": "A Foundry VTT module that automatically replaces NPC tokens in your scene with official D&D compendium versions, preserving their position, elevation, dimensions, and visibility.",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "eslint": "^9.39.2"
+  }
+}
