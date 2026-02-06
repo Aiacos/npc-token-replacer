@@ -14,7 +14,40 @@ This is a Foundry VTT module with no build system - plain JavaScript ES modules.
 2. Enable the module in a D&D 5e world
 3. Changes to `scripts/main.js` require a browser refresh (F5)
 
-The `release/` folder contains packaged releases - do not edit files there directly.
+The `releases/` folder contains packaged releases - do not edit files there directly.
+
+## Build & Release
+
+### Build the package
+
+```bash
+bash build.sh      # Linux/macOS
+build.bat           # Windows
+```
+
+The build script auto-detects module ID, version, and GitHub URL from `module.json`. It creates a clean ZIP in `releases/{id}-v{version}.zip` with the download URL already set.
+
+### Publish a GitHub release
+
+```bash
+# 1. Update version in module.json
+# 2. Update the "download" URL in module.json to match the new version:
+#    https://github.com/Aiacos/npc-token-replacer/releases/download/vX.Y.Z/npc-token-replacer-vX.Y.Z.zip
+# 3. Build the package
+bash build.sh
+# 4. Commit and push
+git add module.json && git commit -m "Bump version to X.Y.Z" && git push
+# 5. Create the GitHub release (upload BOTH module.json and the ZIP)
+gh release create vX.Y.Z releases/npc-token-replacer-vX.Y.Z.zip module.json --title "vX.Y.Z - Description"
+```
+
+**Important:** The `module.json` must be uploaded as a **separate release asset** alongside the ZIP. Foundry VTT downloads it first (via the manifest URL) to discover the module and its download URL.
+
+### Foundry VTT Manifest URL (for installation)
+
+```
+https://github.com/Aiacos/npc-token-replacer/releases/latest/download/module.json
+```
 
 ## Architecture
 
