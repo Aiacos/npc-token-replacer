@@ -1,162 +1,179 @@
 @echo off
 REM
-REM Build script for NPC Token Replacer Foundry VTT module
-REM Creates a distributable ZIP package in the releases/ folder
+REM Generic Build Script for Foundry VTT Modules
+REM Creates a distributable ZIP package in the releases\ folder
+REM Auto-detects module ID, version, and GitHub URL from module.json
 REM
 
 setlocal EnableDelayedExpansion
 
-REM Change to script directory
+REM Change to script directory (allows running from anywhere)
 cd /d "%~dp0"
 
-echo ========================================
-echo   NPC Token Replacer - Build Script
-echo ========================================
-echo.
-
-REM Module configuration
-set "MODULE_ID=npc-token-replacer"
-
-REM Check for required files
-echo [1/6] Checking required files...
+REM ─── Read module.json ──────────────────────────────────────────────
 
 if not exist "module.json" (
-    echo ERROR: module.json not found!
+    echo [ERROR] module.json not found!
     exit /b 1
 )
 
-REM Extract version from module.json using PowerShell
-for /f "usebackq delims=" %%v in (`powershell -NoProfile -Command "(Get-Content 'module.json' | ConvertFrom-Json).version"`) do set "VERSION=%%v"
+REM Extract fields from module.json using PowerShell
+for /f "usebackq delims=" %%i in (`powershell -NoProfile -Command "(Get-Content 'module.json' | ConvertFrom-Json).id"`) do set "MODULE_ID=%%i"
+for /f "usebackq delims=" %%i in (`powershell -NoProfile -Command "(Get-Content 'module.json' | ConvertFrom-Json).version"`) do set "VERSION=%%i"
+for /f "usebackq delims=" %%i in (`powershell -NoProfile -Command "$m = Get-Content 'module.json' | ConvertFrom-Json; if ($m.url) { $m.url }"`) do set "GITHUB_URL=%%i"
+
+if "%MODULE_ID%"=="" (
+    echo [ERROR] Could not extract module id from module.json
+    exit /b 1
+)
 
 if "%VERSION%"=="" (
-    echo ERROR: Could not extract version from module.json
+    echo [ERROR] Could not extract version from module.json
     exit /b 1
 )
-
-echo   Found version: %VERSION%
 
 REM Output file name
 set "OUTPUT_FILE=%MODULE_ID%-v%VERSION%.zip"
 
-REM Check required files
-if not exist "README.md" (
-    echo ERROR: Required file 'README.md' not found!
-    exit /b 1
+echo ========================================
+echo   Foundry VTT Module - Build Script
+echo ========================================
+echo.
+echo   Module:  %MODULE_ID%
+echo   Version: %VERSION%
+echo.
+
+REM ─── Check project files ───────────────────────────────────────────
+
+echo [1/6] Checking project files...
+
+REM Required files
+set "INCLUDE_FILES=module.json"
+
+REM Optional files
+for %%f in (README.md LICENSE CHANGELOG.md) do (
+    if exist "%%f" (
+        set "INCLUDE_FILES=!INCLUDE_FILES! %%f"
+    )
 )
 
-REM Check required directories
-if not exist "scripts\" (
-    echo ERROR: Required directory 'scripts' not found!
-    exit /b 1
+REM Detect existing directories
+set "INCLUDE_DIRS="
+for %%d in (scripts lang styles templates assets packs icons images fonts) do (
+    if exist "%%d\" (
+        if "!INCLUDE_DIRS!"=="" (
+            set "INCLUDE_DIRS=%%d"
+        ) else (
+            set "INCLUDE_DIRS=!INCLUDE_DIRS! %%d"
+        )
+    )
 )
 
-if not exist "templates\" (
-    echo ERROR: Required directory 'templates' not found!
-    exit /b 1
-)
+echo   Files: %INCLUDE_FILES%
+echo   Dirs:  %INCLUDE_DIRS%
+echo   OK
 
-if not exist "lang\" (
-    echo ERROR: Required directory 'lang' not found!
-    exit /b 1
-)
+REM ─── Create releases directory ─────────────────────────────────────
 
-echo   All required files present OK
-
-REM Create releases directory if it doesn't exist
 echo [2/6] Creating releases directory...
 if not exist "releases\" mkdir releases
 echo   OK
 
-REM Create temp directory
+REM ─── Create temporary staging directory ────────────────────────────
+
 echo [3/6] Creating temporary staging directory...
-set "TEMP_DIR=%TEMP%\npc-token-replacer-build-%RANDOM%"
+set "TEMP_DIR=%TEMP%\fvtt-build-%MODULE_ID%-%RANDOM%"
 mkdir "%TEMP_DIR%"
 if errorlevel 1 (
-    echo ERROR: Failed to create temp directory
+    echo [ERROR] Failed to create temp directory
     exit /b 1
 )
 echo   OK
 
-REM Copy files to temp directory
+REM ─── Stage files ───────────────────────────────────────────────────
+
 echo [4/6] Staging files for packaging...
 
-REM Copy required files
-copy /y "module.json" "%TEMP_DIR%\" >nul
-echo   Copied: module.json
-copy /y "README.md" "%TEMP_DIR%\" >nul
-echo   Copied: README.md
-
-REM Copy required directories
-xcopy /e /i /q /y "scripts" "%TEMP_DIR%\scripts" >nul
-echo   Copied: scripts/
-xcopy /e /i /q /y "templates" "%TEMP_DIR%\templates" >nul
-echo   Copied: templates/
-xcopy /e /i /q /y "lang" "%TEMP_DIR%\lang" >nul
-echo   Copied: lang/
-
-REM Copy optional files if they exist
-if exist "LICENSE" (
-    copy /y "LICENSE" "%TEMP_DIR%\" >nul
-    echo   Copied: LICENSE
-) else (
-    echo   Warning: Optional file 'LICENSE' not found ^(skipping^)
+REM Copy files
+for %%f in (%INCLUDE_FILES%) do (
+    if exist "%%f" (
+        copy /y "%%f" "%TEMP_DIR%\" >nul
+        echo   Copied: %%f
+    )
 )
 
-REM Update download URL in the staged module.json
+REM Copy directories
+for %%d in (%INCLUDE_DIRS%) do (
+    if exist "%%d\" (
+        xcopy /e /i /q /y "%%d" "%TEMP_DIR%\%%d" >nul
+        echo   Copied: %%d\
+    )
+)
+
+REM ─── Update download URL in staged module.json ────────────────────
+
 echo [5/6] Updating module.json download URL...
 
-set "NEW_DOWNLOAD_URL=https://github.com/Aiacos/%MODULE_ID%/releases/download/v%VERSION%/%OUTPUT_FILE%"
+if not "%GITHUB_URL%"=="" (
+    REM Use PowerShell to update the download URL
+    powershell -NoProfile -Command ^
+        "$json = Get-Content '%TEMP_DIR%\module.json' -Raw | ConvertFrom-Json; " ^
+        "$ghPath = '%GITHUB_URL%' -replace 'https://github.com/', ''; " ^
+        "$json.download = 'https://github.com/' + $ghPath + '/releases/download/v%VERSION%/%OUTPUT_FILE%'; " ^
+        "$json | ConvertTo-Json -Depth 10 | Set-Content '%TEMP_DIR%\module.json' -Encoding UTF8"
+    echo   Download URL updated
+) else (
+    echo   Skipped ^(no GitHub url in module.json^)
+)
 
-REM Use PowerShell to update the download URL in module.json
-powershell -NoProfile -Command "$json = Get-Content '%TEMP_DIR%\module.json' -Raw | ConvertFrom-Json; $json.download = '%NEW_DOWNLOAD_URL%'; $json | ConvertTo-Json -Depth 10 | Set-Content '%TEMP_DIR%\module.json' -Encoding UTF8"
+REM ─── Create ZIP archive ───────────────────────────────────────────
 
-echo   Download URL set to: %NEW_DOWNLOAD_URL%
-
-REM Create the ZIP file
 echo [6/6] Creating ZIP archive...
 
 REM Remove existing release file if it exists
 if exist "releases\%OUTPUT_FILE%" (
     del /f "releases\%OUTPUT_FILE%"
-    echo   Removed existing: releases\%OUTPUT_FILE%
 )
 
-REM Get the absolute path for output
+REM Get absolute path for output
 set "OUTPUT_PATH=%~dp0releases\%OUTPUT_FILE%"
 
 REM Create ZIP using PowerShell Compress-Archive
 powershell -NoProfile -Command "Compress-Archive -Path '%TEMP_DIR%\*' -DestinationPath '%OUTPUT_PATH%' -Force"
 
 if errorlevel 1 (
-    echo ERROR: Failed to create ZIP file
+    echo [ERROR] Failed to create ZIP file
     rd /s /q "%TEMP_DIR%" 2>nul
     exit /b 1
 )
-
 echo   OK
 
 REM Clean up temp directory
 rd /s /q "%TEMP_DIR%" 2>nul
 
-REM Verify the ZIP was created
-if exist "releases\%OUTPUT_FILE%" (
-    REM Get file size using PowerShell
-    for /f "usebackq delims=" %%s in (`powershell -NoProfile -Command "(Get-Item 'releases\%OUTPUT_FILE%').Length / 1KB | ForEach-Object { '{0:N1} KB' -f $_ }"`) do set "ZIP_SIZE=%%s"
+REM ─── Verify and report ────────────────────────────────────────────
 
-    echo.
-    echo ========================================
-    echo   Build Successful!
-    echo ========================================
-    echo.
-    echo   Output: releases\%OUTPUT_FILE%
-    echo   Size:   !ZIP_SIZE!
-    echo.
-    echo   ZIP Contents:
-    powershell -NoProfile -Command "Add-Type -AssemblyName System.IO.Compression.FileSystem; [System.IO.Compression.ZipFile]::OpenRead('releases\%OUTPUT_FILE%').Entries | ForEach-Object { '    ' + $_.FullName + ' (' + $_.Length + ' bytes)' }"
-    echo.
-) else (
-    echo ERROR: Failed to create ZIP file
+if not exist "releases\%OUTPUT_FILE%" (
+    echo [ERROR] Failed to create ZIP file
     exit /b 1
 )
+
+REM Get file size
+for /f "usebackq delims=" %%s in (`powershell -NoProfile -Command "(Get-Item 'releases\%OUTPUT_FILE%').Length / 1KB | ForEach-Object { '{0:N1} KB' -f $_ }"`) do set "ZIP_SIZE=%%s"
+
+echo.
+echo ========================================
+echo   Build Successful!
+echo ========================================
+echo.
+echo   Output:  releases\%OUTPUT_FILE%
+echo   Size:    !ZIP_SIZE!
+echo.
+echo   ZIP Contents:
+powershell -NoProfile -Command "Add-Type -AssemblyName System.IO.Compression.FileSystem; [System.IO.Compression.ZipFile]::OpenRead('releases\%OUTPUT_FILE%').Entries | ForEach-Object { '    ' + $_.FullName + ' (' + $_.Length + ' bytes)' }"
+echo.
+echo   GitHub release command:
+echo     gh release create v%VERSION% releases\%OUTPUT_FILE% module.json --title "v%VERSION%"
+echo.
 
 endlocal

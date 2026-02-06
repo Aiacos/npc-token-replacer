@@ -47,6 +47,9 @@ tmp/
 temp/
 *.tmp
 *.temp
+
+# Build output
+releases/
 release/
 
 # Auto Claude data directory
