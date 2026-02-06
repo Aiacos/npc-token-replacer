@@ -1,0 +1,34 @@
+{
+  "sandbox": {
+    "enabled": true,
+    "autoAllowBashIfSandboxed": true
+  },
+  "permissions": {
+    "defaultMode": "acceptEdits",
+    "allow": [
+      "Read(./**)",
+      "Write(./**)",
+      "Edit(./**)",
+      "Glob(./**)",
+      "Grep(./**)",
+      "Read(/home/aiacos/workspace/FoundryVTT/token_updater/**)",
+      "Write(/home/aiacos/workspace/FoundryVTT/token_updater/**)",
+      "Edit(/home/aiacos/workspace/FoundryVTT/token_updater/**)",
+      "Glob(/home/aiacos/workspace/FoundryVTT/token_updater/**)",
+      "Grep(/home/aiacos/workspace/FoundryVTT/token_updater/**)",
+      "Read(/home/aiacos/workspace/FoundryVTT/token_updater/.auto-claude/specs/002-crea-uno-script-sh-e-bat-per-costruire-automaticam/**)",
+      "Write(/home/aiacos/workspace/FoundryVTT/token_updater/.auto-claude/specs/002-crea-uno-script-sh-e-bat-per-costruire-automaticam/**)",
+      "Edit(/home/aiacos/workspace/FoundryVTT/token_updater/.auto-claude/specs/002-crea-uno-script-sh-e-bat-per-costruire-automaticam/**)",
+      "Bash(*)",
+      "WebFetch(*)",
+      "WebSearch(*)",
+      "mcp__context7__resolve-library-id(*)",
+      "mcp__context7__get-library-docs(*)",
+      "mcp__graphiti-memory__search_nodes(*)",
+      "mcp__graphiti-memory__search_facts(*)",
+      "mcp__graphiti-memory__add_episode(*)",
+      "mcp__graphiti-memory__get_episodes(*)",
+      "mcp__graphiti-memory__get_entity_edge(*)"
+    ]
+  }
+}
