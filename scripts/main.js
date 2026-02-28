@@ -800,8 +800,9 @@ class CompendiumManager {
       result = allPacks.filter(pack => CompendiumManager.getCompendiumPriority(pack) <= 2);
       Logger.log(`Using default compendiums (Core + Fallback): ${result.map(p => p.metadata.label).join(", ")}`);
     } else {
-      // Otherwise filter by specific compendium IDs
-      result = allPacks.filter(pack => enabledPackIds.includes(pack.collection));
+      // Otherwise filter by specific compendium IDs — Set for O(1) lookup
+      const enabledSet = new Set(enabledPackIds);
+      result = allPacks.filter(pack => enabledSet.has(pack.collection));
       Logger.log(`Enabled compendiums: ${result.map(p => p.metadata.label).join(", ")}`);
     }
 
@@ -852,10 +853,13 @@ class CompendiumManager {
         const priority = CompendiumManager.getCompendiumPriority(pack);
         const priorityLabel = CompendiumManager.PRIORITY_LABELS[priority] || "UNKNOWN";
         for (const entry of pack.index.contents) {
+          const normalizedName = NameMatcher.normalizeName(entry.name);
+          const significantWords = normalizedName.split(" ").filter(w => w.length >= NameMatcher.MIN_PARTIAL_LENGTH);
           combinedIndex.push({
             entry,
             pack,
-            normalizedName: NameMatcher.normalizeName(entry.name),
+            normalizedName,
+            significantWords,
             priority
           });
         }
@@ -1110,22 +1114,18 @@ class NameMatcher {
         const searchWordSet = new Set(significantSearchWords);
 
         matches = index.filter(item => {
-          const entryName = item.normalizedName || NameMatcher.normalizeName(item.entry.name);
-          if (entryName.length < NameMatcher.MIN_PARTIAL_LENGTH) return false;
-
-          // Count matching words — iterate entry words against pre-built Set
-          const entryWords = entryName.split(" ");
-          const significantEntryWords = entryWords.filter(w => w.length >= NameMatcher.MIN_PARTIAL_LENGTH);
-          if (significantEntryWords.length === 0) return false;
+          // Use pre-computed significantWords from index build time
+          const sigWords = item.significantWords;
+          if (!sigWords || sigWords.length === 0) return false;
 
           let matchingCount = 0;
-          for (const w of significantEntryWords) {
+          for (const w of sigWords) {
             if (searchWordSet.has(w)) matchingCount++;
           }
           // Bidirectional check: search words must meet threshold AND
           // matched words must cover at least half of entry's significant words
           return matchingCount >= threshold
-            && matchingCount / significantEntryWords.length >= 0.5;
+            && matchingCount / sigWords.length >= 0.5;
         });
       } else {
         matches = [];
@@ -1161,6 +1161,14 @@ class TokenReplacer {
   static #sequentialCounter = 0;
 
   /**
+   * Cached variation mode setting — read once per session, cleared after
+   * @type {string|null}
+   * @static
+   * @private
+   */
+  static #variationMode = null;
+
+  /**
    * Session-scoped Map for O(1) actor lookups by compendium UUID
    * Built once per replacement session via buildActorLookup()
    * @type {Map<string, Actor>|null}
@@ -1190,7 +1198,8 @@ class TokenReplacer {
    */
   static clearActorLookup() {
     TokenReplacer.#actorLookup = null;
-    Logger.debug("Actor lookup Map cleared");
+    TokenReplacer.#variationMode = null;
+    Logger.debug("Actor lookup Map and variation mode cleared");
   }
 
   /**
@@ -1378,9 +1387,12 @@ class TokenReplacer {
     const originalPath = prototypeToken.texture.src;
     Logger.log(`Detected wildcard pattern in token path: ${originalPath}`);
 
-    // Get the variation mode setting
-    const variationMode = game.settings.get(MODULE_ID, "tokenVariationMode");
-    Logger.log(`Token variation mode: ${variationMode}`);
+    // Use cached variation mode (read once per session)
+    if (!TokenReplacer.#variationMode) {
+      TokenReplacer.#variationMode = game.settings.get(MODULE_ID, "tokenVariationMode");
+      Logger.log(`Token variation mode: ${TokenReplacer.#variationMode}`);
+    }
+    const variationMode = TokenReplacer.#variationMode;
 
     // Use WildcardResolver to find and select variant
     const currentIndex = TokenReplacer.#sequentialCounter;
@@ -1942,6 +1954,9 @@ class CompendiumSelectorForm extends FormApplication {
 
     Logger.log("CompendiumSelectorForm getData:", { enabledPackIds, mode });
 
+    // Build Set for O(1) lookup in custom mode
+    const enabledSet = mode === "custom" ? new Set(enabledPackIds) : null;
+
     return {
       mode,
       compendiums: allPacks.map((pack, index) => {
@@ -1953,7 +1968,7 @@ class CompendiumSelectorForm extends FormApplication {
           module: pack.metadata.packageName,
           priority,
           priorityLabel: CompendiumManager.PRIORITY_LABELS[priority] || "UNKNOWN",
-          enabled: mode === "all" || mode === "default" || enabledPackIds.includes(pack.collection),
+          enabled: mode === "all" || mode === "default" || enabledSet.has(pack.collection),
           isCoreFallback: priority <= 2
         };
       })
