@@ -1,0 +1,84 @@
+# Requirements: NPC Token Replacer — Stability & Reliability
+
+**Defined:** 2026-02-28
+**Core Value:** Token replacement must work correctly and predictably every time — no silent failures, no corrupted state, no confusing errors.
+
+## v1 Requirements
+
+### Testing Infrastructure
+
+- [ ] **TEST-01**: Vitest 4 test framework configured with jsdom environment and Foundry global mocks via @rayners/foundry-test-utils
+- [ ] **TEST-02**: Named exports added to scripts/main.js for all classes (Logger, FolderManager, WildcardResolver, CompendiumManager, NameMatcher, TokenReplacer, NPCTokenReplacerController)
+- [ ] **TEST-03**: Unit tests for NameMatcher (normalizeName, findMatch exact/variant/partial stages, selectBestMatch)
+- [ ] **TEST-04**: Unit tests for WildcardResolver (isWildcardPath, selectVariant modes, resolveWildcardVariants with mocked fetch)
+- [ ] **TEST-05**: Unit tests for CompendiumManager (priority resolution, detectWOTCCompendiums filtering, getEnabledCompendiums with valid/corrupt settings)
+- [ ] **TEST-06**: npm test script runs all tests without a Foundry instance and exits 0
+
+### Bug Fixes
+
+- [ ] **BUG-01**: Actor lookup map checks actor existence via game.actors.has() before use, preventing race condition when actors are deleted between lookup build and token processing
+- [ ] **BUG-02**: getEnabledCompendiums() uses separate try/catch blocks for settings retrieval vs JSON.parse, providing distinct error messages for each failure mode
+- [ ] **BUG-03**: WildcardResolver.clearCache() called in NPCTokenReplacerController.clearCache() so variant cache clears when settings change
+
+### Error Handling
+
+- [ ] **ERR-01**: All caught exceptions in user-triggered flows call ui.notifications.error() with a localized message, not just Logger.error()
+- [ ] **ERR-02**: Per-token failure types classified (no_match, import_failed, creation_failed) and collected into a post-run summary notification
+- [ ] **ERR-03**: Per-compendium load success/failure tracked during loadMonsterIndex() with getLastLoadErrors() exposed via debug API
+
+### User Experience
+
+- [ ] **UX-01**: Live progress bar during multi-token replacement using ui.notifications progress API (v13) with SceneNavigation fallback (v12)
+- [ ] **UX-02**: Dry-run preview dialog showing token-to-creature match mapping before committing replacements
+- [ ] **UX-03**: Configurable HTTP timeout setting for wildcard HEAD requests (replacing hardcoded DEFAULT_HTTP_TIMEOUT_MS)
+
+## v2 Requirements
+
+### Integration Testing
+
+- **ITEST-01**: Quench in-engine integration tests for full replacement workflow
+- **ITEST-02**: CI pipeline with GitHub Actions running npm test on push
+
+### Performance
+
+- **PERF-01**: Batch token mutations (single createEmbeddedDocuments/deleteEmbeddedDocuments call)
+- **PERF-02**: Early-exit wildcard probing (stop after finding 2-3 variants)
+
+## Out of Scope
+
+| Feature | Reason |
+|---------|--------|
+| Full rollback/undo after partial failure | 4x complexity of replacement itself; clear failure reporting covers 95% of need |
+| localStorage/IndexedDB index persistence | Complex browser compatibility; index loads once per session (500ms) |
+| LRU eviction for wildcard cache | No practical scaling issue at current usage (250KB max) |
+| Multi-language localization | English-only for now; structure supports future community translations |
+| Errors & Echoes telemetry | Premature without active user base; test coverage first |
+
+## Traceability
+
+| Requirement | Phase | Status |
+|-------------|-------|--------|
+| TEST-01 | TBD | Pending |
+| TEST-02 | TBD | Pending |
+| TEST-03 | TBD | Pending |
+| TEST-04 | TBD | Pending |
+| TEST-05 | TBD | Pending |
+| TEST-06 | TBD | Pending |
+| BUG-01 | TBD | Pending |
+| BUG-02 | TBD | Pending |
+| BUG-03 | TBD | Pending |
+| ERR-01 | TBD | Pending |
+| ERR-02 | TBD | Pending |
+| ERR-03 | TBD | Pending |
+| UX-01 | TBD | Pending |
+| UX-02 | TBD | Pending |
+| UX-03 | TBD | Pending |
+
+**Coverage:**
+- v1 requirements: 15 total
+- Mapped to phases: 0
+- Unmapped: 15 (roadmap pending)
+
+---
+*Requirements defined: 2026-02-28*
+*Last updated: 2026-02-28 after initial definition*
