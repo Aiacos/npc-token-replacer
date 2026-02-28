@@ -47,6 +47,19 @@ class Logger {
   }
 
   /**
+   * Whether debug logging is enabled — gate expensive debug calls in hot paths
+   * @type {boolean}
+   * @static
+   */
+  static #debugEnabled = false;
+  static get debugEnabled() {
+    return Logger.#debugEnabled;
+  }
+  static set debugEnabled(value) {
+    Logger.#debugEnabled = !!value;
+  }
+
+  /**
    * Log an informational message with the module prefix
    * @param {string} message - The message to log
    * @param {any} [data=null] - Optional data to log alongside the message
@@ -109,7 +122,7 @@ class Logger {
    * Logger.debug("Processing token", { name: "Goblin", id: "token123" });
    */
   static debug(message, data = null) {
-    // Debug messages could be conditionally enabled via a setting
+    if (!Logger.#debugEnabled) return;
     if (data !== null && data !== undefined) {
       console.debug(`${Logger.#MODULE_PREFIX} | ${message}`, data);
     } else {
@@ -819,7 +832,9 @@ class CompendiumManager {
 
     if (enabledPacks.length === 0) {
       Logger.log("No enabled compendiums found");
-      return [];
+      CompendiumManager.#indexCache = [];
+      CompendiumManager.#indexMap = new Map();
+      return CompendiumManager.#indexCache;
     }
 
     Logger.log(`Loading monster index from ${enabledPacks.length} compendium(s)...`);
@@ -1011,12 +1026,14 @@ class NameMatcher {
     // Helper to get priority (use pre-computed field when available)
     const getPriority = m => m.priority ?? CompendiumManager.getCompendiumPriority(m.pack);
 
-    // Log all matches for debugging (verbose — debug level)
-    Logger.debug(`  Found ${matches.length} matches across compendiums:`);
-    matches.forEach(m => {
-      const pkgName = m.pack.metadata.packageName || "unknown";
-      Logger.debug(`    - ${m.entry.name} from "${m.pack.metadata.label}" (package: ${pkgName}, priority: ${getPriority(m)})`);
-    });
+    // Log all matches for debugging (verbose — gated to avoid template literal cost in hot path)
+    if (Logger.debugEnabled) {
+      Logger.debug(`  Found ${matches.length} matches across compendiums:`);
+      matches.forEach(m => {
+        const pkgName = m.pack.metadata.packageName || "unknown";
+        Logger.debug(`    - ${m.entry.name} from "${m.pack.metadata.label}" (package: ${pkgName}, priority: ${getPriority(m)})`);
+      });
+    }
 
     // O(n) max-scan — no mutation of input array
     // Tie-break by pack collection name for deterministic results
@@ -1097,11 +1114,18 @@ class NameMatcher {
           if (entryName.length < NameMatcher.MIN_PARTIAL_LENGTH) return false;
 
           // Count matching words — iterate entry words against pre-built Set
+          const entryWords = entryName.split(" ");
+          const significantEntryWords = entryWords.filter(w => w.length >= NameMatcher.MIN_PARTIAL_LENGTH);
+          if (significantEntryWords.length === 0) return false;
+
           let matchingCount = 0;
-          for (const w of entryName.split(" ")) {
-            if (w.length >= NameMatcher.MIN_PARTIAL_LENGTH && searchWordSet.has(w)) matchingCount++;
+          for (const w of significantEntryWords) {
+            if (searchWordSet.has(w)) matchingCount++;
           }
-          return matchingCount >= threshold;
+          // Bidirectional check: search words must meet threshold AND
+          // matched words must cover at least half of entry's significant words
+          return matchingCount >= threshold
+            && matchingCount / significantEntryWords.length >= 0.5;
         });
       } else {
         matches = [];
@@ -1545,12 +1569,15 @@ class NPCTokenReplacerController {
       <p><strong>${game.i18n.localize("NPC_REPLACER.ConfirmProceed")}</strong></p>
     `;
 
-    return Dialog.confirm({
-      title: game.i18n.localize("NPC_REPLACER.ConfirmTitle"),
-      content,
-      yes: () => true,
-      no: () => false,
-      defaultYes: false
+    return new Promise(resolve => {
+      Dialog.confirm({
+        title: game.i18n.localize("NPC_REPLACER.ConfirmTitle"),
+        content,
+        yes: () => resolve(true),
+        no: () => resolve(false),
+        defaultYes: false,
+        close: () => resolve(false)
+      });
     });
   }
 
@@ -1807,7 +1834,9 @@ class NPCTokenReplacerController {
       getOrCreateImportFolder: () => FolderManager.getOrCreateImportFolder(),
       detectWOTCCompendiums: () => CompendiumManager.detectWOTCCompendiums(),
       getEnabledCompendiums: () => CompendiumManager.getEnabledCompendiums(),
-      clearCache: () => NPCTokenReplacerController.clearCache()
+      clearCache: () => NPCTokenReplacerController.clearCache(),
+      get debugEnabled() { return Logger.debugEnabled; },
+      set debugEnabled(v) { Logger.debugEnabled = v; }
     };
   }
 }
@@ -1990,16 +2019,18 @@ class CompendiumSelectorForm extends FormApplication {
  * escapeHtml('<script>alert("XSS")</script>');
  * // Returns: '&lt;script&gt;alert(&quot;XSS&quot;)&lt;/script&gt;'
  */
+const HTML_ESCAPES = Object.freeze({
+  "&": "&amp;",
+  "<": "&lt;",
+  ">": "&gt;",
+  '"': "&quot;",
+  "'": "&#39;"
+});
+const HTML_ESCAPE_PATTERN = /[&<>"']/g;
+
 function escapeHtml(str) {
   if (str == null) return "";
-  const htmlEscapes = {
-    "&": "&amp;",
-    "<": "&lt;",
-    ">": "&gt;",
-    '"': "&quot;",
-    "'": "&#39;"
-  };
-  return String(str).replace(/[&<>"']/g, char => htmlEscapes[char]);
+  return String(str).replace(HTML_ESCAPE_PATTERN, char => HTML_ESCAPES[char]);
 }
 
 /**
