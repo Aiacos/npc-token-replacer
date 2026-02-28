@@ -445,22 +445,30 @@ class WildcardResolver {
         candidates.map(path =>
           WildcardResolver.fetchWithTimeout(path, { method: "HEAD" }, WildcardResolver.DEFAULT_TIMEOUT)
             .then(response => response.ok ? path : null)
-            .catch(() => null)
         )
       );
 
+      let networkErrors = 0;
       for (const result of results) {
         if (result.status === "fulfilled" && result.value) {
           availableVariants.push(result.value);
+        } else if (result.status === "rejected") {
+          networkErrors++;
         }
+      }
+
+      if (networkErrors > 0 && availableVariants.length === 0) {
+        Logger.warn(`All ${networkErrors} wildcard probe requests failed for ${wildcardPath} — possible network or server configuration issue`);
       }
 
       Logger.debug(`Found ${availableVariants.length} variants for ${wildcardPath}`);
     } catch (e) {
       Logger.error("Error resolving wildcard variants", e);
+      // Do NOT cache failed results — allow retry on subsequent calls
+      return availableVariants;
     }
 
-    // Cache the results
+    // Cache only successful resolution results
     WildcardResolver.#variantCache.set(wildcardPath, availableVariants);
     return availableVariants;
   }
@@ -1357,6 +1365,9 @@ class TokenReplacer {
 
     // Import the actor from compendium using the standard Foundry API
     // Pass the folder ID in the updateData parameter
+    if (!importFolder) {
+      Logger.warn(`Import folder unavailable — actor "${compendiumActor.name}" will be imported to the root folder`);
+    }
     const updateData = importFolder ? { folder: importFolder.id } : {};
     worldActor = await game.actors.importFromCompendium(pack, compendiumEntry._id, updateData);
 
@@ -1939,8 +1950,7 @@ class CompendiumSelectorForm extends FormApplication {
       const settingValue = game.settings.get(MODULE_ID, "enabledCompendiums");
       enabledPackIds = typeof settingValue === "string" ? JSON.parse(settingValue) : settingValue;
     } catch (e) {
-      // Log error for debugging but use default - settings form should still display correctly
-      Logger.debug(`Error parsing enabledCompendiums in form (${e.name}): ${e.message}`);
+      Logger.warn(`Error parsing enabledCompendiums in form (${e.name}: ${e.message}), displaying default selection`);
       enabledPackIds = ["default"];
     }
 
@@ -2073,7 +2083,11 @@ function registerControlButton(controls) {
     const tokenControls = controls.find(c => c.name === "token");
     if (tokenControls && Array.isArray(tokenControls.tools)) {
       tokenControls.tools.push(toolConfig);
+    } else {
+      Logger.error("Could not find token controls group — toolbar button not registered");
     }
+  } else {
+    Logger.error("Unrecognized scene controls format — toolbar button not registered. This may indicate an incompatible Foundry version.");
   }
 }
 
