@@ -1,8 +1,8 @@
 # TODO Fix Plan
 
 ## Summary
-- Total: 13 (original) + 11 (iteration 1) + 7 (iteration 2) = 31 findings
-- Resolved: 30
+- Total: 13 (original) + 11 (iteration 1) + 7 (iteration 2) + 4 (iteration 3) + 5 (iteration 4) + 3 (iteration 5) = 43 findings
+- Resolved: 42
 - Deferred: 1 (batch token mutations — requires major refactor)
 
 ## Original Resolution Status (Iteration 0)
@@ -51,8 +51,35 @@
 | 30 | MEDIUM | selectBestMatch verbose logging at info level | RESOLVED |
 | 31 | MEDIUM | push(...packEntries) spread risks stack overflow | RESOLVED |
 
+## Iteration 3 Review Findings
+
+| # | Priority | Issue | Status |
+|---|----------|-------|--------|
+| 32 | MEDIUM | Dead #getNextSequentialIndex method | RESOLVED |
+| 33 | MEDIUM | PRESERVED_PROPERTIES not wired into #prepareNewTokenData | RESOLVED |
+| 34 | MEDIUM | Stage 3 Set direction inverted (build per-entry Set) | RESOLVED |
+| 35 | MEDIUM | Logger.MODULE_PREFIX getter on every log call | RESOLVED |
+
+## Iteration 4 Review Findings
+
+| # | Priority | Issue | Status |
+|---|----------|-------|--------|
+| 36 | HIGH | escapeHtml allocates object + regex per call | RESOLVED |
+| 37 | HIGH | Logger.debug has no gate — forEach + template literals in hot path | RESOLVED |
+| 38 | MEDIUM | Stage 3 partial matching false positives for short names | RESOLVED |
+| 39 | MEDIUM | Dialog.confirm close-via-X can leave processing lock held | RESOLVED |
+| 40 | MEDIUM | Empty index result not cached in loadMonsterIndex | RESOLVED |
+
+## Iteration 5 Review Findings
+
+| # | Priority | Issue | Status |
+|---|----------|-------|--------|
+| 41 | MEDIUM | Stage 3 split+filter per entry — pre-compute significantWords | RESOLVED |
+| 42 | MEDIUM | game.settings.get per wildcard token — cache per session | RESOLVED |
+| 43 | MEDIUM | enabledPackIds.includes O(N) — convert to Set | RESOLVED |
+
 ## Post-fix review findings
 - Fix #5 partial matching direction was inverted (entry→search vs search→entry) — corrected
 - Unused variable `significantSearchSet` after direction fix — removed
 - Unused variable `name` after folder search simplification — removed
-- ESLint: all clean (0 errors, 0 warnings) after all 3 iterations
+- ESLint: all clean (0 errors, 0 warnings) after all iterations
