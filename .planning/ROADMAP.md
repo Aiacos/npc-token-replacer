@@ -30,7 +30,10 @@ Decimal phases appear between their surrounding integers in numeric order.
   2. Vitest is configured with jsdom environment, `unstubGlobals: true`, and foundry-test-utils as setupFiles
   3. A `beforeEach` cache-clearing template exists in the test setup that other test files can follow
   4. The test suite runs with 0 test files and 0 errors — a clean slate that proves infrastructure works before tests are written
-**Plans**: TBD
+**Plans:** 1 plan
+
+Plans:
+- [ ] 01-01-PLAN.md — Install Vitest + foundry-test-utils, configure test runner, create mock setup files and smoke test
 
 ### Phase 2: Extract Pure Logic
 **Goal**: NameMatcher, WildcardResolver, and Logger exist as named ES module exports in scripts/lib/ so unit tests can import them without Foundry globals
@@ -96,7 +99,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Test Infrastructure | 0/TBD | Not started | - |
+| 1. Test Infrastructure | 0/1 | Planning complete | - |
 | 2. Extract Pure Logic | 0/TBD | Not started | - |
 | 3. Unit Tests | 0/TBD | Not started | - |
 | 4. Error Handling Hardening | 0/TBD | Not started | - |
