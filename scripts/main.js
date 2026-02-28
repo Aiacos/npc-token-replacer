@@ -1968,7 +1968,7 @@ class CompendiumSelectorForm extends FormApplication {
           module: pack.metadata.packageName,
           priority,
           priorityLabel: CompendiumManager.PRIORITY_LABELS[priority] || "UNKNOWN",
-          enabled: mode === "all" || mode === "default" || enabledSet.has(pack.collection),
+          enabled: mode === "all" || mode === "default" || (enabledSet !== null && enabledSet.has(pack.collection)),
           isCoreFallback: priority <= 2
         };
       })
