@@ -1,8 +1,8 @@
 # TODO Fix Plan
 
 ## Summary
-- Total: 13 + 11 + 7 + 4 + 5 + 3 + 5 = 48 findings
-- Resolved: 47
+- Total: 13 + 11 + 7 + 4 + 5 + 3 + 5 + 2 = 50 findings
+- Resolved: 49
 - Deferred: 1 (batch token mutations — requires major refactor)
 
 ## Original Resolution Status (Iteration 0)
@@ -87,6 +87,13 @@
 | 46 | MEDIUM | registerControlButton silent fallthrough on unknown format | RESOLVED |
 | 47 | MEDIUM | Folder creation failure silently falls back to root | RESOLVED |
 | 48 | MEDIUM | getData parse error logged at debug (invisible by default) | RESOLVED |
+
+## Iteration 7 Review Findings (Final Verification)
+
+| # | Priority | Issue | Status |
+|---|----------|-------|--------|
+| 49 | HIGH | _updateObject settings save not wrapped in try/catch | RESOLVED |
+| 50 | LOW | Stack trace logged in enabledCompendiums parse error | RESOLVED |
 
 ## Post-fix review findings
 - Fix #5 partial matching direction was inverted (entry→search vs search→entry) — corrected
