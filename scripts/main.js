@@ -41,8 +41,9 @@ class Logger {
    * @static
    * @readonly
    */
+  static #MODULE_PREFIX = MODULE_ID;
   static get MODULE_PREFIX() {
-    return MODULE_ID;
+    return Logger.#MODULE_PREFIX;
   }
 
   /**
@@ -57,9 +58,9 @@ class Logger {
    */
   static log(message, data = null) {
     if (data !== null && data !== undefined) {
-      console.log(`${Logger.MODULE_PREFIX} | ${message}`, data);
+      console.log(`${Logger.#MODULE_PREFIX} | ${message}`, data);
     } else {
-      console.log(`${Logger.MODULE_PREFIX} | ${message}`);
+      console.log(`${Logger.#MODULE_PREFIX} | ${message}`);
     }
   }
 
@@ -75,9 +76,9 @@ class Logger {
    */
   static error(message, error = null) {
     if (error !== null && error !== undefined) {
-      console.error(`${Logger.MODULE_PREFIX} | ${message}`, error);
+      console.error(`${Logger.#MODULE_PREFIX} | ${message}`, error);
     } else {
-      console.error(`${Logger.MODULE_PREFIX} | ${message}`);
+      console.error(`${Logger.#MODULE_PREFIX} | ${message}`);
     }
   }
 
@@ -92,9 +93,9 @@ class Logger {
    */
   static warn(message, data = null) {
     if (data !== null && data !== undefined) {
-      console.warn(`${Logger.MODULE_PREFIX} | ${message}`, data);
+      console.warn(`${Logger.#MODULE_PREFIX} | ${message}`, data);
     } else {
-      console.warn(`${Logger.MODULE_PREFIX} | ${message}`);
+      console.warn(`${Logger.#MODULE_PREFIX} | ${message}`);
     }
   }
 
@@ -110,9 +111,9 @@ class Logger {
   static debug(message, data = null) {
     // Debug messages could be conditionally enabled via a setting
     if (data !== null && data !== undefined) {
-      console.debug(`${Logger.MODULE_PREFIX} | ${message}`, data);
+      console.debug(`${Logger.#MODULE_PREFIX} | ${message}`, data);
     } else {
-      console.debug(`${Logger.MODULE_PREFIX} | ${message}`);
+      console.debug(`${Logger.#MODULE_PREFIX} | ${message}`);
     }
   }
 }
@@ -158,15 +159,16 @@ class FolderManager {
    * @static
    * @readonly
    */
+  static #MONSTER_FOLDER_PATTERNS = Object.freeze([
+    Object.freeze({ pattern: /monster/i, name: "monster" }),
+    Object.freeze({ pattern: /creature/i, name: "creature" }),
+    Object.freeze({ pattern: /npc/i, name: "npc" }),
+    Object.freeze({ pattern: /bestiary/i, name: "bestiary" }),
+    Object.freeze({ pattern: /enemy/i, name: "enemy" }),
+    Object.freeze({ pattern: /enemies/i, name: "enemies" })
+  ]);
   static get MONSTER_FOLDER_PATTERNS() {
-    return [
-      { pattern: /monster/i, name: "monster" },
-      { pattern: /creature/i, name: "creature" },
-      { pattern: /npc/i, name: "npc" },
-      { pattern: /bestiary/i, name: "bestiary" },
-      { pattern: /enemy/i, name: "enemy" },
-      { pattern: /enemies/i, name: "enemies" }
-    ];
+    return FolderManager.#MONSTER_FOLDER_PATTERNS;
   }
 
   /**
@@ -209,57 +211,36 @@ class FolderManager {
 
     Logger.log("Scanning Actor folders for import destination...");
 
-    // Get all Actor folders for logging
+    // Single pass — gather all Actor folders once and reuse for all searches
     const actorFolders = game.folders.filter(f => f.type === "Actor");
     Logger.log(`Found ${actorFolders.length} Actor folders in world`);
 
-    // Log all existing folders
+    // Log all existing folders (debug level)
     if (actorFolders.length > 0) {
-      Logger.log("Existing Actor folders:");
+      Logger.debug("Existing Actor folders:");
       actorFolders.forEach(f => {
-        const path = FolderManager.getFolderPath(f);
-        Logger.log(`  - ${path} (id: ${f.id})`);
+        Logger.debug(`  - ${FolderManager.getFolderPath(f)} (id: ${f.id})`);
       });
     }
 
-    // Check if our folder already exists
-    Logger.log(`Searching for existing "${FolderManager.FOLDER_NAME}" folder...`);
-    let folder = game.folders.find(f =>
-      f.type === "Actor" &&
-      f.name === FolderManager.FOLDER_NAME
-    );
+    // Check if our folder already exists (search local array, not game.folders)
+    let folder = actorFolders.find(f => f.name === FolderManager.FOLDER_NAME);
 
     if (folder) {
       Logger.log(`Found existing folder: ${FolderManager.getFolderPath(folder)}`);
       FolderManager.#importFolderCache = folder;
       return folder;
     }
-    Logger.log(`Folder "${FolderManager.FOLDER_NAME}" not found`);
+    Logger.debug(`Folder "${FolderManager.FOLDER_NAME}" not found`);
 
     // Look for existing monster-related folders to use as parent
-    Logger.log("Searching for monster-related parent folder...");
     let parentFolder = null;
-    for (const { pattern, name } of FolderManager.MONSTER_FOLDER_PATTERNS) {
-      Logger.log(`  Checking pattern: "${name}"...`);
-      const matchingFolders = game.folders.filter(f =>
-        f.type === "Actor" &&
-        pattern.test(f.name)
-      );
-
-      if (matchingFolders.length > 0) {
-        Logger.log(`    Found ${matchingFolders.length} matching folder(s):`);
-        matchingFolders.forEach(f => {
-          Logger.log(`      - ${FolderManager.getFolderPath(f)}${f.folder ? "" : " (top-level)"}`);
-        });
-
-        // Prefer top-level folders
-        parentFolder = matchingFolders.find(f => !f.folder);
-        if (parentFolder) {
-          Logger.log(`  Selected top-level folder: ${FolderManager.getFolderPath(parentFolder)}`);
-          break;
-        }
-      } else {
-        Logger.log(`    No folders matching "${name}"`);
+    for (const { pattern } of FolderManager.MONSTER_FOLDER_PATTERNS) {
+      const match = actorFolders.find(f => pattern.test(f.name) && !f.folder);
+      if (match) {
+        parentFolder = match;
+        Logger.debug(`  Selected top-level folder: ${FolderManager.getFolderPath(parentFolder)}`);
+        break;
       }
     }
 
@@ -272,12 +253,8 @@ class FolderManager {
       Logger.log(`No monster folder found, will create "${folderName}" at root level`);
     }
 
-    // Check if this combined name already exists
-    Logger.log(`Checking if "${folderName}" already exists...`);
-    folder = game.folders.find(f =>
-      f.type === "Actor" &&
-      f.name === folderName
-    );
+    // Check if this combined name already exists (search local array)
+    folder = actorFolders.find(f => f.name === folderName);
 
     if (folder) {
       Logger.log(`Found existing folder: ${FolderManager.getFolderPath(folder)}`);
@@ -352,8 +329,9 @@ class WildcardResolver {
    * @static
    * @readonly
    */
+  static #IMAGE_EXTENSIONS = Object.freeze([".webp", ".png", ".jpg"]);
   static get IMAGE_EXTENSIONS() {
-    return [".webp", ".png", ".jpg"];
+    return WildcardResolver.#IMAGE_EXTENSIONS;
   }
 
   /**
@@ -363,8 +341,9 @@ class WildcardResolver {
    * @static
    * @readonly
    */
+  static #VARIANT_SUFFIXES = Object.freeze(["1", "2", "3", "4", "5", "01", "02", "03", "04", "05", "a", "b", "c", "d", "e"]);
   static get VARIANT_SUFFIXES() {
-    return ["1", "2", "3", "4", "5", "01", "02", "03", "04", "05", "a", "b", "c", "d", "e", ""];
+    return WildcardResolver.#VARIANT_SUFFIXES;
   }
 
   /**
@@ -432,28 +411,34 @@ class WildcardResolver {
       const lastSlash = wildcardPath.lastIndexOf("/");
       const directory = wildcardPath.substring(0, lastSlash);
       const filePattern = wildcardPath.substring(lastSlash + 1);
+      // Preserve the original extension to avoid cross-extension contamination
+      const extMatch = filePattern.match(/\.(webp|png|jpe?g)$/i);
+      const knownExt = extMatch ? extMatch[0] : null;
+      const extsToProbe = knownExt ? [knownExt] : WildcardResolver.IMAGE_EXTENSIONS;
+
       const baseName = filePattern
         .replace("*", "")
-        .replace(".webp", "")
-        .replace(".png", "")
-        .replace(".jpg", "");
+        .replace(/\.(webp|png|jpe?g)$/i, "");
 
-      // Try common numbered and lettered variants
+      // Build candidate list and probe all in parallel
+      const candidates = [];
       for (const variant of WildcardResolver.VARIANT_SUFFIXES) {
-        for (const ext of WildcardResolver.IMAGE_EXTENSIONS) {
-          const testPath = `${directory}/${baseName}${variant}${ext}`;
-          try {
-            const response = await WildcardResolver.fetchWithTimeout(
-              testPath,
-              { method: "HEAD" },
-              WildcardResolver.DEFAULT_TIMEOUT
-            );
-            if (response.ok) {
-              availableVariants.push(testPath);
-            }
-          } catch {
-            // File doesn't exist or request failed, try next
-          }
+        for (const ext of extsToProbe) {
+          candidates.push(`${directory}/${baseName}${variant}${ext}`);
+        }
+      }
+
+      const results = await Promise.allSettled(
+        candidates.map(path =>
+          WildcardResolver.fetchWithTimeout(path, { method: "HEAD" }, WildcardResolver.DEFAULT_TIMEOUT)
+            .then(response => response.ok ? path : null)
+            .catch(() => null)
+        )
+      );
+
+      for (const result of results) {
+        if (result.status === "fulfilled" && result.value) {
+          availableVariants.push(result.value);
         }
       }
 
@@ -555,7 +540,7 @@ class WildcardResolver {
     }
 
     // Last resort: use mystery man token
-    Logger.log(`Using default mystery-man token as last resort`);
+    Logger.log("Using default mystery-man token as last resort");
     return {
       resolvedPath: "icons/svg/mystery-man.svg",
       nextIndex: sequentialIndex
@@ -602,6 +587,22 @@ class CompendiumManager {
   static #indexCache = null;
 
   /**
+   * Map for O(1) exact-name lookups: normalizedName -> Array<{entry, pack, normalizedName}>
+   * @type {Map<string, Array>|null}
+   * @static
+   * @private
+   */
+  static #indexMap = null;
+
+  /**
+   * Cache for enabled compendium packs (avoids re-parsing JSON settings)
+   * @type {CompendiumCollection[]|null}
+   * @static
+   * @private
+   */
+  static #enabledPacksCache = null;
+
+  /**
    * Cache for detected WOTC compendiums
    * @type {CompendiumCollection[]|null}
    * @static
@@ -615,8 +616,9 @@ class CompendiumManager {
    * @static
    * @readonly
    */
+  static #WOTC_MODULE_PREFIXES = Object.freeze(["dnd-", "dnd5e"]);
   static get WOTC_MODULE_PREFIXES() {
-    return ["dnd-", "dnd5e"];
+    return CompendiumManager.#WOTC_MODULE_PREFIXES;
   }
 
   /**
@@ -629,27 +631,28 @@ class CompendiumManager {
    * @static
    * @readonly
    */
+  static #COMPENDIUM_PRIORITIES = Object.freeze({
+    // SRD and Tasha's - lowest priority (fallback/options)
+    "dnd5e": 1,
+    "dnd-tashas-cauldron": 1,
+
+    // Core Rulebooks - base priority
+    "dnd-monster-manual": 2,
+    "dnd-players-handbook": 2,
+    "dnd-dungeon-masters-guide": 2,
+
+    // Expansions - medium priority
+    "dnd-forge-artificer": 3,
+
+    // Adventures - highest priority (these get priority 4 by default if not listed)
+    "dnd-phandelver-below": 4,
+    "dnd-tomb-annihilation": 4,
+    "dnd-adventures-faerun": 4,
+    "dnd-heroes-faerun": 4,
+    "dnd-heroes-borderlands": 4
+  });
   static get COMPENDIUM_PRIORITIES() {
-    return {
-      // SRD and Tasha's - lowest priority (fallback/options)
-      "dnd5e": 1,
-      "dnd-tashas-cauldron": 1,
-
-      // Core Rulebooks - base priority
-      "dnd-monster-manual": 2,
-      "dnd-players-handbook": 2,
-      "dnd-dungeon-masters-guide": 2,
-
-      // Expansions - medium priority
-      "dnd-forge-artificer": 3,
-
-      // Adventures - highest priority (these get priority 4 by default if not listed)
-      "dnd-phandelver-below": 4,
-      "dnd-tomb-annihilation": 4,
-      "dnd-adventures-faerun": 4,
-      "dnd-heroes-faerun": 4,
-      "dnd-heroes-borderlands": 4,
-    };
+    return CompendiumManager.#COMPENDIUM_PRIORITIES;
   }
 
   /**
@@ -658,13 +661,14 @@ class CompendiumManager {
    * @static
    * @readonly
    */
+  static #PRIORITY_LABELS = Object.freeze({
+    1: "FALLBACK",
+    2: "CORE",
+    3: "EXPANSION",
+    4: "ADVENTURE"
+  });
   static get PRIORITY_LABELS() {
-    return {
-      1: "FALLBACK",
-      2: "CORE",
-      3: "EXPANSION",
-      4: "ADVENTURE"
-    };
+    return CompendiumManager.#PRIORITY_LABELS;
   }
 
   /**
@@ -747,6 +751,8 @@ class CompendiumManager {
    * console.log(`Using ${enabledPacks.length} compendiums`);
    */
   static getEnabledCompendiums() {
+    if (CompendiumManager.#enabledPacksCache) return CompendiumManager.#enabledPacksCache;
+
     const allPacks = CompendiumManager.detectWOTCCompendiums();
 
     // Get the setting (stored as JSON string)
@@ -770,23 +776,24 @@ class CompendiumManager {
       enabledPackIds = ["default"];
     }
 
+    let result;
+
     // "all" - use all available compendiums
     if (enabledPackIds.includes("all")) {
       Logger.log("Using all available compendiums");
-      return allPacks;
+      result = allPacks;
+    } else if (enabledPackIds.includes("default")) {
+      // "default" - only FALLBACK (priority 1) and CORE (priority 2) compendiums
+      result = allPacks.filter(pack => CompendiumManager.getCompendiumPriority(pack) <= 2);
+      Logger.log(`Using default compendiums (Core + Fallback): ${result.map(p => p.metadata.label).join(", ")}`);
+    } else {
+      // Otherwise filter by specific compendium IDs
+      result = allPacks.filter(pack => enabledPackIds.includes(pack.collection));
+      Logger.log(`Enabled compendiums: ${result.map(p => p.metadata.label).join(", ")}`);
     }
 
-    // "default" - only FALLBACK (priority 1) and CORE (priority 2) compendiums
-    if (enabledPackIds.includes("default")) {
-      const filtered = allPacks.filter(pack => CompendiumManager.getCompendiumPriority(pack) <= 2);
-      Logger.log(`Using default compendiums (Core + Fallback): ${filtered.map(p => p.metadata.label).join(", ")}`);
-      return filtered;
-    }
-
-    // Otherwise filter by specific compendium IDs
-    const filtered = allPacks.filter(pack => enabledPackIds.includes(pack.collection));
-    Logger.log(`Enabled compendiums: ${filtered.map(p => p.metadata.label).join(", ")}`);
-    return filtered;
+    CompendiumManager.#enabledPacksCache = result;
+    return result;
   }
 
   /**
@@ -829,11 +836,14 @@ class CompendiumManager {
         await pack.getIndex({ fields: ["name", "type"] });
         const priority = CompendiumManager.getCompendiumPriority(pack);
         const priorityLabel = CompendiumManager.PRIORITY_LABELS[priority] || "UNKNOWN";
-        const packEntries = pack.index.contents.map(entry => ({
-          entry: entry,
-          pack: pack
-        }));
-        combinedIndex.push(...packEntries);
+        for (const entry of pack.index.contents) {
+          combinedIndex.push({
+            entry,
+            pack,
+            normalizedName: NameMatcher.normalizeName(entry.name),
+            priority
+          });
+        }
         Logger.log(`  [${priority}-${priorityLabel}] Loaded ${pack.index.size} entries from ${pack.metadata.label}`);
       } catch (error) {
         Logger.error(`Failed to load index from ${pack.collection}`, error);
@@ -842,7 +852,17 @@ class CompendiumManager {
 
     Logger.log(`Total: ${combinedIndex.length} entries from all compendiums`);
     Logger.log("Priority order: Adventures (4) > Expansions (3) > Core Rulebooks (2) > SRD (1)");
+
+    // Build O(1) lookup Map by normalized name
+    const indexMap = new Map();
+    for (const item of combinedIndex) {
+      const key = item.normalizedName;
+      if (!indexMap.has(key)) indexMap.set(key, []);
+      indexMap.get(key).push(item);
+    }
+
     CompendiumManager.#indexCache = combinedIndex;
+    CompendiumManager.#indexMap = indexMap;
 
     return CompendiumManager.#indexCache;
   }
@@ -858,8 +878,19 @@ class CompendiumManager {
    */
   static clearCache() {
     CompendiumManager.#indexCache = null;
+    CompendiumManager.#indexMap = null;
     CompendiumManager.#wotcCompendiumsCache = null;
+    CompendiumManager.#enabledPacksCache = null;
     Logger.debug("CompendiumManager caches cleared");
+  }
+
+  /**
+   * Get the index Map for O(1) exact-name lookups
+   * @returns {Map<string, Array>|null} Map of normalizedName -> matches, or null if not loaded
+   * @static
+   */
+  static getIndexMap() {
+    return CompendiumManager.#indexMap;
   }
 
   /**
@@ -904,8 +935,9 @@ class NameMatcher {
    * @static
    * @readonly
    */
+  static #PREFIX_PATTERN = /^(young|adult|ancient|elder|greater|lesser)\s+/i;
   static get PREFIX_PATTERN() {
-    return /^(young|adult|ancient|elder|greater|lesser)\s+/i;
+    return NameMatcher.#PREFIX_PATTERN;
   }
 
   /**
@@ -915,8 +947,25 @@ class NameMatcher {
    * @static
    * @readonly
    */
+  static #SUFFIX_PATTERN = /\s+(warrior|guard|scout|champion|leader|chief|captain|shaman|berserker)$/i;
   static get SUFFIX_PATTERN() {
-    return /\s+(warrior|guard|scout|champion|leader|chief|captain|shaman|berserker)$/i;
+    return NameMatcher.#SUFFIX_PATTERN;
+  }
+
+  /**
+   * Variant transforms for Stage 2 name matching
+   * Strips common prefixes, suffixes, or both
+   * @type {Array<function(string): string>}
+   * @static
+   * @readonly
+   */
+  static #VARIANT_TRANSFORMS = Object.freeze([
+    name => name.replace(NameMatcher.#PREFIX_PATTERN, ""),
+    name => name.replace(NameMatcher.#SUFFIX_PATTERN, ""),
+    name => name.replace(NameMatcher.#PREFIX_PATTERN, "").replace(NameMatcher.#SUFFIX_PATTERN, "")
+  ]);
+  static get VARIANT_TRANSFORMS() {
+    return NameMatcher.#VARIANT_TRANSFORMS;
   }
 
   /**
@@ -936,7 +985,7 @@ class NameMatcher {
     return name
       .toLowerCase()
       .trim()
-      .replace(/[^\w\s]/g, "") // Remove special characters
+      .replace(/[^\p{L}\p{N}\s]/gu, "") // Remove non-letter/non-number chars (Unicode-safe)
       .replace(/\s+/g, " ");   // Normalize whitespace
   }
 
@@ -959,19 +1008,25 @@ class NameMatcher {
     if (!matches || matches.length === 0) return null;
     if (matches.length === 1) return matches[0];
 
-    // Log all matches before sorting for debugging
-    Logger.log(`  Found ${matches.length} matches across compendiums:`);
+    // Helper to get priority (use pre-computed field when available)
+    const getPriority = m => m.priority ?? CompendiumManager.getCompendiumPriority(m.pack);
+
+    // Log all matches for debugging (verbose — debug level)
+    Logger.debug(`  Found ${matches.length} matches across compendiums:`);
     matches.forEach(m => {
       const pkgName = m.pack.metadata.packageName || "unknown";
-      const priority = CompendiumManager.getCompendiumPriority(m.pack);
-      Logger.log(`    - ${m.entry.name} from "${m.pack.metadata.label}" (package: ${pkgName}, priority: ${priority})`);
+      Logger.debug(`    - ${m.entry.name} from "${m.pack.metadata.label}" (package: ${pkgName}, priority: ${getPriority(m)})`);
     });
 
-    // Sort by priority (highest first) and return the best
-    matches.sort((a, b) => CompendiumManager.getCompendiumPriority(b.pack) - CompendiumManager.getCompendiumPriority(a.pack));
-
-    const best = matches[0];
-    Logger.log(`  Selected: ${best.pack.metadata.label} (priority ${CompendiumManager.getCompendiumPriority(best.pack)})`);
+    // O(n) max-scan — no mutation of input array
+    // Tie-break by pack collection name for deterministic results
+    const best = matches.reduce((a, b) => {
+      const pa = getPriority(a);
+      const pb = getPriority(b);
+      if (pb !== pa) return pb > pa ? b : a;
+      return a.pack.collection < b.pack.collection ? a : b;
+    });
+    Logger.debug(`  Selected: ${best.pack.metadata.label} (priority ${getPriority(best)})`);
 
     return best;
   }
@@ -998,59 +1053,63 @@ class NameMatcher {
     const normalizedSearch = NameMatcher.normalizeName(creatureName);
 
     if (!normalizedSearch) {
-      Logger.log(`Empty creature name provided`);
+      Logger.log("Empty creature name provided");
       return null;
     }
 
-    // Stage 1: Exact match - find ALL exact matches and select best by priority
-    let matches = index.filter(item => NameMatcher.normalizeName(item.entry.name) === normalizedSearch);
+    // Stage 1: Exact match via O(1) Map lookup
+    const indexMap = CompendiumManager.getIndexMap();
+    let matches = indexMap ? (indexMap.get(normalizedSearch) || []) :
+      index.filter(item => (item.normalizedName || NameMatcher.normalizeName(item.entry.name)) === normalizedSearch);
     if (matches.length > 0) {
       const match = NameMatcher.selectBestMatch(matches);
-      Logger.log(`Exact match found: "${creatureName}" -> "${match.entry.name}" (${match.pack.metadata.label}, priority ${CompendiumManager.getCompendiumPriority(match.pack)})`);
+      Logger.log(`Exact match found: "${creatureName}" -> "${match.entry.name}" (${match.pack.metadata.label}, priority ${match.priority ?? CompendiumManager.getCompendiumPriority(match.pack)})`);
       return match;
     }
 
     // Stage 2: Variant transforms - try without common suffixes/prefixes
-    // Only check variants that differ from original
-    const variantTransforms = [
-      name => name.replace(NameMatcher.PREFIX_PATTERN, ""),
-      name => name.replace(NameMatcher.SUFFIX_PATTERN, ""),
-      name => name.replace(NameMatcher.PREFIX_PATTERN, "").replace(NameMatcher.SUFFIX_PATTERN, ""),
-    ];
-
-    for (const transform of variantTransforms) {
+    for (const transform of NameMatcher.VARIANT_TRANSFORMS) {
       const variant = transform(normalizedSearch);
       // Only check if variant is different from original
       if (variant !== normalizedSearch && variant.length > 0) {
-        matches = index.filter(item => NameMatcher.normalizeName(item.entry.name) === variant);
+        matches = indexMap ? (indexMap.get(variant) || []) :
+          index.filter(item => (item.normalizedName || NameMatcher.normalizeName(item.entry.name)) === variant);
         if (matches.length > 0) {
           const match = NameMatcher.selectBestMatch(matches);
-          Logger.log(`Variant match found: "${creatureName}" -> "${match.entry.name}" (${match.pack.metadata.label}, priority ${CompendiumManager.getCompendiumPriority(match.pack)})`);
+          Logger.log(`Variant match found: "${creatureName}" -> "${match.entry.name}" (${match.pack.metadata.label}, priority ${match.priority ?? CompendiumManager.getCompendiumPriority(match.pack)})`);
           return match;
         }
       }
     }
 
-    // Stage 3: Partial match - word-level matching for longer names
-    // Only for names with MIN_PARTIAL_LENGTH+ characters to avoid false positives
-    // Requires word boundary matching to prevent "Rat" matching "Pirate"
+    // Stage 3: Partial match - require majority of significant words to overlap
     if (normalizedSearch.length >= NameMatcher.MIN_PARTIAL_LENGTH) {
-      matches = index.filter(item => {
-        const entryName = NameMatcher.normalizeName(item.entry.name);
-        if (entryName.length < NameMatcher.MIN_PARTIAL_LENGTH) return false;
+      const searchWords = normalizedSearch.split(" ");
+      const significantSearchWords = searchWords.filter(w => w.length >= NameMatcher.MIN_PARTIAL_LENGTH);
 
-        // Check if one name starts with the other (word boundary)
-        const searchWords = normalizedSearch.split(" ");
-        const entryWords = entryName.split(" ");
+      if (significantSearchWords.length > 0) {
+        const threshold = Math.max(1, Math.ceil(significantSearchWords.length * 2 / 3));
+        // Build search word Set once — avoids per-entry Set allocation
+        const searchWordSet = new Set(significantSearchWords);
 
-        // Check if the main creature type matches (usually first or last word)
-        return searchWords.some(sw => entryWords.includes(sw) && sw.length >= NameMatcher.MIN_PARTIAL_LENGTH) ||
-               entryWords.some(ew => searchWords.includes(ew) && ew.length >= NameMatcher.MIN_PARTIAL_LENGTH);
-      });
+        matches = index.filter(item => {
+          const entryName = item.normalizedName || NameMatcher.normalizeName(item.entry.name);
+          if (entryName.length < NameMatcher.MIN_PARTIAL_LENGTH) return false;
+
+          // Count matching words — iterate entry words against pre-built Set
+          let matchingCount = 0;
+          for (const w of entryName.split(" ")) {
+            if (w.length >= NameMatcher.MIN_PARTIAL_LENGTH && searchWordSet.has(w)) matchingCount++;
+          }
+          return matchingCount >= threshold;
+        });
+      } else {
+        matches = [];
+      }
 
       if (matches.length > 0) {
         const match = NameMatcher.selectBestMatch(matches);
-        Logger.log(`Partial match found: "${creatureName}" -> "${match.entry.name}" (${match.pack.metadata.label}, priority ${CompendiumManager.getCompendiumPriority(match.pack)})`);
+        Logger.log(`Partial match found: "${creatureName}" -> "${match.entry.name}" (${match.pack.metadata.label}, priority ${match.priority ?? CompendiumManager.getCompendiumPriority(match.pack)})`);
         return match;
       }
     }
@@ -1078,17 +1137,51 @@ class TokenReplacer {
   static #sequentialCounter = 0;
 
   /**
+   * Session-scoped Map for O(1) actor lookups by compendium UUID
+   * Built once per replacement session via buildActorLookup()
+   * @type {Map<string, Actor>|null}
+   * @static
+   * @private
+   */
+  static #actorLookup = null;
+
+  /**
+   * Build the actor lookup Map for the current session
+   * @returns {void}
+   * @static
+   */
+  static buildActorLookup() {
+    TokenReplacer.#actorLookup = new Map();
+    for (const a of game.actors) {
+      const uuid = a._stats?.compendiumSource || a.flags?.core?.sourceId;
+      if (uuid) TokenReplacer.#actorLookup.set(uuid, a);
+    }
+    Logger.debug(`Built actor lookup Map with ${TokenReplacer.#actorLookup.size} entries`);
+  }
+
+  /**
+   * Clear the actor lookup Map to free memory after a session
+   * @returns {void}
+   * @static
+   */
+  static clearActorLookup() {
+    TokenReplacer.#actorLookup = null;
+    Logger.debug("Actor lookup Map cleared");
+  }
+
+  /**
    * Properties to preserve when replacing a token
    * These are the token properties that get transferred from old to new token
    * @type {string[]}
    * @static
    * @readonly
    */
+  static #PRESERVED_PROPERTIES = Object.freeze([
+    "x", "y", "elevation", "width", "height",
+    "hidden", "rotation", "disposition", "locked", "alpha"
+  ]);
   static get PRESERVED_PROPERTIES() {
-    return [
-      "x", "y", "elevation", "width", "height",
-      "hidden", "rotation", "disposition", "locked", "alpha"
-    ];
+    return TokenReplacer.#PRESERVED_PROPERTIES;
   }
 
   /**
@@ -1114,17 +1207,6 @@ class TokenReplacer {
   static resetCounter() {
     TokenReplacer.#sequentialCounter = 0;
     Logger.debug("TokenReplacer sequential counter reset");
-  }
-
-  /**
-   * Increment and get the next sequential counter value
-   * Used internally for sequential variant selection
-   * @returns {number} The counter value before incrementing
-   * @static
-   * @private
-   */
-  static #getNextSequentialIndex() {
-    return TokenReplacer.#sequentialCounter++;
   }
 
   /**
@@ -1187,8 +1269,9 @@ class TokenReplacer {
         return { tokens: selectedNPCs, isSelection: true };
       }
 
-      // Selected tokens but none are NPCs - fall through to scene tokens
-      Logger.log("Selected tokens contain no NPCs, using all scene NPCs");
+      // Selected tokens but none are NPCs — respect user intent, don't process entire scene
+      Logger.log("Selected tokens contain no NPCs");
+      return { tokens: [], isSelection: true };
     }
 
     // No selection or no NPCs in selection - use all scene tokens
@@ -1228,32 +1311,8 @@ class TokenReplacer {
    * @private
    */
   static async #getOrImportWorldActor(compendiumActor, compendiumEntry, pack) {
-    // Check if we already have this actor imported (by name and source)
-    // This avoids creating duplicate actors in the world
-    let worldActor = game.actors.find(a => {
-      if (a.name !== compendiumActor.name) return false;
-
-      // Check _stats.compendiumSource first (v12+ preferred method, avoids deprecation warning)
-      const compendiumSource = a._stats?.compendiumSource;
-      if (compendiumSource === compendiumActor.uuid) return true;
-
-      // Fallback: check flags.core.sourceId for older imports (may trigger deprecation warning in v12+)
-      // Only check if _stats.compendiumSource is not set
-      if (!compendiumSource) {
-        try {
-          const sourceId = a.flags?.core?.sourceId;
-          if (sourceId === compendiumActor.uuid) {
-            Logger.debug(`Found actor via legacy flags.core.sourceId: ${a.name}`);
-            return true;
-          }
-        } catch (e) {
-          // Log error for debugging but continue checking other actors
-          Logger.debug(`Error accessing flags.core.sourceId for actor "${a.name}": ${e.message}`);
-        }
-      }
-
-      return false;
-    });
+    // O(1) lookup via session-scoped Map (built by buildActorLookup before processing loop)
+    let worldActor = TokenReplacer.#actorLookup?.get(compendiumActor.uuid) || null;
 
     if (worldActor) {
       Logger.log(`Using existing imported actor "${worldActor.name}"`);
@@ -1270,6 +1329,11 @@ class TokenReplacer {
 
     if (!worldActor) {
       throw new Error(`Failed to import actor "${compendiumActor.name}" from compendium`);
+    }
+
+    // Register newly imported actor in session lookup for future O(1) hits
+    if (TokenReplacer.#actorLookup) {
+      TokenReplacer.#actorLookup.set(compendiumActor.uuid, worldActor);
     }
 
     Logger.log(`Imported actor "${compendiumActor.name}" from compendium into folder "${importFolder?.name || "root"}"`);
@@ -1322,18 +1386,13 @@ class TokenReplacer {
    * @private
    */
   static #prepareNewTokenData(prototypeToken, originalProps, worldActorId) {
+    const overrides = {};
+    for (const prop of TokenReplacer.PRESERVED_PROPERTIES) {
+      overrides[prop] = originalProps[prop];
+    }
     return {
       ...prototypeToken,
-      x: originalProps.x,
-      y: originalProps.y,
-      elevation: originalProps.elevation,
-      width: originalProps.width,
-      height: originalProps.height,
-      hidden: originalProps.hidden,
-      rotation: originalProps.rotation,
-      disposition: originalProps.disposition,
-      locked: originalProps.locked,
-      alpha: originalProps.alpha,
+      ...overrides,
       actorId: worldActorId,
       actorLink: false
     };
@@ -1381,16 +1440,16 @@ class TokenReplacer {
     // Prepare new token data, merging prototype with original properties
     const newTokenData = TokenReplacer.#prepareNewTokenData(prototypeToken, originalProps, worldActor.id);
 
-    // Delete the old token
-    await canvas.scene.deleteEmbeddedDocuments("Token", [tokenDoc.id]);
-
-    // Create the new token
+    // Create new token first, then delete old one — avoids data loss if creation fails
     const createdTokens = await canvas.scene.createEmbeddedDocuments("Token", [newTokenData]);
     const newToken = createdTokens[0];
 
     if (!newToken) {
       throw new Error(`Failed to create new token for "${compendiumEntry.name}"`);
     }
+
+    // Safe to delete now — new token exists
+    await canvas.scene.deleteEmbeddedDocuments("Token", [tokenDoc.id]);
 
     Logger.log(`Successfully replaced "${originalName}" with "${compendiumEntry.name}"`);
 
@@ -1488,7 +1547,7 @@ class NPCTokenReplacerController {
 
     return Dialog.confirm({
       title: game.i18n.localize("NPC_REPLACER.ConfirmTitle"),
-      content: content,
+      content,
       yes: () => true,
       no: () => false,
       defaultYes: false
@@ -1586,68 +1645,70 @@ class NPCTokenReplacerController {
    * NPCTokenReplacer.replaceNPCTokens();
    */
   static async replaceNPCTokens() {
-    // Prevent double execution
+    // Prevent double execution — acquire lock immediately to avoid TOCTOU race
     if (NPCTokenReplacerController.#isProcessing) {
       Logger.log("Already processing tokens, ignoring duplicate call");
       return;
     }
-
-    // Validate prerequisites
-    if (!NPCTokenReplacerController.validatePrerequisites()) {
-      return;
-    }
-
-    // Check if any compendiums are available
-    const enabledPacks = CompendiumManager.getEnabledCompendiums();
-    if (enabledPacks.length === 0) {
-      ui.notifications.error(game.i18n.localize("NPC_REPLACER.NoCompendium"));
-      return;
-    }
-
-    // Load the combined monster index from all enabled compendiums
-    const index = await CompendiumManager.loadMonsterIndex();
-
-    if (index.length === 0) {
-      ui.notifications.error(game.i18n.localize("NPC_REPLACER.NoCompendium"));
-      return;
-    }
-
-    // Get NPC tokens to process (selected if any, otherwise all scene NPCs)
-    const { tokens: npcTokens, isSelection } = TokenReplacer.getNPCTokensToProcess();
-    if (npcTokens.length === 0) {
-      const message = isSelection
-        ? game.i18n.localize("NPC_REPLACER.NoSelectedNPCs")
-        : game.i18n.localize("NPC_REPLACER.NoTokens");
-      ui.notifications.info(message);
-      return;
-    }
-
-    const sourceDesc = isSelection ? "selected" : "in scene";
-    Logger.log(`Found ${npcTokens.length} NPC tokens ${sourceDesc}`);
-
-    // Show confirmation dialog
-    const confirmed = await NPCTokenReplacerController.showConfirmationDialog(npcTokens);
-    if (!confirmed) {
-      Logger.log("Token replacement cancelled by user");
-      return;
-    }
-
-    // Set processing lock AFTER confirmation (so user can cancel and retry)
     NPCTokenReplacerController.#isProcessing = true;
 
-    // Reset sequential counter for this replacement session
-    TokenReplacer.resetCounter();
-
-    // Track results
-    let replaced = 0;
-    const notFound = [];
-    const errors = [];
-    const processedIds = new Set(); // Track processed token IDs to avoid duplicates
-
-    // Show progress notification
-    ui.notifications.info(game.i18n.format("NPC_REPLACER.Processing", { count: npcTokens.length }));
-
     try {
+      // Validate prerequisites
+      if (!NPCTokenReplacerController.validatePrerequisites()) {
+        return;
+      }
+
+      // Check if any compendiums are available
+      const enabledPacks = CompendiumManager.getEnabledCompendiums();
+      if (enabledPacks.length === 0) {
+        ui.notifications.error(game.i18n.localize("NPC_REPLACER.NoCompendium"));
+        return;
+      }
+
+      // Load the combined monster index from all enabled compendiums
+      const index = await CompendiumManager.loadMonsterIndex();
+
+      if (index.length === 0) {
+        ui.notifications.error(game.i18n.localize("NPC_REPLACER.NoCompendium"));
+        return;
+      }
+
+      // Get NPC tokens to process (selected if any, otherwise all scene NPCs)
+      const { tokens: npcTokens, isSelection } = TokenReplacer.getNPCTokensToProcess();
+      if (npcTokens.length === 0) {
+        const message = isSelection
+          ? game.i18n.localize("NPC_REPLACER.NoSelectedNPCs")
+          : game.i18n.localize("NPC_REPLACER.NoTokens");
+        ui.notifications.info(message);
+        return;
+      }
+
+      const sourceDesc = isSelection ? "selected" : "in scene";
+      Logger.log(`Found ${npcTokens.length} NPC tokens ${sourceDesc}`);
+
+      // Show confirmation dialog
+      const confirmed = await NPCTokenReplacerController.showConfirmationDialog(npcTokens);
+      if (!confirmed) {
+        Logger.log("Token replacement cancelled by user");
+        return;
+      }
+
+      // Reset sequential counter and build actor lookup for this session
+      TokenReplacer.resetCounter();
+      TokenReplacer.buildActorLookup();
+
+      // TODO [MEDIUM] Performance: token processing loop is fully sequential — 2N socket round-trips.
+      // Split into parallel resolve phase (getDocument, import, wildcard) + batched mutation phase
+      // (single deleteEmbeddedDocuments + createEmbeddedDocuments call for all tokens).
+      // Track results
+      let replaced = 0;
+      const notFound = [];
+      const errors = [];
+      const processedIds = new Set(); // Track processed token IDs to avoid duplicates
+
+      // Show progress notification
+      ui.notifications.info(game.i18n.format("NPC_REPLACER.Processing", { count: npcTokens.length }));
+
       // Process each token
       for (const tokenDoc of npcTokens) {
         const result = await NPCTokenReplacerController.#processToken(tokenDoc, index, processedIds);
@@ -1669,8 +1730,9 @@ class NPCTokenReplacerController {
       // Report results
       NPCTokenReplacerController.#reportResults(replaced, notFound, errors);
     } finally {
-      // Always release the lock
+      // Always release the lock and clean up session state
       NPCTokenReplacerController.#isProcessing = false;
+      TokenReplacer.clearActorLookup();
     }
   }
 
@@ -1689,6 +1751,7 @@ class NPCTokenReplacerController {
     CompendiumManager.clearCache();
     FolderManager.clearCache();
     WildcardResolver.clearCache();
+    TokenReplacer.clearActorLookup();
     Logger.log("All caches cleared");
   }
 
@@ -1851,15 +1914,15 @@ class CompendiumSelectorForm extends FormApplication {
     Logger.log("CompendiumSelectorForm getData:", { enabledPackIds, mode });
 
     return {
-      mode: mode,
+      mode,
       compendiums: allPacks.map((pack, index) => {
         const priority = CompendiumManager.getCompendiumPriority(pack);
         return {
-          index: index,
+          index,
           id: pack.collection,
           name: pack.metadata.label,
           module: pack.metadata.packageName,
-          priority: priority,
+          priority,
           priorityLabel: CompendiumManager.PRIORITY_LABELS[priority] || "UNKNOWN",
           enabled: mode === "all" || mode === "default" || enabledPackIds.includes(pack.collection),
           isCoreFallback: priority <= 2
@@ -1899,6 +1962,10 @@ class CompendiumSelectorForm extends FormApplication {
           }
         }
       }
+      if (enabledArray.length === 0) {
+        ui.notifications.warn(game.i18n.localize("NPC_REPLACER.NoCompendium"));
+        enabledArray = ["default"];
+      }
     }
 
     // Save as JSON string
@@ -1924,7 +1991,7 @@ class CompendiumSelectorForm extends FormApplication {
  * // Returns: '&lt;script&gt;alert(&quot;XSS&quot;)&lt;/script&gt;'
  */
 function escapeHtml(str) {
-  if (!str) return "";
+  if (str == null) return "";
   const htmlEscapes = {
     "&": "&amp;",
     "<": "&lt;",
@@ -1932,7 +1999,7 @@ function escapeHtml(str) {
     '"': "&quot;",
     "'": "&#39;"
   };
-  return str.replace(/[&<>"']/g, char => htmlEscapes[char]);
+  return String(str).replace(/[&<>"']/g, char => htmlEscapes[char]);
 }
 
 /**
@@ -1991,31 +2058,31 @@ Hooks.once("init", () => {
  * - WildcardResolver: Resolves wildcard token paths
  * - NPCTokenReplacerController: Main facade coordinating all operations
  */
-Hooks.once("ready", () => {
-  // Initialize the module using the controller's OOP initialize method
-  // This detects available compendiums and pre-caches the monster index
-  NPCTokenReplacerController.initialize();
+Hooks.once("ready", async () => {
+  try {
+    await NPCTokenReplacerController.initialize();
+  } catch (error) {
+    Logger.error("Failed to initialize NPC Token Replacer", error);
+  }
+
+  /**
+   * Global debug API for console access
+   * Exposes OOP class methods through the NPCTokenReplacerController facade
+   *
+   * Available methods:
+   * - NPCTokenReplacer.replaceNPCTokens() - Run token replacement
+   * - NPCTokenReplacer.detectWOTCCompendiums() - List detected compendiums
+   * - NPCTokenReplacer.getEnabledCompendiums() - List enabled compendiums
+   * - NPCTokenReplacer.clearCache() - Force index reload
+   * - NPCTokenReplacer.getNPCTokensFromScene() - Get NPC tokens in current scene
+   * - NPCTokenReplacer.findInMonsterManual(name, index) - Find creature in index
+   * - NPCTokenReplacer.getOrCreateImportFolder() - Get/create import folder
+   * - NPCTokenReplacer.getMonsterManualPack() - Get first enabled compendium (legacy)
+   */
+  window.NPCTokenReplacer = NPCTokenReplacerController.getDebugAPI();
 });
 
 /**
  * Register control button hook
  */
 Hooks.on("getSceneControlButtons", registerControlButton);
-
-/**
- * Global debug API for console access
- * Exposes OOP class methods through the NPCTokenReplacerController facade
- *
- * Available methods:
- * - NPCTokenReplacer.replaceNPCTokens() - Run token replacement
- * - NPCTokenReplacer.detectWOTCCompendiums() - List detected compendiums
- * - NPCTokenReplacer.getEnabledCompendiums() - List enabled compendiums
- * - NPCTokenReplacer.clearCache() - Force index reload
- * - NPCTokenReplacer.getNPCTokensFromScene() - Get NPC tokens in current scene
- * - NPCTokenReplacer.findInMonsterManual(name, index) - Find creature in index
- * - NPCTokenReplacer.getOrCreateImportFolder() - Get/create import folder
- * - NPCTokenReplacer.getMonsterManualPack() - Get first enabled compendium (legacy)
- *
- * @global
- */
-window.NPCTokenReplacer = NPCTokenReplacerController.getDebugAPI();
