@@ -44,7 +44,8 @@
         "ModeCustom": "Custom Selection",
         "ModeCustomHint": "Manually select which compendiums to use from the list below.",
         "SelectCompendiums": "Available Compendiums:",
-        "Saved": "Compendium settings saved. The index will be reloaded on next use."
+        "Saved": "Compendium settings saved. The index will be reloaded on next use.",
+        "SaveError": "Failed to save compendium settings. Please try again."
       }
     }
   }

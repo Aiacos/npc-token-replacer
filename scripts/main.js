@@ -783,12 +783,7 @@ class CompendiumManager {
       enabledPackIds = typeof settingValue === "string" ? JSON.parse(settingValue) : settingValue;
     } catch (e) {
       // Preserve full error context for debugging - could be JSON parse error or settings retrieval error
-      Logger.warn(`Error parsing enabledCompendiums setting (${e.name}: ${e.message}), falling back to default`, {
-        error: e,
-        errorType: e.name,
-        errorMessage: e.message,
-        stack: e.stack
-      });
+      Logger.warn(`Error parsing enabledCompendiums setting (${e.name}: ${e.message}), falling back to default`);
       enabledPackIds = ["default"];
     }
 
@@ -2025,13 +2020,18 @@ class CompendiumSelectorForm extends FormApplication {
     // Save as JSON string
     const jsonValue = JSON.stringify(enabledArray);
     Logger.log("Saving enabledCompendiums:", jsonValue);
-    await game.settings.set(MODULE_ID, "enabledCompendiums", jsonValue);
 
-    // Clear all caches to reload with new settings
-    // Uses NPCTokenReplacerController.clearCache() which handles all manager caches and legacy caches
-    NPCTokenReplacerController.clearCache();
+    try {
+      await game.settings.set(MODULE_ID, "enabledCompendiums", jsonValue);
 
-    ui.notifications.info(game.i18n.localize("NPC_REPLACER.Settings.CompendiumSelector.Saved"));
+      // Clear all caches to reload with new settings
+      NPCTokenReplacerController.clearCache();
+
+      ui.notifications.info(game.i18n.localize("NPC_REPLACER.Settings.CompendiumSelector.Saved"));
+    } catch (e) {
+      Logger.error(`Failed to save compendium settings (${e.name}: ${e.message})`);
+      ui.notifications.error(game.i18n.localize("NPC_REPLACER.Settings.CompendiumSelector.SaveError"));
+    }
   }
 }
 
