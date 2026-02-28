@@ -1,8 +1,8 @@
 # TODO Fix Plan
 
 ## Summary
-- Total: 13 (original) + 11 (iteration 1) + 7 (iteration 2) + 4 (iteration 3) + 5 (iteration 4) + 3 (iteration 5) = 43 findings
-- Resolved: 42
+- Total: 13 + 11 + 7 + 4 + 5 + 3 + 5 = 48 findings
+- Resolved: 47
 - Deferred: 1 (batch token mutations — requires major refactor)
 
 ## Original Resolution Status (Iteration 0)
@@ -77,6 +77,16 @@
 | 41 | MEDIUM | Stage 3 split+filter per entry — pre-compute significantWords | RESOLVED |
 | 42 | MEDIUM | game.settings.get per wildcard token — cache per session | RESOLVED |
 | 43 | MEDIUM | enabledPackIds.includes O(N) — convert to Set | RESOLVED |
+
+## Iteration 6 Review Findings (Silent Failure Analysis)
+
+| # | Priority | Issue | Status |
+|---|----------|-------|--------|
+| 44 | HIGH | Empty variant cache on transient failure poisons session | RESOLVED |
+| 45 | MEDIUM | .catch(() => null) hides network errors in wildcard probing | RESOLVED |
+| 46 | MEDIUM | registerControlButton silent fallthrough on unknown format | RESOLVED |
+| 47 | MEDIUM | Folder creation failure silently falls back to root | RESOLVED |
+| 48 | MEDIUM | getData parse error logged at debug (invisible by default) | RESOLVED |
 
 ## Post-fix review findings
 - Fix #5 partial matching direction was inverted (entry→search vs search→entry) — corrected
