@@ -201,7 +201,7 @@ class FolderManager {
       parts.unshift(parent.name);
       parent = parent.folder;
     }
-    return "/" + parts.join("/");
+    return `/${parts.join("/")}`;
   }
 
   /**
@@ -1575,14 +1575,16 @@ class NPCTokenReplacerController {
    * }
    */
   static async showConfirmationDialog(tokens) {
-    const tokenList = tokens
-      .map(t => `<li>${escapeHtml(t.actor?.name || t.name)}</li>`)
-      .join("");
+    // Build token list HTML in single pass without intermediate string array
+    let tokenListHtml = "";
+    for (const t of tokens) {
+      tokenListHtml += `<li>${escapeHtml(t.actor?.name || t.name)}</li>`;
+    }
 
     const content = `
       <p>${game.i18n.format("NPC_REPLACER.ConfirmContent", { count: tokens.length })}</p>
       <ul style="max-height: 200px; overflow-y: auto; margin: 10px 0;">
-        ${tokenList}
+        ${tokenListHtml}
       </ul>
       <p><strong>${game.i18n.localize("NPC_REPLACER.ConfirmProceed")}</strong></p>
     `;
@@ -2001,11 +2003,12 @@ class CompendiumSelectorForm extends FormApplication {
     } else if (mode === "all") {
       enabledArray = ["all"];
     } else {
-      // Collect all checked compendiums using index
+      // Collect all checked compendiums using index — extract number via substring not replace+parseInt
       enabledArray = [];
+      const prefix = "compendium-";
       for (const [key, value] of Object.entries(formData)) {
-        if (key.startsWith("compendium-") && value) {
-          const index = parseInt(key.replace("compendium-", ""));
+        if (key.startsWith(prefix) && value) {
+          const index = parseInt(key.substring(prefix.length), 10);
           if (!isNaN(index) && allPacks[index]) {
             enabledArray.push(allPacks[index].collection);
           }
