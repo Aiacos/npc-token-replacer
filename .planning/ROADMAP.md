@@ -74,7 +74,11 @@ Plans:
   3. Calling `NPCTokenReplacerController.clearCache()` also clears the WildcardResolver variant cache — changing the variation mode setting takes effect immediately on next run
   4. After a replacement run with partial failures, the user sees a summary notification classifying failures as no_match, import_failed, or creation_failed
   5. `CompendiumManager.getLastLoadErrors()` is exposed via the debug API and returns per-compendium load success/failure from the most recent index load
-**Plans**: TBD
+**Plans:** 2 plans
+
+Plans:
+- [ ] 04-01-PLAN.md — Fix BUG-01/02/03 bugs and add ERR-01 ui.notifications pairing for all user-triggered error paths
+- [ ] 04-02-PLAN.md — Implement ERR-02 failure classification and ERR-03 per-compendium load error tracking with debug API
 
 ### Phase 5: Progress Bar
 **Goal**: Users see a live progress bar during multi-token replacement operations so they know the module is working and how far along it is
@@ -109,6 +113,6 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6
 | 1. Test Infrastructure | 1/1 | Complete | 2026-03-01 |
 | 2. Extract Pure Logic | 1/1 | Complete | 2026-03-01 |
 | 3. Unit Tests | 2/2 | Complete | 2026-03-01 |
-| 4. Error Handling Hardening | 0/TBD | Not started | - |
+| 4. Error Handling Hardening | 0/2 | Not started | - |
 | 5. Progress Bar | 0/TBD | Not started | - |
 | 6. Dry-Run Preview | 0/TBD | Not started | - |
