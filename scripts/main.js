@@ -176,6 +176,7 @@ class FolderManager {
       return folder;
     } catch (error) {
       Logger.error("Failed to create import folder", error);
+      ui.notifications.error(game.i18n.localize("NPC_REPLACER.ErrorFolderCreate"));
       return null;
     }
   }
@@ -380,13 +381,24 @@ class CompendiumManager {
     const allPacks = CompendiumManager.detectWOTCCompendiums();
 
     // Get the setting (stored as JSON string)
+    // BUG-02: Split into two try/catch blocks for distinct error messages
+    let settingValue;
+    try {
+      settingValue = game.settings.get(MODULE_ID, "enabledCompendiums");
+    } catch (e) {
+      Logger.warn(`Failed to retrieve enabledCompendiums setting (${e.name}: ${e.message})`);
+      ui.notifications.error(game.i18n.localize("NPC_REPLACER.ErrorSettingsRetrieve"));
+      const result = allPacks.filter(pack => CompendiumManager.getCompendiumPriority(pack) <= 2);
+      CompendiumManager.#enabledPacksCache = result;
+      return result;
+    }
+
     let enabledPackIds;
     try {
-      const settingValue = game.settings.get(MODULE_ID, "enabledCompendiums");
       enabledPackIds = typeof settingValue === "string" ? JSON.parse(settingValue) : settingValue;
     } catch (e) {
-      // Preserve full error context for debugging - could be JSON parse error or settings retrieval error
-      Logger.warn(`Error parsing enabledCompendiums setting (${e.name}: ${e.message}), falling back to default`);
+      Logger.warn(`Failed to parse enabledCompendiums JSON (${e.name}: ${e.message})`);
+      ui.notifications.error(game.i18n.localize("NPC_REPLACER.ErrorSettingsParse"));
       enabledPackIds = ["default"];
     }
 
@@ -472,6 +484,7 @@ class CompendiumManager {
         Logger.log(`  [${priority}-${priorityLabel}] Loaded ${pack.index.size} entries from ${pack.metadata.label}`);
       } catch (error) {
         Logger.error(`Failed to load index from ${pack.collection}`, error);
+        ui.notifications.error(game.i18n.format("NPC_REPLACER.ErrorCompendiumLoad", { name: pack.metadata.label }));
       }
     }
 
@@ -743,6 +756,13 @@ class TokenReplacer {
   static async #getOrImportWorldActor(compendiumActor, compendiumEntry, pack) {
     // O(1) lookup via session-scoped Map (built by buildActorLookup before processing loop)
     let worldActor = TokenReplacer.#actorLookup?.get(compendiumActor.uuid) || null;
+
+    // BUG-01: Guard against stale cached references (actor deleted between sessions)
+    if (worldActor && !game.actors.has(worldActor.id)) {
+      Logger.warn(`Cached actor "${worldActor.name}" (id: ${worldActor.id}) no longer exists in game.actors, will re-import`);
+      TokenReplacer.#actorLookup.delete(compendiumActor.uuid);
+      worldActor = null;
+    }
 
     if (worldActor) {
       Logger.log(`Using existing imported actor "${worldActor.name}"`);
