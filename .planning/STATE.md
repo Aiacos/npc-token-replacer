@@ -3,12 +3,12 @@ gsd_state_version: 1.0
 milestone: v1.4
 milestone_name: milestone
 status: unknown
-last_updated: "2026-03-01T06:18:41.556Z"
+last_updated: "2026-03-01T07:02:00.000Z"
 progress:
-  total_phases: 1
-  completed_phases: 1
-  total_plans: 1
-  completed_plans: 1
+  total_phases: 2
+  completed_phases: 2
+  total_plans: 2
+  completed_plans: 2
 ---
 
 # Project State
@@ -18,32 +18,33 @@ progress:
 See: .planning/PROJECT.md (updated 2026-02-28)
 
 **Core value:** Token replacement must work correctly and predictably every time — no silent failures, no corrupted state, no confusing errors.
-**Current focus:** Phase 1 — Test Infrastructure
+**Current focus:** Phase 2 — Extract Pure Logic
 
 ## Current Position
 
-Phase: 1 of 6 (Test Infrastructure)
+Phase: 2 of 6 (Extract Pure Logic)
 Plan: 1 of 1 in current phase (COMPLETE)
-Status: Phase 1 complete — ready for Phase 2
-Last activity: 2026-03-01 — Phase 1 Plan 1 executed: test infrastructure configured
+Status: Phase 2 complete — ready for Phase 3
+Last activity: 2026-03-01 — Phase 2 Plan 1 executed: extracted Logger, WildcardResolver, NameMatcher to scripts/lib/
 
-Progress: [##░░░░░░░░] 17%
+Progress: [####░░░░░░] 33%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 1
-- Average duration: 3 min
-- Total execution time: 0.05 hours
+- Total plans completed: 2
+- Average duration: 4.5 min
+- Total execution time: 0.15 hours
 
 **By Phase:**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
 | 1. Test Infrastructure | 1 | 3 min | 3 min |
+| 2. Extract Pure Logic | 1 | 6 min | 6 min |
 
 **Recent Trend:**
-- Last 5 plans: 01-01 (3 min)
+- Last 5 plans: 01-01 (3 min), 02-01 (6 min)
 - Trend: -
 
 *Updated after each plan completion*
@@ -61,6 +62,9 @@ Recent decisions affecting current work:
 - [01-01]: Vitest 3.x (not 4.x) due to foundry-test-utils peer dependency constraint on vitest ^3.1.0
 - [01-01]: v8 coverage provider for native ESM support without transpilation
 - [01-01]: Guard project mocks with globalThis checks for forward compatibility
+- [02-01]: MODULE_ID exported from logger.js rather than separate constants.js
+- [02-01]: Static setter pattern for NameMatcher dependency injection (setCompendiumManager)
+- [02-01]: Named exports added to main.js for 4 remaining classes to fully satisfy TEST-02
 
 ### Pending Todos
 
@@ -75,5 +79,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-03-01
-Stopped at: Completed 01-01-PLAN.md — Phase 1 complete, ready for Phase 2 planning
+Stopped at: Completed 02-01-PLAN.md — Phase 2 complete, ready for Phase 3
 Resume file: None
