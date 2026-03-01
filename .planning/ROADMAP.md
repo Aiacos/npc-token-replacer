@@ -58,7 +58,11 @@ Plans:
   3. `npm test` runs tests for CompendiumManager (priority resolution, detectWOTCCompendiums filtering, getEnabledCompendiums with valid/corrupt settings) and all pass
   4. Coverage report is generated and shows a measurable baseline percentage for the tested classes
   5. Each test file uses `beforeEach` to clear all relevant caches, preventing order-dependent failures
-**Plans**: TBD
+**Plans:** 2 plans
+
+Plans:
+- [ ] 03-01-PLAN.md — Write unit tests for NameMatcher (normalizeName, findMatch stages, selectBestMatch) and WildcardResolver (isWildcardPath, selectVariant, resolveWildcardVariants)
+- [ ] 03-02-PLAN.md — Write unit tests for CompendiumManager (priority resolution, detection filtering, settings parsing) and verify coverage baseline
 
 ### Phase 4: Error Handling Hardening
 **Goal**: All known bugs are fixed under test coverage and every user-triggered failure produces a visible ui.notifications error, not a silent log entry
@@ -104,7 +108,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6
 |-------|----------------|--------|-----------|
 | 1. Test Infrastructure | 1/1 | Complete | 2026-03-01 |
 | 2. Extract Pure Logic | 0/1 | Not started | - |
-| 3. Unit Tests | 0/TBD | Not started | - |
+| 3. Unit Tests | 0/2 | Not started | - |
 | 4. Error Handling Hardening | 0/TBD | Not started | - |
 | 5. Progress Bar | 0/TBD | Not started | - |
 | 6. Dry-Run Preview | 0/TBD | Not started | - |
