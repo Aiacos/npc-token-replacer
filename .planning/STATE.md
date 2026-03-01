@@ -3,12 +3,12 @@ gsd_state_version: 1.0
 milestone: v1.4
 milestone_name: milestone
 status: unknown
-last_updated: "2026-03-01T07:41:33.534Z"
+last_updated: "2026-03-01T08:33:42.256Z"
 progress:
-  total_phases: 3
+  total_phases: 4
   completed_phases: 3
-  total_plans: 4
-  completed_plans: 4
+  total_plans: 6
+  completed_plans: 5
 ---
 
 # Project State
@@ -18,23 +18,23 @@ progress:
 See: .planning/PROJECT.md (updated 2026-02-28)
 
 **Core value:** Token replacement must work correctly and predictably every time — no silent failures, no corrupted state, no confusing errors.
-**Current focus:** Phase 3 — Unit Tests (complete, ready for Phase 4)
+**Current focus:** Phase 4 — Error Handling & Hardening (Plan 01 complete, Plan 02 remaining)
 
 ## Current Position
 
-Phase: 3 of 6 (Unit Tests)
-Plan: 2 of 2 in current phase (COMPLETE)
-Status: Phase 3 complete — all unit tests for NameMatcher, WildcardResolver, and CompendiumManager written
-Last activity: 2026-03-01 — Phase 3 Plan 1 executed: 38 tests for NameMatcher and WildcardResolver
+Phase: 4 of 6 (Error Handling & Hardening)
+Plan: 1 of 2 in current phase
+Status: Plan 04-01 complete — BUG-01/02/03 fixed, ERR-01 notifications added, 93 tests passing
+Last activity: 2026-03-01 — Phase 4 Plan 1 executed: 3 bug fixes, 4 new localization keys, 12 new tests
 
-Progress: [######░░░░] 66%
+Progress: [########░░] 83%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 4
-- Average duration: 3.5 min
-- Total execution time: 0.23 hours
+- Total plans completed: 5
+- Average duration: 4.0 min
+- Total execution time: 0.37 hours
 
 **By Phase:**
 
@@ -43,12 +43,14 @@ Progress: [######░░░░] 66%
 | 1. Test Infrastructure | 1 | 3 min | 3 min |
 | 2. Extract Pure Logic | 1 | 6 min | 6 min |
 | 3. Unit Tests | 2 | 5 min | 2.5 min |
+| 4. Error Handling | 1 | 8 min | 8 min |
 
 **Recent Trend:**
-- Last 5 plans: 01-01 (3 min), 02-01 (6 min), 03-02 (2 min), 03-01 (3 min)
-- Trend: improving
+- Last 5 plans: 02-01 (6 min), 03-02 (2 min), 03-01 (3 min), 04-01 (8 min)
+- Trend: stable (04-01 larger scope with bug fixes + tests)
 
 *Updated after each plan completion*
+| Phase 04 P01 | 8min | 2 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -72,6 +74,10 @@ Recent decisions affecting current work:
 - [03-01]: normalizeName does not handle non-string truthy input (throws TypeError) - documented via falsy coercion tests
 - [03-01]: isWildcardPath returns falsy values (null/undefined) not strict false - tested with toBeFalsy()
 - [03-01]: Mock pack objects must include metadata.label for Logger.debug in selectBestMatch
+- [04-01]: Flat localization keys (ErrorSettingsRetrieve, not Error.SettingsRetrieve) to avoid conflicting with existing Error string key
+- [04-01]: No per-token ui.notifications in #processToken — errors surfaced via summary notification in #reportResults
+- [04-01]: BUG-02 retrieval error returns early with priority<=2 packs; parse error falls through to default path
+- [Phase 04]: Flat localization keys (ErrorSettingsRetrieve) to avoid conflicting with existing Error string key
 
 ### Pending Todos
 
@@ -86,5 +92,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-03-01
-Stopped at: Completed 03-01-PLAN.md — Phase 3 complete, all unit tests written (81 tests across 5 files)
+Stopped at: Completed 04-01-PLAN.md — BUG-01/02/03 fixed, ERR-01 added, 93 tests passing
 Resume file: None

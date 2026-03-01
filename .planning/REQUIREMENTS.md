@@ -16,13 +16,13 @@
 
 ### Bug Fixes
 
-- [ ] **BUG-01**: Actor lookup map checks actor existence via game.actors.has() before use, preventing race condition when actors are deleted between lookup build and token processing
-- [ ] **BUG-02**: getEnabledCompendiums() uses separate try/catch blocks for settings retrieval vs JSON.parse, providing distinct error messages for each failure mode
-- [ ] **BUG-03**: WildcardResolver.clearCache() called in NPCTokenReplacerController.clearCache() so variant cache clears when settings change
+- [x] **BUG-01**: Actor lookup map checks actor existence via game.actors.has() before use, preventing race condition when actors are deleted between lookup build and token processing
+- [x] **BUG-02**: getEnabledCompendiums() uses separate try/catch blocks for settings retrieval vs JSON.parse, providing distinct error messages for each failure mode
+- [x] **BUG-03**: WildcardResolver.clearCache() called in NPCTokenReplacerController.clearCache() so variant cache clears when settings change
 
 ### Error Handling
 
-- [ ] **ERR-01**: All caught exceptions in user-triggered flows call ui.notifications.error() with a localized message, not just Logger.error()
+- [x] **ERR-01**: All caught exceptions in user-triggered flows call ui.notifications.error() with a localized message, not just Logger.error()
 - [ ] **ERR-02**: Per-token failure types classified (no_match, import_failed, creation_failed) and collected into a post-run summary notification
 - [ ] **ERR-03**: Per-compendium load success/failure tracked during loadMonsterIndex() with getLastLoadErrors() exposed via debug API
 
@@ -64,10 +64,10 @@
 | TEST-03 | Phase 3 | Complete |
 | TEST-04 | Phase 3 | Complete |
 | TEST-05 | Phase 3 | Complete |
-| BUG-01 | Phase 4 | Pending |
-| BUG-02 | Phase 4 | Pending |
-| BUG-03 | Phase 4 | Pending |
-| ERR-01 | Phase 4 | Pending |
+| BUG-01 | Phase 4 | Complete |
+| BUG-02 | Phase 4 | Complete |
+| BUG-03 | Phase 4 | Complete |
+| ERR-01 | Phase 4 | Complete |
 | ERR-02 | Phase 4 | Pending |
 | ERR-03 | Phase 4 | Pending |
 | UX-01 | Phase 5 | Pending |
