@@ -10,6 +10,7 @@
     "NotFoundCount": "{count} creatures not found in compendiums",
     "Error": "Error replacing token: {name}",
     "ErrorCount": "{count} errors occurred during replacement",
+    "SummaryPartialFailure": "Replacement completed with issues: {replaced} replaced, {noMatch} not found, {importFailed} import failures, {creationFailed} creation failures",
     "ErrorSettingsRetrieve": "Failed to read compendium settings. Using default compendiums.",
     "ErrorSettingsParse": "Compendium settings are corrupted. Using default compendiums.",
     "ErrorCompendiumLoad": "Failed to load compendium: {name}",

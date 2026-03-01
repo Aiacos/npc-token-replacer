@@ -236,6 +236,14 @@ class CompendiumManager {
   static #wotcCompendiumsCache = null;
 
   /**
+   * Errors from the most recent loadMonsterIndex() call
+   * @type {Array<{packId: string, packLabel: string, error: string}>}
+   * @static
+   * @private
+   */
+  static #lastLoadErrors = [];
+
+  /**
    * Known official WOTC module prefixes for auto-detection
    * @type {string[]}
    * @static
@@ -447,6 +455,9 @@ class CompendiumManager {
       return CompendiumManager.#indexCache;
     }
 
+    // Reset load errors for this run
+    CompendiumManager.#lastLoadErrors = [];
+
     const enabledPacks = CompendiumManager.getEnabledCompendiums();
 
     if (enabledPacks.length === 0) {
@@ -483,6 +494,11 @@ class CompendiumManager {
         }
         Logger.log(`  [${priority}-${priorityLabel}] Loaded ${pack.index.size} entries from ${pack.metadata.label}`);
       } catch (error) {
+        CompendiumManager.#lastLoadErrors.push({
+          packId: pack.collection,
+          packLabel: pack.metadata.label,
+          error: error.message
+        });
         Logger.error(`Failed to load index from ${pack.collection}`, error);
         ui.notifications.error(game.i18n.format("NPC_REPLACER.ErrorCompendiumLoad", { name: pack.metadata.label }));
       }
@@ -519,7 +535,17 @@ class CompendiumManager {
     CompendiumManager.#indexMap = null;
     CompendiumManager.#wotcCompendiumsCache = null;
     CompendiumManager.#enabledPacksCache = null;
+    CompendiumManager.#lastLoadErrors = [];
     Logger.debug("CompendiumManager caches cleared");
+  }
+
+  /**
+   * Get errors from the most recent loadMonsterIndex() call
+   * @returns {Array<{packId: string, packLabel: string, error: string}>} Copy of load errors
+   * @static
+   */
+  static getLastLoadErrors() {
+    return [...CompendiumManager.#lastLoadErrors];
   }
 
   /**
@@ -1021,7 +1047,7 @@ class NPCTokenReplacerController {
    * @param {TokenDocument} tokenDoc - The token document to process
    * @param {Array<{entry: Object, pack: CompendiumCollection}>} index - The monster index
    * @param {Set<string>} processedIds - Set of already processed token IDs
-   * @returns {Promise<{status: 'replaced'|'not_found'|'error'|'skipped', name: string}>} Processing result
+   * @returns {Promise<{status: 'replaced'|'not_found'|'import_failed'|'creation_failed'|'skipped', name: string}>} Processing result
    * @static
    * @private
    */
@@ -1042,19 +1068,27 @@ class NPCTokenReplacerController {
 
     processedIds.add(tokenDoc.id);
 
-    try {
-      const match = NameMatcher.findMatch(creatureName, index);
+    const match = NameMatcher.findMatch(creatureName, index);
+    if (!match) {
+      return { status: "not_found", name: creatureName };
+    }
 
-      if (match) {
-        // match is {entry, pack} - pass the entry and its source pack
-        await TokenReplacer.replaceToken(tokenDoc, match.entry, match.pack);
-        return { status: "replaced", name: creatureName };
-      } else {
-        return { status: "not_found", name: creatureName };
-      }
+    try {
+      await TokenReplacer.replaceToken(tokenDoc, match.entry, match.pack);
+      return { status: "replaced", name: creatureName };
     } catch (error) {
-      Logger.error(`Error replacing token ${tokenDoc.name}`, error);
-      return { status: "error", name: creatureName };
+      // Classify failure based on error message content.
+      // replaceToken throws from import stage (getDocument, #getOrImportWorldActor)
+      // or creation stage (createEmbeddedDocuments, deleteEmbeddedDocuments).
+      // Default to "creation_failed" since import is attempted first — if we got past it,
+      // creation is the likely failure point.
+      const msg = (error.message || "").toLowerCase();
+      const isImportError = msg.includes("import") ||
+                            msg.includes("failed to load") ||
+                            msg.includes("getdocument");
+      const status = isImportError ? "import_failed" : "creation_failed";
+      Logger.error(`Error replacing token ${tokenDoc.name} (${status})`, error);
+      return { status, name: creatureName };
     }
   }
 
@@ -1063,28 +1097,35 @@ class NPCTokenReplacerController {
    * Displays appropriate notifications and logs details
    * @param {number} replaced - Count of successfully replaced tokens
    * @param {string[]} notFound - Names of tokens not found in compendiums
-   * @param {string[]} errors - Names of tokens that had errors during replacement
+   * @param {string[]} importFailed - Names of tokens that failed during import
+   * @param {string[]} creationFailed - Names of tokens that failed during creation
    * @returns {void}
    * @static
    * @private
    */
-  static #reportResults(replaced, notFound, errors) {
-    // Report results
+  static #reportResults(replaced, notFound, importFailed, creationFailed) {
     if (replaced > 0) {
       ui.notifications.info(game.i18n.format("NPC_REPLACER.Complete", { count: replaced }));
     }
 
     if (notFound.length > 0) {
       ui.notifications.warn(game.i18n.format("NPC_REPLACER.NotFoundCount", { count: notFound.length }));
-      Logger.log("Creatures not found in Monster Manual:", notFound);
+      Logger.log("Creatures not found in compendiums:", notFound);
     }
 
-    if (errors.length > 0) {
-      ui.notifications.error(game.i18n.format("NPC_REPLACER.ErrorCount", { count: errors.length }));
-      Logger.log("Errors occurred with tokens:", errors);
+    const totalErrors = importFailed.length + creationFailed.length;
+    if (totalErrors > 0) {
+      ui.notifications.error(game.i18n.format("NPC_REPLACER.SummaryPartialFailure", {
+        replaced,
+        noMatch: notFound.length,
+        importFailed: importFailed.length,
+        creationFailed: creationFailed.length
+      }));
+      if (importFailed.length > 0) Logger.log("Import failures:", importFailed);
+      if (creationFailed.length > 0) Logger.log("Creation failures:", creationFailed);
     }
 
-    Logger.log(`Replacement complete: ${replaced} replaced, ${notFound.length} not found, ${errors.length} errors`);
+    Logger.log(`Replacement complete: ${replaced} replaced, ${notFound.length} not found, ${importFailed.length} import failures, ${creationFailed.length} creation failures`);
   }
 
   /**
@@ -1164,7 +1205,8 @@ class NPCTokenReplacerController {
       // Track results
       let replaced = 0;
       const notFound = [];
-      const errors = [];
+      const importFailed = [];
+      const creationFailed = [];
       const processedIds = new Set(); // Track processed token IDs to avoid duplicates
 
       // Show progress notification
@@ -1181,15 +1223,18 @@ class NPCTokenReplacerController {
           case "not_found":
             notFound.push(result.name);
             break;
-          case "error":
-            errors.push(result.name);
+          case "import_failed":
+            importFailed.push(result.name);
+            break;
+          case "creation_failed":
+            creationFailed.push(result.name);
             break;
           // 'skipped' - no action needed
         }
       }
 
       // Report results
-      NPCTokenReplacerController.#reportResults(replaced, notFound, errors);
+      NPCTokenReplacerController.#reportResults(replaced, notFound, importFailed, creationFailed);
     } finally {
       // Always release the lock and clean up session state
       NPCTokenReplacerController.#isProcessing = false;
@@ -1269,6 +1314,7 @@ class NPCTokenReplacerController {
       detectWOTCCompendiums: () => CompendiumManager.detectWOTCCompendiums(),
       getEnabledCompendiums: () => CompendiumManager.getEnabledCompendiums(),
       clearCache: () => NPCTokenReplacerController.clearCache(),
+      getLastLoadErrors: () => CompendiumManager.getLastLoadErrors(),
       get debugEnabled() { return Logger.debugEnabled; },
       set debugEnabled(v) { Logger.debugEnabled = v; }
     };
