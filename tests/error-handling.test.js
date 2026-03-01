@@ -6,12 +6,14 @@ import {
   TokenReplacer
 } from "../scripts/main.js";
 import { WildcardResolver } from "../scripts/lib/wildcard-resolver.js";
+import { NameMatcher } from "../scripts/lib/name-matcher.js";
 
 /**
  * Cross-cutting Error Handling Tests
  *
  * Tests for BUG-01 (stale actor guard), BUG-03 (cache propagation),
- * and ERR-01 (ui.notifications.error pairing with Logger.error).
+ * ERR-01 (ui.notifications.error pairing with Logger.error),
+ * ERR-02 (failure classification), and ERR-03 (load error tracking).
  */
 
 // ─── Test Group 1: BUG-03 — Cache propagation ───────────────────────────────
@@ -202,6 +204,281 @@ describe("ERR-01 — FolderManager.getOrCreateImportFolder error notification", 
     const result = await FolderManager.getOrCreateImportFolder();
 
     expect(result).toBeNull();
+  });
+
+});
+
+// ─── Test Group 5: ERR-03 — Per-compendium load error tracking ──────────────
+
+describe("ERR-03 — Per-compendium load error tracking", () => {
+
+  beforeEach(() => {
+    CompendiumManager.clearCache();
+    ui.notifications.error = vi.fn();
+    game.i18n.format = vi.fn((key, data) => `${key}: ${JSON.stringify(data)}`);
+  });
+
+  it("getLastLoadErrors returns empty array when no errors occurred", () => {
+    expect(CompendiumManager.getLastLoadErrors()).toEqual([]);
+  });
+
+  it("records per-pack errors during loadMonsterIndex", async () => {
+    const failingPack = {
+      collection: "dnd-broken.monsters",
+      metadata: { packageName: "dnd-broken", label: "Broken Pack" },
+      documentName: "Actor",
+      getIndex: vi.fn().mockRejectedValue(new Error("Network timeout")),
+    };
+
+    game.packs.filter = vi.fn(pred => [failingPack].filter(pred));
+    game.settings.get = vi.fn().mockReturnValue('["all"]');
+
+    await CompendiumManager.loadMonsterIndex(true);
+
+    const errors = CompendiumManager.getLastLoadErrors();
+    expect(errors).toHaveLength(1);
+    expect(errors[0].packId).toBe("dnd-broken.monsters");
+    expect(errors[0].packLabel).toBe("Broken Pack");
+    expect(errors[0].error).toBe("Network timeout");
+  });
+
+  it("resets errors on each loadMonsterIndex call", async () => {
+    // First call with failure
+    const failingPack = {
+      collection: "dnd-broken.monsters",
+      metadata: { packageName: "dnd-broken", label: "Broken Pack" },
+      documentName: "Actor",
+      getIndex: vi.fn().mockRejectedValue(new Error("fail")),
+    };
+    game.packs.filter = vi.fn(pred => [failingPack].filter(pred));
+    game.settings.get = vi.fn().mockReturnValue('["all"]');
+
+    await CompendiumManager.loadMonsterIndex(true);
+    expect(CompendiumManager.getLastLoadErrors()).toHaveLength(1);
+
+    // Second call with success (no packs)
+    CompendiumManager.clearCache();
+    game.packs.filter = vi.fn(() => []);
+    await CompendiumManager.loadMonsterIndex(true);
+    expect(CompendiumManager.getLastLoadErrors()).toEqual([]);
+  });
+
+  it("clearCache resets lastLoadErrors", async () => {
+    const failingPack = {
+      collection: "dnd-broken.monsters",
+      metadata: { packageName: "dnd-broken", label: "Broken Pack" },
+      documentName: "Actor",
+      getIndex: vi.fn().mockRejectedValue(new Error("fail")),
+    };
+    game.packs.filter = vi.fn(pred => [failingPack].filter(pred));
+    game.settings.get = vi.fn().mockReturnValue('["all"]');
+
+    await CompendiumManager.loadMonsterIndex(true);
+    expect(CompendiumManager.getLastLoadErrors()).toHaveLength(1);
+
+    CompendiumManager.clearCache();
+    expect(CompendiumManager.getLastLoadErrors()).toEqual([]);
+  });
+
+  it("getDebugAPI exposes getLastLoadErrors", () => {
+    const api = NPCTokenReplacerController.getDebugAPI();
+    expect(typeof api.getLastLoadErrors).toBe("function");
+  });
+
+  it("getLastLoadErrors returns a copy, not the original array", () => {
+    const errors1 = CompendiumManager.getLastLoadErrors();
+    const errors2 = CompendiumManager.getLastLoadErrors();
+    expect(errors1).not.toBe(errors2);  // Different array references
+    expect(errors1).toEqual(errors2);   // Same content
+  });
+
+});
+
+// ─── Test Group 6: ERR-02 — Failure classification end-to-end ───────────────
+
+describe("ERR-02 — Failure classification via replaceNPCTokens", () => {
+
+  // Helper to create a minimal mock token
+  const createMockToken = (id, name) => ({
+    id,
+    name,
+    actor: { name, type: "npc" },
+  });
+
+  // Helper to set up a mock pack and index for one creature
+  const setupMockIndex = (creatureName) => {
+    const mockPack = {
+      collection: "dnd5e.monsters",
+      metadata: { packageName: "dnd5e", label: "Monsters" },
+      documentName: "Actor",
+      getIndex: vi.fn().mockResolvedValue(),
+      index: {
+        contents: [{ name: creatureName, _id: "entry-1" }],
+        size: 1
+      }
+    };
+    return mockPack;
+  };
+
+  beforeEach(() => {
+    // Reset all caches
+    CompendiumManager.clearCache();
+    TokenReplacer.clearActorLookup();
+
+    // Reset notification mocks
+    ui.notifications.info = vi.fn();
+    ui.notifications.warn = vi.fn();
+    ui.notifications.error = vi.fn();
+    game.i18n.format = vi.fn((key, data) => `${key}: ${JSON.stringify(data)}`);
+    game.i18n.localize = vi.fn((key) => key);
+
+    // Mock game.user as GM
+    game.user.isGM = true;
+
+    // Mock empty game.actors iterator
+    game.actors[Symbol.iterator] = function* () {};
+
+    // Ensure canvas.scene exists with tokens.has
+    canvas.scene = canvas.scene || {};
+    canvas.scene.tokens = canvas.scene.tokens || {};
+    canvas.scene.tokens.has = vi.fn(() => true);
+  });
+
+  it("classifies import error and shows SummaryPartialFailure notification", async () => {
+    const mockPack = setupMockIndex("Goblin");
+
+    // Mock CompendiumManager to return enabled packs and index
+    game.packs.filter = vi.fn(pred => [mockPack].filter(pred));
+    game.settings.get = vi.fn().mockReturnValue('["all"]');
+
+    // Pre-load index so replaceNPCTokens finds it
+    await CompendiumManager.loadMonsterIndex(true);
+
+    // Mock CompendiumManager.detectWOTCCompendiums (needed by validatePrerequisites)
+    const detectSpy = vi.spyOn(CompendiumManager, "detectWOTCCompendiums").mockReturnValue([mockPack]);
+
+    // Mock TokenReplacer.getNPCTokensToProcess to return one token
+    const mockToken = createMockToken("token-1", "Goblin");
+    const getNPCSpy = vi.spyOn(TokenReplacer, "getNPCTokensToProcess").mockReturnValue({
+      tokens: [mockToken],
+      isSelection: false
+    });
+
+    // Mock showConfirmationDialog to auto-confirm
+    const dialogSpy = vi.spyOn(NPCTokenReplacerController, "showConfirmationDialog").mockResolvedValue(true);
+
+    // Mock TokenReplacer.replaceToken to throw an import error
+    const replaceSpy = vi.spyOn(TokenReplacer, "replaceToken")
+      .mockRejectedValue(new Error("Failed to import actor from compendium"));
+
+    // Run the full flow
+    await NPCTokenReplacerController.replaceNPCTokens();
+
+    // Verify SummaryPartialFailure was shown via ui.notifications.error
+    expect(ui.notifications.error).toHaveBeenCalled();
+    const errorCalls = ui.notifications.error.mock.calls;
+    const summaryCall = errorCalls.find(call =>
+      typeof call[0] === "string" && call[0].includes("SummaryPartialFailure")
+    );
+    expect(summaryCall).toBeTruthy();
+
+    // Verify game.i18n.format was called with SummaryPartialFailure key and import failure count
+    expect(game.i18n.format).toHaveBeenCalledWith(
+      "NPC_REPLACER.SummaryPartialFailure",
+      expect.objectContaining({
+        importFailed: 1,
+        creationFailed: 0
+      })
+    );
+
+    // Cleanup spies
+    detectSpy.mockRestore();
+    getNPCSpy.mockRestore();
+    dialogSpy.mockRestore();
+    replaceSpy.mockRestore();
+  });
+
+  it("classifies creation error and shows SummaryPartialFailure notification", async () => {
+    const mockPack = setupMockIndex("Dragon");
+
+    game.packs.filter = vi.fn(pred => [mockPack].filter(pred));
+    game.settings.get = vi.fn().mockReturnValue('["all"]');
+
+    await CompendiumManager.loadMonsterIndex(true);
+
+    const detectSpy = vi.spyOn(CompendiumManager, "detectWOTCCompendiums").mockReturnValue([mockPack]);
+
+    const mockToken = createMockToken("token-2", "Dragon");
+    const getNPCSpy = vi.spyOn(TokenReplacer, "getNPCTokensToProcess").mockReturnValue({
+      tokens: [mockToken],
+      isSelection: false
+    });
+
+    const dialogSpy = vi.spyOn(NPCTokenReplacerController, "showConfirmationDialog").mockResolvedValue(true);
+
+    // Mock TokenReplacer.replaceToken to throw a creation error (no "import" keyword)
+    const replaceSpy = vi.spyOn(TokenReplacer, "replaceToken")
+      .mockRejectedValue(new Error("Failed to create new token for Dragon"));
+
+    await NPCTokenReplacerController.replaceNPCTokens();
+
+    // Verify classified as creation_failed
+    expect(game.i18n.format).toHaveBeenCalledWith(
+      "NPC_REPLACER.SummaryPartialFailure",
+      expect.objectContaining({
+        importFailed: 0,
+        creationFailed: 1
+      })
+    );
+
+    detectSpy.mockRestore();
+    getNPCSpy.mockRestore();
+    dialogSpy.mockRestore();
+    replaceSpy.mockRestore();
+  });
+
+  it("classifies mixed import and creation failures correctly", async () => {
+    const mockPack = setupMockIndex("Goblin");
+    // Add a second creature to index
+    mockPack.index.contents.push({ name: "Skeleton", _id: "entry-2" });
+    mockPack.index.size = 2;
+
+    game.packs.filter = vi.fn(pred => [mockPack].filter(pred));
+    game.settings.get = vi.fn().mockReturnValue('["all"]');
+
+    await CompendiumManager.loadMonsterIndex(true);
+
+    const detectSpy = vi.spyOn(CompendiumManager, "detectWOTCCompendiums").mockReturnValue([mockPack]);
+
+    const token1 = createMockToken("token-3", "Goblin");
+    const token2 = createMockToken("token-4", "Skeleton");
+    const getNPCSpy = vi.spyOn(TokenReplacer, "getNPCTokensToProcess").mockReturnValue({
+      tokens: [token1, token2],
+      isSelection: false
+    });
+
+    const dialogSpy = vi.spyOn(NPCTokenReplacerController, "showConfirmationDialog").mockResolvedValue(true);
+
+    // First token: import error; Second token: creation error
+    const replaceSpy = vi.spyOn(TokenReplacer, "replaceToken")
+      .mockRejectedValueOnce(new Error("Failed to import actor"))
+      .mockRejectedValueOnce(new Error("Failed to create new token"));
+
+    await NPCTokenReplacerController.replaceNPCTokens();
+
+    // Verify both types of failures are counted
+    expect(game.i18n.format).toHaveBeenCalledWith(
+      "NPC_REPLACER.SummaryPartialFailure",
+      expect.objectContaining({
+        importFailed: 1,
+        creationFailed: 1
+      })
+    );
+
+    detectSpy.mockRestore();
+    getNPCSpy.mockRestore();
+    dialogSpy.mockRestore();
+    replaceSpy.mockRestore();
   });
 
 });
