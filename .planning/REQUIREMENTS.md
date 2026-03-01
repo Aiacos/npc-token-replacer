@@ -7,12 +7,12 @@
 
 ### Testing Infrastructure
 
-- [ ] **TEST-01**: Vitest 4 test framework configured with jsdom environment and Foundry global mocks via @rayners/foundry-test-utils
+- [x] **TEST-01**: Vitest 4 test framework configured with jsdom environment and Foundry global mocks via @rayners/foundry-test-utils
 - [ ] **TEST-02**: Named exports added to scripts/main.js for all classes (Logger, FolderManager, WildcardResolver, CompendiumManager, NameMatcher, TokenReplacer, NPCTokenReplacerController)
 - [ ] **TEST-03**: Unit tests for NameMatcher (normalizeName, findMatch exact/variant/partial stages, selectBestMatch)
 - [ ] **TEST-04**: Unit tests for WildcardResolver (isWildcardPath, selectVariant modes, resolveWildcardVariants with mocked fetch)
 - [ ] **TEST-05**: Unit tests for CompendiumManager (priority resolution, detectWOTCCompendiums filtering, getEnabledCompendiums with valid/corrupt settings)
-- [ ] **TEST-06**: npm test script runs all tests without a Foundry instance and exits 0
+- [x] **TEST-06**: npm test script runs all tests without a Foundry instance and exits 0
 
 ### Bug Fixes
 
@@ -58,8 +58,8 @@
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| TEST-01 | Phase 1 | Pending |
-| TEST-06 | Phase 1 | Pending |
+| TEST-01 | Phase 1 | Complete |
+| TEST-06 | Phase 1 | Complete |
 | TEST-02 | Phase 2 | Pending |
 | TEST-03 | Phase 3 | Pending |
 | TEST-04 | Phase 3 | Pending |

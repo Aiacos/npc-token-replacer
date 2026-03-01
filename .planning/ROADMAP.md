@@ -12,7 +12,7 @@ This milestone takes NPC Token Replacer from a functioning v1.4.0 module to a pr
 
 Decimal phases appear between their surrounding integers in numeric order.
 
-- [ ] **Phase 1: Test Infrastructure** - Configure Vitest + foundry-test-utils so `npm test` runs clean with zero errors
+- [x] **Phase 1: Test Infrastructure** - Configure Vitest + foundry-test-utils so `npm test` runs clean with zero errors
 - [ ] **Phase 2: Extract Pure Logic** - Move NameMatcher, WildcardResolver, Logger to scripts/lib/ with named exports
 - [ ] **Phase 3: Unit Tests** - Write unit tests for all pure-logic classes and CompendiumManager; establish coverage baseline
 - [ ] **Phase 4: Error Handling Hardening** - Fix known bugs and ensure all user-triggered errors surface via ui.notifications
@@ -33,7 +33,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 **Plans:** 1 plan
 
 Plans:
-- [ ] 01-01-PLAN.md — Install Vitest + foundry-test-utils, configure test runner, create mock setup files and smoke test
+- [x] 01-01-PLAN.md — Install Vitest + foundry-test-utils, configure test runner, create mock setup files and smoke test
 
 ### Phase 2: Extract Pure Logic
 **Goal**: NameMatcher, WildcardResolver, and Logger exist as named ES module exports in scripts/lib/ so unit tests can import them without Foundry globals
@@ -99,7 +99,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Test Infrastructure | 0/1 | Planning complete | - |
+| 1. Test Infrastructure | 1/1 | Complete | 2026-03-01 |
 | 2. Extract Pure Logic | 0/TBD | Not started | - |
 | 3. Unit Tests | 0/TBD | Not started | - |
 | 4. Error Handling Hardening | 0/TBD | Not started | - |
