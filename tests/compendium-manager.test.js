@@ -170,13 +170,26 @@ describe("CompendiumManager", () => {
       expect(result[0]).toBe(adventurePack);
     });
 
-    it("corrupt JSON falls back to default behavior", () => {
-      game.settings.get = vi.fn(() => { throw new Error("Invalid JSON"); });
+    it("settings retrieval error falls back to default packs with notification", () => {
+      game.settings.get = vi.fn(() => { throw new Error("Settings unavailable"); });
       const result = CompendiumManager.getEnabledCompendiums();
-      // Should fall back to default (priority <= 2)
+      // Should fall back to priority <= 2 packs
       expect(result).toContain(corePack);
       expect(result).toContain(srdPack);
       expect(result).not.toContain(adventurePack);
+      // Should notify the user
+      expect(ui.notifications.error).toHaveBeenCalled();
+    });
+
+    it("corrupt JSON string triggers parse error with notification", () => {
+      game.settings.get = vi.fn().mockReturnValue("{broken json");
+      const result = CompendiumManager.getEnabledCompendiums();
+      // Should fall back to default (["default"] -> priority <= 2)
+      expect(result).toContain(corePack);
+      expect(result).toContain(srdPack);
+      expect(result).not.toContain(adventurePack);
+      // Should notify about parse error
+      expect(ui.notifications.error).toHaveBeenCalled();
     });
 
     it("undefined setting falls back to default behavior", () => {
