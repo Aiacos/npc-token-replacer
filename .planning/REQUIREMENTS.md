@@ -23,8 +23,8 @@
 ### Error Handling
 
 - [x] **ERR-01**: All caught exceptions in user-triggered flows call ui.notifications.error() with a localized message, not just Logger.error()
-- [ ] **ERR-02**: Per-token failure types classified (no_match, import_failed, creation_failed) and collected into a post-run summary notification
-- [ ] **ERR-03**: Per-compendium load success/failure tracked during loadMonsterIndex() with getLastLoadErrors() exposed via debug API
+- [x] **ERR-02**: Per-token failure types classified (no_match, import_failed, creation_failed) and collected into a post-run summary notification
+- [x] **ERR-03**: Per-compendium load success/failure tracked during loadMonsterIndex() with getLastLoadErrors() exposed via debug API
 
 ### User Experience
 
@@ -68,8 +68,8 @@
 | BUG-02 | Phase 4 | Complete |
 | BUG-03 | Phase 4 | Complete |
 | ERR-01 | Phase 4 | Complete |
-| ERR-02 | Phase 4 | Pending |
-| ERR-03 | Phase 4 | Pending |
+| ERR-02 | Phase 4 | Complete |
+| ERR-03 | Phase 4 | Complete |
 | UX-01 | Phase 5 | Pending |
 | UX-02 | Phase 6 | Pending |
 | UX-03 | Phase 6 | Pending |
