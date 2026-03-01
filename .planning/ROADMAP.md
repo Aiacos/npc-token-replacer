@@ -43,7 +43,10 @@ Plans:
   1. `scripts/lib/name-matcher.js`, `scripts/lib/wildcard-resolver.js`, and `scripts/lib/logger.js` exist with explicit named exports
   2. `scripts/main.js` imports from scripts/lib/ and the module loads correctly in Foundry (manual verify)
   3. A test file can `import { NameMatcher } from '../scripts/lib/name-matcher.js'` without any Foundry global stubs and the import succeeds
-**Plans**: TBD
+**Plans:** 1 plan
+
+Plans:
+- [ ] 02-01-PLAN.md — Extract Logger, WildcardResolver, NameMatcher to scripts/lib/, update main.js imports, add remaining exports, write import validation tests
 
 ### Phase 3: Unit Tests
 **Goal**: Unit tests for all pure-logic classes and CompendiumManager establish a regression safety net before any bug fixes are made
@@ -100,7 +103,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Test Infrastructure | 1/1 | Complete | 2026-03-01 |
-| 2. Extract Pure Logic | 0/TBD | Not started | - |
+| 2. Extract Pure Logic | 0/1 | Not started | - |
 | 3. Unit Tests | 0/TBD | Not started | - |
 | 4. Error Handling Hardening | 0/TBD | Not started | - |
 | 5. Progress Bar | 0/TBD | Not started | - |
