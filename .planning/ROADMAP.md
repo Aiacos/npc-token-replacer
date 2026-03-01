@@ -13,8 +13,8 @@ This milestone takes NPC Token Replacer from a functioning v1.4.0 module to a pr
 Decimal phases appear between their surrounding integers in numeric order.
 
 - [x] **Phase 1: Test Infrastructure** - Configure Vitest + foundry-test-utils so `npm test` runs clean with zero errors
-- [ ] **Phase 2: Extract Pure Logic** - Move NameMatcher, WildcardResolver, Logger to scripts/lib/ with named exports
-- [ ] **Phase 3: Unit Tests** - Write unit tests for all pure-logic classes and CompendiumManager; establish coverage baseline
+- [x] **Phase 2: Extract Pure Logic** - Move NameMatcher, WildcardResolver, Logger to scripts/lib/ with named exports
+- [x] **Phase 3: Unit Tests** - Write unit tests for all pure-logic classes and CompendiumManager; establish coverage baseline
 - [ ] **Phase 4: Error Handling Hardening** - Fix known bugs and ensure all user-triggered errors surface via ui.notifications
 - [ ] **Phase 5: Progress Bar** - Add live progress bar during multi-token replacement with v12/v13 version-aware ProgressReporter
 - [ ] **Phase 6: Dry-Run Preview** - Add pre-replacement match preview dialog showing token-to-creature mapping before committing
@@ -46,7 +46,7 @@ Plans:
 **Plans:** 1 plan
 
 Plans:
-- [ ] 02-01-PLAN.md — Extract Logger, WildcardResolver, NameMatcher to scripts/lib/, update main.js imports, add remaining exports, write import validation tests
+- [x] 02-01-PLAN.md — Extract Logger, WildcardResolver, NameMatcher to scripts/lib/, update main.js imports, add remaining exports, write import validation tests
 
 ### Phase 3: Unit Tests
 **Goal**: Unit tests for all pure-logic classes and CompendiumManager establish a regression safety net before any bug fixes are made
@@ -61,8 +61,8 @@ Plans:
 **Plans:** 2 plans
 
 Plans:
-- [ ] 03-01-PLAN.md — Write unit tests for NameMatcher (normalizeName, findMatch stages, selectBestMatch) and WildcardResolver (isWildcardPath, selectVariant, resolveWildcardVariants)
-- [ ] 03-02-PLAN.md — Write unit tests for CompendiumManager (priority resolution, detection filtering, settings parsing) and verify coverage baseline
+- [x] 03-01-PLAN.md — Write unit tests for NameMatcher (normalizeName, findMatch stages, selectBestMatch) and WildcardResolver (isWildcardPath, selectVariant, resolveWildcardVariants)
+- [x] 03-02-PLAN.md — Write unit tests for CompendiumManager (priority resolution, detection filtering, settings parsing) and verify coverage baseline
 
 ### Phase 4: Error Handling Hardening
 **Goal**: All known bugs are fixed under test coverage and every user-triggered failure produces a visible ui.notifications error, not a silent log entry
@@ -107,8 +107,8 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Test Infrastructure | 1/1 | Complete | 2026-03-01 |
-| 2. Extract Pure Logic | 0/1 | Not started | - |
-| 3. Unit Tests | 0/2 | Not started | - |
+| 2. Extract Pure Logic | 1/1 | Complete | 2026-03-01 |
+| 3. Unit Tests | 2/2 | Complete | 2026-03-01 |
 | 4. Error Handling Hardening | 0/TBD | Not started | - |
 | 5. Progress Bar | 0/TBD | Not started | - |
 | 6. Dry-Run Preview | 0/TBD | Not started | - |
