@@ -89,7 +89,7 @@ Plans:
   2. The progress bar works on both Foundry v12 (SceneNavigation fallback) and v13 (ui.notifications progress API) without throwing errors on either version
   3. The progress bar reaches 100% and disappears when the run completes or fails
   4. A `ProgressReporter` class with `start()`, `update(pct, label)`, and `finish()` wraps the version divergence and is tested with mocks for both v12 and v13 code paths
-**Plans:** 2 plans
+**Plans:** 1/2 plans executed
 
 Plans:
 - [ ] 05-01-PLAN.md — Create ProgressReporter class with TDD covering v12 SceneNavigation and v13 notifications progress paths
@@ -118,5 +118,5 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6
 | 2. Extract Pure Logic | 1/1 | Complete | 2026-03-01 |
 | 3. Unit Tests | 2/2 | Complete | 2026-03-01 |
 | 4. Error Handling Hardening | 0/2 | Not started | - |
-| 5. Progress Bar | 0/2 | Not started | - |
+| 5. Progress Bar | 1/2 | In Progress|  |
 | 6. Dry-Run Preview | 0/TBD | Not started | - |

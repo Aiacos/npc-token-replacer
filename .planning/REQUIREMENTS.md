@@ -28,7 +28,7 @@
 
 ### User Experience
 
-- [ ] **UX-01**: Live progress bar during multi-token replacement using ui.notifications progress API (v13) with SceneNavigation fallback (v12)
+- [x] **UX-01**: Live progress bar during multi-token replacement using ui.notifications progress API (v13) with SceneNavigation fallback (v12)
 - [ ] **UX-02**: Dry-run preview dialog showing token-to-creature match mapping before committing replacements
 - [ ] **UX-03**: Configurable HTTP timeout setting for wildcard HEAD requests (replacing hardcoded DEFAULT_HTTP_TIMEOUT_MS)
 
@@ -70,7 +70,7 @@
 | ERR-01 | Phase 4 | Complete |
 | ERR-02 | Phase 4 | Complete |
 | ERR-03 | Phase 4 | Complete |
-| UX-01 | Phase 5 | Pending |
+| UX-01 | Phase 5 | Complete |
 | UX-02 | Phase 6 | Pending |
 | UX-03 | Phase 6 | Pending |
 
