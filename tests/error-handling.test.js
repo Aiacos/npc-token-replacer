@@ -364,8 +364,8 @@ describe("ERR-02 — Failure classification via replaceNPCTokens", () => {
       isSelection: false
     });
 
-    // Mock showConfirmationDialog to auto-confirm
-    const dialogSpy = vi.spyOn(NPCTokenReplacerController, "showConfirmationDialog").mockResolvedValue(true);
+    // Mock showPreviewDialog to auto-confirm
+    const dialogSpy = vi.spyOn(NPCTokenReplacerController, "showPreviewDialog").mockResolvedValue(true);
 
     // Mock TokenReplacer.replaceToken to throw an import error
     const replaceSpy = vi.spyOn(TokenReplacer, "replaceToken")
@@ -414,7 +414,7 @@ describe("ERR-02 — Failure classification via replaceNPCTokens", () => {
       isSelection: false
     });
 
-    const dialogSpy = vi.spyOn(NPCTokenReplacerController, "showConfirmationDialog").mockResolvedValue(true);
+    const dialogSpy = vi.spyOn(NPCTokenReplacerController, "showPreviewDialog").mockResolvedValue(true);
 
     // Mock TokenReplacer.replaceToken to throw a creation error (no "import" keyword)
     const replaceSpy = vi.spyOn(TokenReplacer, "replaceToken")
@@ -457,7 +457,7 @@ describe("ERR-02 — Failure classification via replaceNPCTokens", () => {
       isSelection: false
     });
 
-    const dialogSpy = vi.spyOn(NPCTokenReplacerController, "showConfirmationDialog").mockResolvedValue(true);
+    const dialogSpy = vi.spyOn(NPCTokenReplacerController, "showPreviewDialog").mockResolvedValue(true);
 
     // First token: import error; Second token: creation error
     const replaceSpy = vi.spyOn(TokenReplacer, "replaceToken")

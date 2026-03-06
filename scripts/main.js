@@ -1002,45 +1002,7 @@ class NPCTokenReplacerController {
     return true;
   }
 
-  /**
-   * Show a confirmation dialog before replacing tokens
-   * Displays a scrollable list of tokens that will be replaced
-   * @param {TokenDocument[]} tokens - The tokens to replace
-   * @returns {Promise<boolean>} Whether user confirmed to proceed
-   * @static
-   * @example
-   * const confirmed = await NPCTokenReplacerController.showConfirmationDialog(npcTokens);
-   * if (!confirmed) {
-   *   Logger.log("Replacement cancelled by user");
-   *   return;
-   * }
-   */
-  static async showConfirmationDialog(tokens) {
-    // Build token list HTML in single pass without intermediate string array
-    let tokenListHtml = "";
-    for (const t of tokens) {
-      tokenListHtml += `<li>${escapeHtml(t.actor?.name || t.name)}</li>`;
-    }
-
-    const content = `
-      <p>${game.i18n.format("NPC_REPLACER.ConfirmContent", { count: tokens.length })}</p>
-      <ul style="max-height: 200px; overflow-y: auto; margin: 10px 0;">
-        ${tokenListHtml}
-      </ul>
-      <p><strong>${game.i18n.localize("NPC_REPLACER.ConfirmProceed")}</strong></p>
-    `;
-
-    return new Promise(resolve => {
-      Dialog.confirm({
-        title: game.i18n.localize("NPC_REPLACER.ConfirmTitle"),
-        content,
-        yes: () => resolve(true),
-        no: () => resolve(false),
-        defaultYes: false,
-        close: () => resolve(false)
-      });
-    });
-  }
+  // Removed: showConfirmationDialog — replaced by showPreviewDialog
 
   /**
    * Show a preview dialog with token-to-creature match mapping
@@ -1122,56 +1084,7 @@ class NPCTokenReplacerController {
     });
   }
 
-  /**
-   * Process a single token for replacement
-   * Finds matching compendium entry and replaces the token if found
-   * @param {TokenDocument} tokenDoc - The token document to process
-   * @param {Array<{entry: Object, pack: CompendiumCollection}>} index - The monster index
-   * @param {Set<string>} processedIds - Set of already processed token IDs
-   * @returns {Promise<{status: 'replaced'|'not_found'|'import_failed'|'creation_failed'|'skipped', name: string}>} Processing result
-   * @static
-   * @private
-   */
-  static async #processToken(tokenDoc, index, processedIds) {
-    const creatureName = tokenDoc.actor?.name || tokenDoc.name;
-
-    // Skip if already processed (handles duplicate entries)
-    if (processedIds.has(tokenDoc.id)) {
-      Logger.log(`Skipping already processed token: ${tokenDoc.name}`);
-      return { status: "skipped", name: creatureName };
-    }
-
-    // Check if token still exists in scene BEFORE processing
-    if (!canvas.scene.tokens.has(tokenDoc.id)) {
-      Logger.log(`Token "${tokenDoc.name}" no longer exists, skipping`);
-      return { status: "skipped", name: creatureName };
-    }
-
-    processedIds.add(tokenDoc.id);
-
-    const match = NameMatcher.findMatch(creatureName, index);
-    if (!match) {
-      return { status: "not_found", name: creatureName };
-    }
-
-    try {
-      await TokenReplacer.replaceToken(tokenDoc, match.entry, match.pack);
-      return { status: "replaced", name: creatureName };
-    } catch (error) {
-      // Classify failure based on error message content.
-      // replaceToken throws from import stage (getDocument, #getOrImportWorldActor)
-      // or creation stage (createEmbeddedDocuments, deleteEmbeddedDocuments).
-      // Default to "creation_failed" since import is attempted first — if we got past it,
-      // creation is the likely failure point.
-      const msg = (error.message || "").toLowerCase();
-      const isImportError = msg.includes("import") ||
-                            msg.includes("failed to load") ||
-                            msg.includes("getdocument");
-      const status = isImportError ? "import_failed" : "creation_failed";
-      Logger.error(`Error replacing token ${tokenDoc.name} (${status})`, error);
-      return { status, name: creatureName };
-    }
-  }
+  // Removed: #processToken — replacement logic inlined in replaceNPCTokens using pre-computed matches
 
   /**
    * Report the results of a replacement session
@@ -1269,8 +1182,12 @@ class NPCTokenReplacerController {
       const sourceDesc = isSelection ? "selected" : "in scene";
       Logger.log(`Found ${npcTokens.length} NPC tokens ${sourceDesc}`);
 
-      // Show confirmation dialog
-      const confirmed = await NPCTokenReplacerController.showConfirmationDialog(npcTokens);
+      // Pre-compute matches (scan phase with progress)
+      const scanProgress = new ProgressReporter();
+      const matchResults = NPCTokenReplacerController.computeMatches(npcTokens, index, scanProgress);
+
+      // Show preview dialog with match results
+      const confirmed = await NPCTokenReplacerController.showPreviewDialog(matchResults);
       if (!confirmed) {
         Logger.log("Token replacement cancelled by user");
         return;
@@ -1280,44 +1197,67 @@ class NPCTokenReplacerController {
       TokenReplacer.resetCounter();
       TokenReplacer.buildActorLookup();
 
+      // Filter to only matched tokens for replacement
+      const toReplace = matchResults.filter(r => r.match !== null);
+      const notFoundNames = matchResults.filter(r => r.match === null).map(r => r.creatureName);
+
       // TODO [MEDIUM] Performance: token processing loop is fully sequential — 2N socket round-trips.
       // Split into parallel resolve phase (getDocument, import, wildcard) + batched mutation phase
       // (single deleteEmbeddedDocuments + createEmbeddedDocuments call for all tokens).
       // Track results
       let replaced = 0;
-      const notFound = [];
       const importFailed = [];
       const creationFailed = [];
-      const processedIds = new Set(); // Track processed token IDs to avoid duplicates
+      const processedIds = new Set();
 
-      // Start progress bar
+      // Start progress bar for replacement phase
       const progress = new ProgressReporter();
-      progress.start(npcTokens.length, game.i18n.format("NPC_REPLACER.ProgressStart", { count: npcTokens.length }));
+      progress.start(toReplace.length, game.i18n.format("NPC_REPLACER.ProgressStart", { count: toReplace.length }));
 
-      // Process each token
-      for (const tokenDoc of npcTokens) {
-        const result = await NPCTokenReplacerController.#processToken(tokenDoc, index, processedIds);
+      // Replace each matched token using pre-computed match data
+      for (const result of toReplace) {
+        const { tokenDoc, creatureName } = result;
 
-        switch (result.status) {
-          case "replaced":
-            replaced++;
-            break;
-          case "not_found":
-            notFound.push(result.name);
-            break;
-          case "import_failed":
-            importFailed.push(result.name);
-            break;
-          case "creation_failed":
-            creationFailed.push(result.name);
-            break;
-          // 'skipped' - no action needed
+        // Skip if already processed (handles duplicate entries)
+        if (processedIds.has(tokenDoc.id)) {
+          Logger.log(`Skipping already processed token: ${tokenDoc.name}`);
+          continue;
         }
 
-        progress.update(replaced + notFound.length + importFailed.length + creationFailed.length,
+        // Check if token still exists in scene (may have been deleted during preview)
+        if (!canvas.scene.tokens.has(tokenDoc.id)) {
+          Logger.log(`Token "${tokenDoc.name}" no longer exists, skipping`);
+          continue;
+        }
+
+        processedIds.add(tokenDoc.id);
+
+        try {
+          await TokenReplacer.replaceToken(tokenDoc, result.match.entry, result.match.pack);
+          replaced++;
+        } catch (error) {
+          // Classify failure based on error message content.
+          // replaceToken throws from import stage (getDocument, #getOrImportWorldActor)
+          // or creation stage (createEmbeddedDocuments, deleteEmbeddedDocuments).
+          // Default to "creation_failed" since import is attempted first.
+          const msg = (error.message || "").toLowerCase();
+          const isImportError = msg.includes("import") ||
+                                msg.includes("failed to load") ||
+                                msg.includes("getdocument");
+          const status = isImportError ? "import_failed" : "creation_failed";
+          Logger.error(`Error replacing token ${tokenDoc.name} (${status})`, error);
+          if (status === "import_failed") {
+            importFailed.push(creatureName);
+          } else {
+            creationFailed.push(creatureName);
+          }
+        }
+
+        const processed = replaced + importFailed.length + creationFailed.length;
+        progress.update(processed,
           game.i18n.format("NPC_REPLACER.ProgressUpdate", {
-            current: replaced + notFound.length + importFailed.length + creationFailed.length,
-            total: npcTokens.length,
+            current: processed,
+            total: toReplace.length,
             name: tokenDoc.name
           }));
       }
@@ -1325,7 +1265,7 @@ class NPCTokenReplacerController {
       progress.finish();
 
       // Report results
-      NPCTokenReplacerController.#reportResults(replaced, notFound, importFailed, creationFailed);
+      NPCTokenReplacerController.#reportResults(replaced, notFoundNames, importFailed, creationFailed);
     } finally {
       // Always release the lock and clean up session state
       NPCTokenReplacerController.#isProcessing = false;

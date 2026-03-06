@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import { NPCTokenReplacerController } from "../scripts/main.js";
+import { NPCTokenReplacerController, CompendiumManager, TokenReplacer } from "../scripts/main.js";
 import { NameMatcher } from "../scripts/lib/name-matcher.js";
 
 // ---------------------------------------------------------------------------
@@ -260,5 +260,176 @@ describe("NPCTokenReplacerController.showPreviewDialog", () => {
 
     const result = await NPCTokenReplacerController.showPreviewDialog(createMatchResults());
     expect(result).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Tests for replaceNPCTokens integration (Task 2)
+// ---------------------------------------------------------------------------
+describe("replaceNPCTokens integration with preview flow", () => {
+  const mockPack = {
+    collection: "dnd5e.monsters",
+    metadata: { packageName: "dnd5e", label: "Monsters" },
+    documentName: "Actor",
+    getIndex: vi.fn().mockResolvedValue(),
+    index: {
+      contents: [
+        { name: "Goblin", _id: "entry-1" },
+        { name: "Orc", _id: "entry-2" }
+      ],
+      size: 2
+    }
+  };
+
+  const mockToken1 = { id: "t1", name: "Goblin", actor: { name: "Goblin", type: "npc" } };
+  const mockToken2 = { id: "t2", name: "Orc", actor: { name: "Orc", type: "npc" } };
+  const mockToken3 = { id: "t3", name: "Unknown", actor: { name: "Unknown", type: "npc" } };
+
+  let computeMatchesSpy;
+  let showPreviewSpy;
+  let replaceTokenSpy;
+  let findMatchSpy;
+
+  beforeEach(() => {
+    vi.restoreAllMocks();
+
+    // Reset caches
+    CompendiumManager.clearCache();
+    TokenReplacer.clearActorLookup();
+
+    // Mock i18n
+    game.i18n.format = vi.fn((key, data) => `${key}: ${JSON.stringify(data)}`);
+    game.i18n.localize = vi.fn((key) => key);
+
+    // Mock prerequisites
+    game.user.isGM = true;
+    canvas.scene = canvas.scene || {};
+    canvas.scene.tokens = canvas.scene.tokens || {};
+    canvas.scene.tokens.has = vi.fn(() => true);
+    game.actors[Symbol.iterator] = function* () {};
+
+    // Mock compendium detection + index
+    vi.spyOn(CompendiumManager, "detectWOTCCompendiums").mockReturnValue([mockPack]);
+    vi.spyOn(CompendiumManager, "getEnabledCompendiums").mockReturnValue([mockPack]);
+    vi.spyOn(CompendiumManager, "loadMonsterIndex").mockResolvedValue([
+      { entry: { name: "Goblin" }, pack: mockPack },
+      { entry: { name: "Orc" }, pack: mockPack }
+    ]);
+
+    // Mock getNPCTokensToProcess
+    vi.spyOn(TokenReplacer, "getNPCTokensToProcess").mockReturnValue({
+      tokens: [mockToken1, mockToken2, mockToken3],
+      isSelection: false
+    });
+
+    // Spy on computeMatches (let it run, we just want to verify order)
+    findMatchSpy = vi.spyOn(NameMatcher, "findMatch").mockImplementation((name) => {
+      if (name === "Goblin") return { entry: { name: "Goblin" }, pack: mockPack };
+      if (name === "Orc") return { entry: { name: "Orc" }, pack: mockPack };
+      return null;
+    });
+
+    // Mock showPreviewDialog to auto-confirm
+    showPreviewSpy = vi.spyOn(NPCTokenReplacerController, "showPreviewDialog").mockResolvedValue(true);
+
+    // Mock replaceToken to succeed
+    replaceTokenSpy = vi.spyOn(TokenReplacer, "replaceToken").mockResolvedValue();
+    vi.spyOn(TokenReplacer, "resetCounter").mockImplementation(() => {});
+    vi.spyOn(TokenReplacer, "buildActorLookup").mockImplementation(() => {});
+  });
+
+  it("calls computeMatches before showPreviewDialog", async () => {
+    const callOrder = [];
+    computeMatchesSpy = vi.spyOn(NPCTokenReplacerController, "computeMatches")
+      .mockImplementation((...args) => {
+        callOrder.push("computeMatches");
+        // Call original
+        computeMatchesSpy.mockRestore();
+        return NPCTokenReplacerController.computeMatches(...args);
+      });
+    showPreviewSpy.mockImplementation((matchResults) => {
+      callOrder.push("showPreviewDialog");
+      return Promise.resolve(true);
+    });
+
+    await NPCTokenReplacerController.replaceNPCTokens();
+
+    expect(callOrder).toEqual(["computeMatches", "showPreviewDialog"]);
+  });
+
+  it("does not call replaceToken when preview is cancelled", async () => {
+    showPreviewSpy.mockResolvedValue(false);
+
+    await NPCTokenReplacerController.replaceNPCTokens();
+
+    expect(replaceTokenSpy).not.toHaveBeenCalled();
+  });
+
+  it("calls replaceToken with pre-computed match.entry and match.pack", async () => {
+    await NPCTokenReplacerController.replaceNPCTokens();
+
+    // Should be called for the 2 matched tokens (not the unmatched one)
+    expect(replaceTokenSpy).toHaveBeenCalledTimes(2);
+    expect(replaceTokenSpy).toHaveBeenCalledWith(
+      mockToken1,
+      { name: "Goblin" },
+      mockPack
+    );
+    expect(replaceTokenSpy).toHaveBeenCalledWith(
+      mockToken2,
+      { name: "Orc" },
+      mockPack
+    );
+  });
+
+  it("does NOT call NameMatcher.findMatch during replacement phase (no double-matching)", async () => {
+    await NPCTokenReplacerController.replaceNPCTokens();
+
+    // findMatch should only be called during computeMatches (3 tokens = 3 calls)
+    // NOT again during replacement
+    expect(findMatchSpy).toHaveBeenCalledTimes(3);
+  });
+
+  it("deduplicates tokens with same ID in matchResults", async () => {
+    // Return duplicate token IDs from getNPCTokensToProcess
+    vi.spyOn(TokenReplacer, "getNPCTokensToProcess").mockReturnValue({
+      tokens: [mockToken1, mockToken1], // same token twice
+      isSelection: false
+    });
+
+    await NPCTokenReplacerController.replaceNPCTokens();
+
+    // replaceToken should only be called once despite duplicate
+    expect(replaceTokenSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it("skips tokens deleted during preview (canvas.scene.tokens.has returns false)", async () => {
+    // First token no longer exists after preview
+    canvas.scene.tokens.has = vi.fn((id) => id !== "t1");
+
+    await NPCTokenReplacerController.replaceNPCTokens();
+
+    // Only Orc should be replaced (Goblin was "deleted")
+    expect(replaceTokenSpy).toHaveBeenCalledTimes(1);
+    expect(replaceTokenSpy).toHaveBeenCalledWith(
+      mockToken2,
+      { name: "Orc" },
+      mockPack
+    );
+  });
+
+  it("reports correct counts including unmatched from preview", async () => {
+    ui.notifications.info = vi.fn();
+    ui.notifications.warn = vi.fn();
+
+    await NPCTokenReplacerController.replaceNPCTokens();
+
+    // 2 replaced, 1 not found (Unknown)
+    expect(ui.notifications.info).toHaveBeenCalled();
+    expect(ui.notifications.warn).toHaveBeenCalled();
+    expect(game.i18n.format).toHaveBeenCalledWith(
+      "NPC_REPLACER.NotFoundCount",
+      { count: 1 }
+    );
   });
 });
