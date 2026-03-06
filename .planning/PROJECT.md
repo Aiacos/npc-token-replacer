@@ -2,7 +2,7 @@
 
 ## What This Is
 
-A Foundry VTT module (v12/v13) for D&D 5e that replaces scene NPC tokens with official WotC compendium versions while preserving position, elevation, dimensions, and other token properties. Currently at v1.4.0 with core functionality complete — this milestone focuses on making it production-grade: reliable, tested, and ready for public distribution.
+A Foundry VTT module (v12/v13) for D&D 5e that replaces scene NPC tokens with official WotC compendium versions while preserving position, elevation, dimensions, and other token properties. Production-grade with 136 automated tests, structured error handling, progress feedback, and dry-run preview.
 
 ## Core Value
 
@@ -17,7 +17,6 @@ Token replacement must work correctly and predictably every time — no silent f
 - ✓ Multi-stage name matching (exact → variant transforms → partial word) — existing
 - ✓ Wildcard token path resolution with variant selection modes (none/sequential/random) — existing
 - ✓ Token replacement preserving position, elevation, dimensions, visual state — existing
-- ✓ Confirmation dialog with token list before replacement — existing
 - ✓ Compendium selection UI with Default/All/Custom modes — existing
 - ✓ Foundry v12/v13 compatibility for toolbar controls — existing
 - ✓ GM-only access enforcement — existing
@@ -25,18 +24,20 @@ Token replacement must work correctly and predictably every time — no silent f
 - ✓ Localization support via lang/en.json — existing
 - ✓ Multi-level caching (compendium index, wildcard paths, import folders) — existing
 - ✓ XSS prevention in dialog content via escapeHtml — existing
+- ✓ Automated test suite (136 tests, Vitest + Foundry mocks) — v1.4
+- ✓ Error handling hardening with structured failure classification — v1.4
+- ✓ Bug fixes (stale actor cache, settings errors, cache propagation) — v1.4
+- ✓ Wildcard variant cache cleared on settings change — v1.4
+- ✓ Progress bar during multi-token replacements (v12/v13) — v1.4
+- ✓ Dry-run preview dialog with match mapping before committing — v1.4
+- ✓ Per-compendium load error tracking for diagnostics — v1.4
+- ✓ Configurable HTTP timeout for wildcard probing — v1.4
 
 ### Active
 
-- [ ] Automated test suite with framework and core coverage
-- [ ] Error handling hardening — graceful failures with clear user messages
-- [ ] Fix known bugs (null pointer risk, actor race condition, empty variant edge case)
-- [ ] Wildcard variant cache cleared on settings change
-- [ ] Progress bar during multi-token replacements
-- [ ] Dry-run preview showing matches before committing
 - [ ] Performance optimization (batch token operations, wildcard probing)
-- [ ] Per-compendium load error tracking for diagnostics
-- [ ] Configurable HTTP timeout for wildcard probing
+- [ ] CI pipeline with GitHub Actions running npm test on push
+- [ ] Quench in-engine integration tests for full replacement workflow
 
 ### Out of Scope
 
@@ -48,13 +49,12 @@ Token replacement must work correctly and predictably every time — no silent f
 
 ## Context
 
-- Module has been through 10 iterations of multi-agent code review (code quality, security, performance, architecture, silent failure analysis)
+- Shipped v1.4 with 136 automated tests across 8 test files, 58%+ coverage
 - ESLint reports 0 errors and 0 warnings
-- Single-file architecture (~2150 lines) with well-defined OOP classes
+- Modular architecture: main.js (~2000 lines) + scripts/lib/ (name-matcher, wildcard-resolver, logger, progress-reporter)
 - Zero runtime dependencies — native browser APIs only
-- No test framework currently configured (package.json test script is placeholder)
-- Codebase concerns document identifies specific bugs, performance bottlenecks, and fragile areas
-- Users test manually in Foundry; no automated regression catching
+- Vitest 3.x with jsdom + @rayners/foundry-test-utils for Foundry global mocks
+- Known future breaking change: Dialog.confirm v13 shim removed in v14
 
 ## Constraints
 
@@ -68,11 +68,13 @@ Token replacement must work correctly and predictably every time — no silent f
 
 | Decision | Rationale | Outcome |
 |----------|-----------|---------|
-| Comprehensive scope over quick pass | Public release prep needs full confidence, not patches | — Pending |
-| Test suite as top priority | Enables safe future changes and catches regressions | — Pending |
-| Error handling as second priority | Users need clear feedback, not silent failures | — Pending |
-| Include progress bar and dry-run | Improves perceived reliability and user confidence | — Pending |
-| Test framework choice | Must work with Foundry module structure (no build step) | — Pending |
+| Comprehensive scope over quick pass | Public release prep needs full confidence, not patches | ✓ Good |
+| Test suite as top priority | Enables safe future changes and catches regressions | ✓ Good — 136 tests |
+| Error handling as second priority | Users need clear feedback, not silent failures | ✓ Good |
+| Include progress bar and dry-run | Improves perceived reliability and user confidence | ✓ Good |
+| Vitest 3.x + foundry-test-utils | Works with Foundry module structure, no build step | ✓ Good |
+| Duck-typing for v12/v13 detection | typeof checks instead of version strings | ✓ Good |
+| Flat localization keys | Avoid conflicts with existing "Error" key | ✓ Good |
 
 ---
-*Last updated: 2026-02-28 after initialization*
+*Last updated: 2026-03-06 after v1.4 milestone*
