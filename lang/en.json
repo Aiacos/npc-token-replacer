@@ -3,6 +3,8 @@
     "Title": "NPC Token Replacer",
     "Button": "Replace NPC Tokens",
     "Processing": "Processing {count} tokens...",
+    "ProgressStart": "Replacing {count} tokens...",
+    "ProgressUpdate": "({current}/{total}) {name}",
     "Complete": "Replaced {count} tokens successfully",
     "NoTokens": "No NPC tokens found in the current scene",
     "NoSelectedNPCs": "No NPC tokens in selection (select NPC tokens or deselect all to process entire scene)",
