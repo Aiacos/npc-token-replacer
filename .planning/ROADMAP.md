@@ -105,7 +105,7 @@ Plans:
   3. Accepting the preview runs the actual replacement using the already-computed match results (no double-matching)
   4. All token and creature names in the preview dialog are HTML-escaped via `escapeHtml` before rendering
   5. The HTTP timeout for wildcard HEAD requests is configurable via a module setting (replacing the hardcoded DEFAULT_HTTP_TIMEOUT_MS constant)
-**Plans:** 2 plans
+**Plans:** 1/2 plans executed
 
 Plans:
 - [ ] 06-01-PLAN.md — Add HTTP timeout setting, wire into WildcardResolver, extract computeMatches method
@@ -123,4 +123,4 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6
 | 3. Unit Tests | 2/2 | Complete | 2026-03-01 |
 | 4. Error Handling Hardening | 0/2 | Not started | - |
 | 5. Progress Bar | 2/2 | Complete   | 2026-03-06 |
-| 6. Dry-Run Preview | 0/2 | Not started | - |
+| 6. Dry-Run Preview | 1/2 | In Progress|  |
