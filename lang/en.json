@@ -21,6 +21,7 @@
     "NoModule": "No official D&D compendiums found. Install official D&D content (Monster Manual, Adventures, etc.)",
     "NoCompendium": "No compendiums available for token replacement",
     "GMOnly": "Only the GM can replace tokens",
+    "PreviewScanning": "Scanning tokens...",
     "ConfirmTitle": "Confirm Token Replacement",
     "ConfirmContent": "The following {count} NPC tokens will be replaced with official D&D versions:",
     "ConfirmProceed": "Do you want to proceed?",

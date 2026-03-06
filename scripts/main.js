@@ -1273,6 +1273,37 @@ class NPCTokenReplacerController {
   }
 
   /**
+   * Pre-compute matches for all tokens against the monster index
+   * Separates "find matches" from "replace tokens" so a preview dialog
+   * can be shown between the two steps (dry-run preview).
+   * @param {Object[]} tokens - Array of token documents to match
+   * @param {Object[]} index - The combined monster index
+   * @param {ProgressReporter} progress - Progress reporter instance
+   * @returns {Array<{tokenDoc: Object, creatureName: string, match: Object|null}>} Match results
+   * @static
+   */
+  static computeMatches(tokens, index, progress) {
+    progress.start(tokens.length, game.i18n.localize("NPC_REPLACER.PreviewScanning"));
+
+    const results = [];
+    for (let i = 0; i < tokens.length; i++) {
+      const tokenDoc = tokens[i];
+      const creatureName = tokenDoc.actor?.name || tokenDoc.name;
+      const match = NameMatcher.findMatch(creatureName, index);
+      results.push({ tokenDoc, creatureName, match });
+
+      progress.update(i + 1, game.i18n.format("NPC_REPLACER.ProgressUpdate", {
+        current: i + 1,
+        total: tokens.length,
+        name: tokenDoc.name
+      }));
+    }
+
+    progress.finish();
+    return results;
+  }
+
+  /**
    * Initialize the module during ready hook
    * Detects available compendiums and pre-caches the monster index
    * @returns {Promise<void>}
