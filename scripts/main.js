@@ -1043,6 +1043,86 @@ class NPCTokenReplacerController {
   }
 
   /**
+   * Show a preview dialog with token-to-creature match mapping
+   * Replaces the old confirmation dialog with a rich 3-column table showing
+   * Token Name | Will Match As | Source Compendium for each token.
+   * Matched tokens appear first, unmatched tokens last.
+   * @param {Array<{tokenDoc: Object, creatureName: string, match: Object|null}>} matchResults - Pre-computed match results from computeMatches
+   * @returns {Promise<boolean>} Whether user confirmed to proceed
+   * @static
+   */
+  static async showPreviewDialog(matchResults) {
+    const matched = matchResults.filter(r => r.match !== null);
+    const unmatched = matchResults.filter(r => r.match === null);
+    const sorted = [...matched, ...unmatched];
+
+    const noMatchText = game.i18n.localize("NPC_REPLACER.PreviewNoMatch");
+
+    let rowsHtml = "";
+    for (const result of sorted) {
+      if (result.match) {
+        rowsHtml += `<tr>
+          <td>${escapeHtml(result.creatureName)}</td>
+          <td>${escapeHtml(result.match.entry.name)}</td>
+          <td>${escapeHtml(result.match.pack.metadata.label)}</td>
+        </tr>`;
+      } else {
+        rowsHtml += `<tr>
+          <td>${escapeHtml(result.creatureName)}</td>
+          <td style="color: red;">${noMatchText}</td>
+          <td>&mdash;</td>
+        </tr>`;
+      }
+    }
+
+    const summary = game.i18n.format("NPC_REPLACER.PreviewSummary", {
+      matched: matched.length,
+      total: matchResults.length
+    });
+
+    const content = `
+      <p>${summary}</p>
+      <div style="max-height: 300px; overflow-y: auto; margin: 10px 0;">
+        <table style="width: 100%; border-collapse: collapse;">
+          <thead>
+            <tr>
+              <th>${game.i18n.localize("NPC_REPLACER.PreviewColToken")}</th>
+              <th>${game.i18n.localize("NPC_REPLACER.PreviewColMatch")}</th>
+              <th>${game.i18n.localize("NPC_REPLACER.PreviewColSource")}</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${rowsHtml}
+          </tbody>
+        </table>
+      </div>
+    `;
+
+    const dialogOpts = {
+      title: game.i18n.localize("NPC_REPLACER.PreviewTitle"),
+      content,
+      yes: null,
+      no: null,
+      defaultYes: false,
+      close: null
+    };
+
+    // When all tokens are unmatched, disable the Replace/yes button
+    if (matched.length === 0) {
+      dialogOpts.render = (html) => {
+        html.find('.yes, [data-button="yes"]').prop("disabled", true);
+      };
+    }
+
+    return new Promise(resolve => {
+      dialogOpts.yes = () => resolve(true);
+      dialogOpts.no = () => resolve(false);
+      dialogOpts.close = () => resolve(false);
+      Dialog.confirm(dialogOpts);
+    });
+  }
+
+  /**
    * Process a single token for replacement
    * Finds matching compendium entry and replaces the token if found
    * @param {TokenDocument} tokenDoc - The token document to process

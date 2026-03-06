@@ -92,3 +92,173 @@ describe("NPCTokenReplacerController.computeMatches", () => {
     expect(results[2].creatureName).toBe("Unknown Beast");
   });
 });
+
+// ---------------------------------------------------------------------------
+// Mock data for showPreviewDialog
+// ---------------------------------------------------------------------------
+const mockPackLabel = { metadata: { id: "dnd5e.monsters", label: "Monster Manual" } };
+const mockPackLabel2 = { metadata: { id: "dnd-adventures.monsters", label: "Adventure Compendium" } };
+
+function createMatchResults({ matched = true, unmatched = true, htmlChars = false } = {}) {
+  const results = [];
+  if (matched) {
+    results.push({
+      tokenDoc: { id: "t1", name: "Goblin" },
+      creatureName: htmlChars ? '<script>Goblin</script>' : "Goblin",
+      match: { entry: { name: htmlChars ? '<b>Goblin</b>' : "Goblin" }, pack: mockPackLabel }
+    });
+    results.push({
+      tokenDoc: { id: "t2", name: "Orc" },
+      creatureName: "Orc",
+      match: { entry: { name: "Orc" }, pack: mockPackLabel2 }
+    });
+  }
+  if (unmatched) {
+    results.push({
+      tokenDoc: { id: "t3", name: "Unknown Beast" },
+      creatureName: htmlChars ? '<img src=x>Beast' : "Unknown Beast",
+      match: null
+    });
+  }
+  return results;
+}
+
+// ---------------------------------------------------------------------------
+// Tests for showPreviewDialog
+// ---------------------------------------------------------------------------
+describe("NPCTokenReplacerController.showPreviewDialog", () => {
+  let capturedOptions;
+
+  beforeEach(() => {
+    vi.restoreAllMocks();
+    capturedOptions = null;
+    // Mock Dialog.confirm to capture options and trigger yes callback
+    globalThis.Dialog.confirm = vi.fn((opts) => {
+      capturedOptions = opts;
+      if (opts.yes) opts.yes();
+    });
+  });
+
+  it("renders a table with Token Name, Will Match As, Source Compendium columns", async () => {
+    await NPCTokenReplacerController.showPreviewDialog(createMatchResults());
+
+    expect(capturedOptions).toBeDefined();
+    const content = capturedOptions.content;
+    // Mock i18n.localize returns the key, so check for the localization keys
+    expect(content).toContain("NPC_REPLACER.PreviewColToken");
+    expect(content).toContain("NPC_REPLACER.PreviewColMatch");
+    expect(content).toContain("NPC_REPLACER.PreviewColSource");
+    // Verify it's a table with three th headers
+    const thMatches = content.match(/<th>/g);
+    expect(thMatches).not.toBeNull();
+    expect(thMatches.length).toBe(3);
+  });
+
+  it("matched tokens appear before unmatched tokens in the table", async () => {
+    // Create results with unmatched FIRST in the array to verify sorting
+    const results = [
+      { tokenDoc: { id: "t3" }, creatureName: "Unknown Beast", match: null },
+      { tokenDoc: { id: "t1" }, creatureName: "Goblin", match: { entry: { name: "Goblin" }, pack: mockPackLabel } }
+    ];
+
+    await NPCTokenReplacerController.showPreviewDialog(results);
+    const content = capturedOptions.content;
+
+    // Goblin (matched) should appear before Unknown Beast (unmatched)
+    const goblinPos = content.indexOf("Goblin");
+    const unknownPos = content.indexOf("Unknown Beast");
+    expect(goblinPos).toBeLessThan(unknownPos);
+  });
+
+  it("unmatched tokens show 'No match found' text and em-dash for source", async () => {
+    await NPCTokenReplacerController.showPreviewDialog(createMatchResults());
+
+    const content = capturedOptions.content;
+    // Mock i18n.localize returns the key
+    expect(content).toContain("NPC_REPLACER.PreviewNoMatch");
+    expect(content).toContain("&mdash;");
+  });
+
+  it("HTML-escapes all token names and creature names", async () => {
+    await NPCTokenReplacerController.showPreviewDialog(createMatchResults({ htmlChars: true }));
+
+    const content = capturedOptions.content;
+    // Raw HTML should NOT appear
+    expect(content).not.toContain("<script>");
+    expect(content).not.toContain("<b>");
+    expect(content).not.toContain("<img");
+    // Escaped versions should appear
+    expect(content).toContain("&lt;script&gt;");
+    expect(content).toContain("&lt;b&gt;");
+    expect(content).toContain("&lt;img");
+  });
+
+  it("summary line shows matched/total counts via i18n.format", async () => {
+    const formatSpy = vi.spyOn(game.i18n, "format");
+    const results = createMatchResults(); // 2 matched, 1 unmatched
+    await NPCTokenReplacerController.showPreviewDialog(results);
+
+    // Verify i18n.format was called with correct key and counts
+    expect(formatSpy).toHaveBeenCalledWith("NPC_REPLACER.PreviewSummary", {
+      matched: 2,
+      total: 3
+    });
+  });
+
+  it("disables the Replace button when all tokens are unmatched", async () => {
+    const allUnmatched = createMatchResults({ matched: false, unmatched: true });
+
+    await NPCTokenReplacerController.showPreviewDialog(allUnmatched);
+
+    // When all unmatched, a render callback should be provided
+    expect(capturedOptions.render).toBeDefined();
+
+    // Simulate the render callback with a mock jQuery html object
+    const mockButton = { prop: vi.fn() };
+    const mockHtml = {
+      find: vi.fn(() => mockButton)
+    };
+    capturedOptions.render(mockHtml);
+
+    expect(mockHtml.find).toHaveBeenCalledWith(expect.stringContaining("yes"));
+    expect(mockButton.prop).toHaveBeenCalledWith("disabled", true);
+  });
+
+  it("does NOT provide render callback when some tokens are matched", async () => {
+    const someMatched = createMatchResults({ matched: true, unmatched: true });
+    await NPCTokenReplacerController.showPreviewDialog(someMatched);
+
+    // render should be undefined when there are matches
+    expect(capturedOptions.render).toBeUndefined();
+  });
+
+  it("resolves true on yes callback", async () => {
+    globalThis.Dialog.confirm = vi.fn((opts) => {
+      capturedOptions = opts;
+      opts.yes();
+    });
+
+    const result = await NPCTokenReplacerController.showPreviewDialog(createMatchResults());
+    expect(result).toBe(true);
+  });
+
+  it("resolves false on no callback", async () => {
+    globalThis.Dialog.confirm = vi.fn((opts) => {
+      capturedOptions = opts;
+      opts.no();
+    });
+
+    const result = await NPCTokenReplacerController.showPreviewDialog(createMatchResults());
+    expect(result).toBe(false);
+  });
+
+  it("resolves false on close callback", async () => {
+    globalThis.Dialog.confirm = vi.fn((opts) => {
+      capturedOptions = opts;
+      opts.close();
+    });
+
+    const result = await NPCTokenReplacerController.showPreviewDialog(createMatchResults());
+    expect(result).toBe(false);
+  });
+});
