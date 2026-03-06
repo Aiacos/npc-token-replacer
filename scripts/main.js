@@ -3,21 +3,10 @@
  * A Foundry VTT module that replaces NPC tokens with official D&D compendium versions
  */
 
-/**
- * The unique identifier for this module
- * Used for settings registration, hook identification, and logging
- * @type {string}
- * @constant
- */
-const MODULE_ID = "npc-token-replacer";
-
-// Configuration constants that can be adjusted for different environments
-/**
- * Default timeout for HTTP requests in milliseconds
- * Increase this value for slow network connections
- * @type {number}
- */
-const DEFAULT_HTTP_TIMEOUT_MS = 5000;
+import { Logger, MODULE_ID } from "./lib/logger.js";
+import { WildcardResolver } from "./lib/wildcard-resolver.js";
+import { NameMatcher } from "./lib/name-matcher.js";
+import { ProgressReporter } from "./lib/progress-reporter.js";
 
 // Note: WOTC_MODULE_PREFIXES and COMPENDIUM_PRIORITIES are defined as
 // static getters in CompendiumManager class for better encapsulation
@@ -28,108 +17,7 @@ const DEFAULT_HTTP_TIMEOUT_MS = 5000;
 // - FolderManager.#importFolderCache (import folder)
 // - NPCTokenReplacerController.#isProcessing (execution lock)
 // - TokenReplacer.#sequentialCounter (variant counter)
-
-/**
- * Logger utility class for consistent logging with module prefix
- * Provides centralized logging functionality with automatic module ID prefixing
- * @class
- */
-class Logger {
-  /**
-   * The module ID used as prefix for all log messages
-   * @type {string}
-   * @static
-   * @readonly
-   */
-  static #MODULE_PREFIX = MODULE_ID;
-  static get MODULE_PREFIX() {
-    return Logger.#MODULE_PREFIX;
-  }
-
-  /**
-   * Whether debug logging is enabled — gate expensive debug calls in hot paths
-   * @type {boolean}
-   * @static
-   */
-  static #debugEnabled = false;
-  static get debugEnabled() {
-    return Logger.#debugEnabled;
-  }
-  static set debugEnabled(value) {
-    Logger.#debugEnabled = !!value;
-  }
-
-  /**
-   * Log an informational message with the module prefix
-   * @param {string} message - The message to log
-   * @param {any} [data=null] - Optional data to log alongside the message
-   * @returns {void}
-   * @static
-   * @example
-   * Logger.log("Module initialized");
-   * Logger.log("Found creatures", { count: 5, names: ["Goblin", "Orc"] });
-   */
-  static log(message, data = null) {
-    if (data !== null && data !== undefined) {
-      console.log(`${Logger.#MODULE_PREFIX} | ${message}`, data);
-    } else {
-      console.log(`${Logger.#MODULE_PREFIX} | ${message}`);
-    }
-  }
-
-  /**
-   * Log an error message with the module prefix
-   * @param {string} message - The error message describing what went wrong
-   * @param {Error|any} [error=null] - The error object or additional error context
-   * @returns {void}
-   * @static
-   * @example
-   * Logger.error("Failed to load compendium", new Error("Network timeout"));
-   * Logger.error("Invalid token data", { tokenId: "abc123", reason: "missing actor" });
-   */
-  static error(message, error = null) {
-    if (error !== null && error !== undefined) {
-      console.error(`${Logger.#MODULE_PREFIX} | ${message}`, error);
-    } else {
-      console.error(`${Logger.#MODULE_PREFIX} | ${message}`);
-    }
-  }
-
-  /**
-   * Log a warning message with the module prefix
-   * @param {string} message - The warning message
-   * @param {any} [data=null] - Optional data to log alongside the warning
-   * @returns {void}
-   * @static
-   * @example
-   * Logger.warn("Deprecated function called", { function: "getMonsterManualPack" });
-   */
-  static warn(message, data = null) {
-    if (data !== null && data !== undefined) {
-      console.warn(`${Logger.#MODULE_PREFIX} | ${message}`, data);
-    } else {
-      console.warn(`${Logger.#MODULE_PREFIX} | ${message}`);
-    }
-  }
-
-  /**
-   * Log a debug message with the module prefix (only in development)
-   * @param {string} message - The debug message
-   * @param {any} [data=null] - Optional data to log alongside the debug message
-   * @returns {void}
-   * @static
-   * @example
-   * Logger.debug("Processing token", { name: "Goblin", id: "token123" });
-   */
-  static debug(message, data = null) {
-    if (!Logger.#debugEnabled) return;
-    if (data !== null && data !== undefined) {
-      console.debug(`${Logger.#MODULE_PREFIX} | ${message}`, data);
-    } else {
-      console.debug(`${Logger.#MODULE_PREFIX} | ${message}`);
-    }
-  }
-}
+// - WildcardResolver.#variantCache (resolved wildcard paths)
 
 /**
  * FolderManager utility class for Actor folder handling
@@ -289,6 +177,7 @@ class FolderManager {
       return folder;
     } catch (error) {
       Logger.error("Failed to create import folder", error);
+      ui.notifications.error(game.i18n.localize("NPC_REPLACER.ErrorFolderCreate"));
       return null;
     }
   }
@@ -305,290 +194,6 @@ class FolderManager {
   static clearCache() {
     FolderManager.#importFolderCache = null;
     Logger.debug("FolderManager cache cleared");
-  }
-}
-
-/**
- * WildcardResolver utility class for resolving wildcard token texture paths
- * Handles the Monster Manual 2024 wildcard patterns like "specter-*.webp"
- * Provides variant discovery and selection based on user preferences
- * @class
- */
-class WildcardResolver {
-  /**
-   * Cache for resolved variant paths to avoid repeated HEAD requests
-   * Maps original wildcard paths to arrays of resolved paths
-   * @type {Map<string, string[]>}
-   * @static
-   * @private
-   */
-  static #variantCache = new Map();
-
-  /**
-   * Default timeout for HEAD requests in milliseconds
-   * Uses module-level DEFAULT_HTTP_TIMEOUT_MS constant which can be adjusted
-   * for slow network connections
-   * @type {number}
-   * @static
-   * @readonly
-   */
-  static get DEFAULT_TIMEOUT() {
-    return DEFAULT_HTTP_TIMEOUT_MS;
-  }
-
-  /**
-   * Common file extensions for token images
-   * @type {string[]}
-   * @static
-   * @readonly
-   */
-  static #IMAGE_EXTENSIONS = Object.freeze([".webp", ".png", ".jpg"]);
-  static get IMAGE_EXTENSIONS() {
-    return WildcardResolver.#IMAGE_EXTENSIONS;
-  }
-
-  /**
-   * Common variant suffixes to probe for wildcard resolution
-   * Includes numbered (1-5, 01-05) and lettered (a-e) variants
-   * @type {string[]}
-   * @static
-   * @readonly
-   */
-  static #VARIANT_SUFFIXES = Object.freeze(["1", "2", "3", "4", "5", "01", "02", "03", "04", "05", "a", "b", "c", "d", "e"]);
-  static get VARIANT_SUFFIXES() {
-    return WildcardResolver.#VARIANT_SUFFIXES;
-  }
-
-  /**
-   * Perform a fetch with timeout support
-   * @param {string} url - The URL to fetch
-   * @param {Object} [options={}] - Fetch options
-   * @param {number} [timeout=3000] - Timeout in milliseconds
-   * @returns {Promise<Response>} The fetch response
-   * @throws {Error} If the request times out or fails
-   * @static
-   * @example
-   * const response = await WildcardResolver.fetchWithTimeout('/path/to/file.webp', { method: 'HEAD' }, 5000);
-   */
-  static async fetchWithTimeout(url, options = {}, timeout = WildcardResolver.DEFAULT_TIMEOUT) {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), timeout);
-
-    try {
-      const response = await fetch(url, {
-        ...options,
-        signal: controller.signal
-      });
-      return response;
-    } finally {
-      clearTimeout(timeoutId);
-    }
-  }
-
-  /**
-   * Check if a path contains a wildcard pattern
-   * @param {string} path - The path to check
-   * @returns {boolean} True if the path contains a wildcard
-   * @static
-   * @example
-   * WildcardResolver.isWildcardPath('tokens/specter-*.webp'); // returns true
-   * WildcardResolver.isWildcardPath('tokens/specter-1.webp'); // returns false
-   */
-  static isWildcardPath(path) {
-    return path && typeof path === "string" && path.includes("*");
-  }
-
-  /**
-   * Resolve all available variants for a wildcard path
-   * Probes the server for existing files matching the pattern
-   * Results are cached to avoid repeated requests
-   * @param {string} wildcardPath - The path with wildcard (e.g., "tokens/specter-*.webp")
-   * @returns {Promise<string[]>} Array of resolved paths that exist on the server
-   * @static
-   * @example
-   * const variants = await WildcardResolver.resolveWildcardVariants('tokens/specter-*.webp');
-   * // Returns: ['tokens/specter-1.webp', 'tokens/specter-2.webp', ...]
-   */
-  static async resolveWildcardVariants(wildcardPath) {
-    // Return cached results if available
-    if (WildcardResolver.#variantCache.has(wildcardPath)) {
-      const cached = WildcardResolver.#variantCache.get(wildcardPath);
-      Logger.debug(`Using cached variants for ${wildcardPath}: ${cached.length} found`);
-      return cached;
-    }
-
-    const availableVariants = [];
-
-    try {
-      // Extract the directory and pattern
-      const lastSlash = wildcardPath.lastIndexOf("/");
-      const directory = wildcardPath.substring(0, lastSlash);
-      const filePattern = wildcardPath.substring(lastSlash + 1);
-      // Preserve the original extension to avoid cross-extension contamination
-      const extMatch = filePattern.match(/\.(webp|png|jpe?g)$/i);
-      const knownExt = extMatch ? extMatch[0] : null;
-      const extsToProbe = knownExt ? [knownExt] : WildcardResolver.IMAGE_EXTENSIONS;
-
-      const baseName = filePattern
-        .replace("*", "")
-        .replace(/\.(webp|png|jpe?g)$/i, "");
-
-      // Build candidate list and probe all in parallel
-      const candidates = [];
-      for (const variant of WildcardResolver.VARIANT_SUFFIXES) {
-        for (const ext of extsToProbe) {
-          candidates.push(`${directory}/${baseName}${variant}${ext}`);
-        }
-      }
-
-      const results = await Promise.allSettled(
-        candidates.map(path =>
-          WildcardResolver.fetchWithTimeout(path, { method: "HEAD" }, WildcardResolver.DEFAULT_TIMEOUT)
-            .then(response => response.ok ? path : null)
-        )
-      );
-
-      let networkErrors = 0;
-      for (const result of results) {
-        if (result.status === "fulfilled" && result.value) {
-          availableVariants.push(result.value);
-        } else if (result.status === "rejected") {
-          networkErrors++;
-        }
-      }
-
-      if (networkErrors > 0 && availableVariants.length === 0) {
-        Logger.warn(`All ${networkErrors} wildcard probe requests failed for ${wildcardPath} — possible network or server configuration issue`);
-      }
-
-      Logger.debug(`Found ${availableVariants.length} variants for ${wildcardPath}`);
-    } catch (e) {
-      Logger.error("Error resolving wildcard variants", e);
-      // Do NOT cache failed results — allow retry on subsequent calls
-      return availableVariants;
-    }
-
-    // Cache only successful resolution results
-    WildcardResolver.#variantCache.set(wildcardPath, availableVariants);
-    return availableVariants;
-  }
-
-  /**
-   * Select a variant based on the specified mode
-   * @param {string[]} variants - Array of available variant paths
-   * @param {string} mode - Selection mode: 'none', 'sequential', or 'random'
-   * @param {number} [sequentialIndex=0] - Current index for sequential mode
-   * @returns {{path: string|null, nextIndex: number}} Selected path and next sequential index
-   * @static
-   * @example
-   * const variants = ['token-1.webp', 'token-2.webp', 'token-3.webp'];
-   *
-   * // None mode - always first
-   * WildcardResolver.selectVariant(variants, 'none'); // {path: 'token-1.webp', nextIndex: 0}
-   *
-   * // Sequential mode
-   * WildcardResolver.selectVariant(variants, 'sequential', 0); // {path: 'token-1.webp', nextIndex: 1}
-   * WildcardResolver.selectVariant(variants, 'sequential', 1); // {path: 'token-2.webp', nextIndex: 2}
-   *
-   * // Random mode
-   * WildcardResolver.selectVariant(variants, 'random'); // {path: <random>, nextIndex: 0}
-   */
-  static selectVariant(variants, mode, sequentialIndex = 0) {
-    if (!variants || variants.length === 0) {
-      return { path: null, nextIndex: sequentialIndex };
-    }
-
-    switch (mode) {
-      case "none":
-        // Always use the first variant
-        Logger.debug(`Using first variant (none mode): ${variants[0]}`);
-        return { path: variants[0], nextIndex: 0 };
-
-      case "random":
-        // Pick a random variant
-        const randomIndex = Math.floor(Math.random() * variants.length);
-        Logger.debug(`Using random variant (${randomIndex + 1}/${variants.length}): ${variants[randomIndex]}`);
-        return { path: variants[randomIndex], nextIndex: 0 };
-
-      case "sequential":
-      default:
-        // Use variants in sequence
-        const seqIndex = sequentialIndex % variants.length;
-        Logger.debug(`Using sequential variant (${seqIndex + 1}/${variants.length}): ${variants[seqIndex]}`);
-        return { path: variants[seqIndex], nextIndex: sequentialIndex + 1 };
-    }
-  }
-
-  /**
-   * Resolve a wildcard path to a specific file path
-   * Combines variant resolution and selection based on settings
-   * @param {string} wildcardPath - The path with wildcard pattern
-   * @param {string} mode - Selection mode: 'none', 'sequential', or 'random'
-   * @param {number} [sequentialIndex=0] - Current index for sequential mode
-   * @param {string|null} [fallbackPath=null] - Fallback path if no variants found
-   * @returns {Promise<{resolvedPath: string, nextIndex: number}>} Resolved path and next index
-   * @static
-   * @example
-   * const result = await WildcardResolver.resolve(
-   *   'tokens/specter-*.webp',
-   *   'sequential',
-   *   0,
-   *   'portraits/specter.webp'
-   * );
-   * // Returns: {resolvedPath: 'tokens/specter-1.webp', nextIndex: 1}
-   */
-  static async resolve(wildcardPath, mode, sequentialIndex = 0, fallbackPath = null) {
-    // Find available variants
-    const variants = await WildcardResolver.resolveWildcardVariants(wildcardPath);
-
-    Logger.log(`Found ${variants.length} token variants`);
-
-    if (variants.length > 0) {
-      const selection = WildcardResolver.selectVariant(variants, mode, sequentialIndex);
-      return {
-        resolvedPath: selection.path,
-        nextIndex: selection.nextIndex
-      };
-    }
-
-    // No variants found, use fallback
-    if (fallbackPath && !WildcardResolver.isWildcardPath(fallbackPath)) {
-      Logger.log(`Using fallback path: ${fallbackPath}`);
-      return {
-        resolvedPath: fallbackPath,
-        nextIndex: sequentialIndex
-      };
-    }
-
-    // Last resort: use mystery man token
-    Logger.log("Using default mystery-man token as last resort");
-    return {
-      resolvedPath: "icons/svg/mystery-man.svg",
-      nextIndex: sequentialIndex
-    };
-  }
-
-  /**
-   * Clear the variant cache
-   * Call this when settings change or to force re-probing of paths
-   * @returns {void}
-   * @static
-   * @example
-   * // After settings update or manual cache clear
-   * WildcardResolver.clearCache();
-   */
-  static clearCache() {
-    WildcardResolver.#variantCache.clear();
-    Logger.debug("WildcardResolver cache cleared");
-  }
-
-  /**
-   * Get the current cache size for debugging
-   * @returns {number} Number of cached wildcard paths
-   * @static
-   */
-  static getCacheSize() {
-    return WildcardResolver.#variantCache.size;
   }
 }
 
@@ -630,6 +235,14 @@ class CompendiumManager {
    * @private
    */
   static #wotcCompendiumsCache = null;
+
+  /**
+   * Errors from the most recent loadMonsterIndex() call
+   * @type {Array<{packId: string, packLabel: string, error: string}>}
+   * @static
+   * @private
+   */
+  static #lastLoadErrors = [];
 
   /**
    * Known official WOTC module prefixes for auto-detection
@@ -777,13 +390,24 @@ class CompendiumManager {
     const allPacks = CompendiumManager.detectWOTCCompendiums();
 
     // Get the setting (stored as JSON string)
+    // BUG-02: Split into two try/catch blocks for distinct error messages
+    let settingValue;
+    try {
+      settingValue = game.settings.get(MODULE_ID, "enabledCompendiums");
+    } catch (e) {
+      Logger.warn(`Failed to retrieve enabledCompendiums setting (${e.name}: ${e.message})`);
+      ui.notifications.error(game.i18n.localize("NPC_REPLACER.ErrorSettingsRetrieve"));
+      const result = allPacks.filter(pack => CompendiumManager.getCompendiumPriority(pack) <= 2);
+      CompendiumManager.#enabledPacksCache = result;
+      return result;
+    }
+
     let enabledPackIds;
     try {
-      const settingValue = game.settings.get(MODULE_ID, "enabledCompendiums");
       enabledPackIds = typeof settingValue === "string" ? JSON.parse(settingValue) : settingValue;
     } catch (e) {
-      // Preserve full error context for debugging - could be JSON parse error or settings retrieval error
-      Logger.warn(`Error parsing enabledCompendiums setting (${e.name}: ${e.message}), falling back to default`);
+      Logger.warn(`Failed to parse enabledCompendiums JSON (${e.name}: ${e.message})`);
+      ui.notifications.error(game.i18n.localize("NPC_REPLACER.ErrorSettingsParse"));
       enabledPackIds = ["default"];
     }
 
@@ -832,6 +456,9 @@ class CompendiumManager {
       return CompendiumManager.#indexCache;
     }
 
+    // Reset load errors for this run
+    CompendiumManager.#lastLoadErrors = [];
+
     const enabledPacks = CompendiumManager.getEnabledCompendiums();
 
     if (enabledPacks.length === 0) {
@@ -868,7 +495,13 @@ class CompendiumManager {
         }
         Logger.log(`  [${priority}-${priorityLabel}] Loaded ${pack.index.size} entries from ${pack.metadata.label}`);
       } catch (error) {
+        CompendiumManager.#lastLoadErrors.push({
+          packId: pack.collection,
+          packLabel: pack.metadata.label,
+          error: error.message
+        });
         Logger.error(`Failed to load index from ${pack.collection}`, error);
+        ui.notifications.error(game.i18n.format("NPC_REPLACER.ErrorCompendiumLoad", { name: pack.metadata.label }));
       }
     }
 
@@ -903,7 +536,17 @@ class CompendiumManager {
     CompendiumManager.#indexMap = null;
     CompendiumManager.#wotcCompendiumsCache = null;
     CompendiumManager.#enabledPacksCache = null;
+    CompendiumManager.#lastLoadErrors = [];
     Logger.debug("CompendiumManager caches cleared");
+  }
+
+  /**
+   * Get errors from the most recent loadMonsterIndex() call
+   * @returns {Array<{packId: string, packLabel: string, error: string}>} Copy of load errors
+   * @static
+   */
+  static getLastLoadErrors() {
+    return [...CompendiumManager.#lastLoadErrors];
   }
 
   /**
@@ -934,217 +577,8 @@ class CompendiumManager {
   }
 }
 
-/**
- * NameMatcher utility class for creature name normalization and matching
- * Provides static methods for matching token names to compendium entries
- * @class
- */
-class NameMatcher {
-  /**
-   * Minimum character length for partial matching to avoid false positives
-   * @type {number}
-   * @static
-   * @readonly
-   */
-  static get MIN_PARTIAL_LENGTH() {
-    return 4;
-  }
-
-  /**
-   * Regular expression patterns for common creature name prefixes to strip
-   * Prefixes like "young", "adult", "ancient", "elder", "greater", "lesser"
-   * @type {RegExp}
-   * @static
-   * @readonly
-   */
-  static #PREFIX_PATTERN = /^(young|adult|ancient|elder|greater|lesser)\s+/i;
-  static get PREFIX_PATTERN() {
-    return NameMatcher.#PREFIX_PATTERN;
-  }
-
-  /**
-   * Regular expression patterns for common creature name suffixes to strip
-   * Suffixes like "warrior", "guard", "scout", "champion", "leader", "chief", "captain", "shaman", "berserker"
-   * @type {RegExp}
-   * @static
-   * @readonly
-   */
-  static #SUFFIX_PATTERN = /\s+(warrior|guard|scout|champion|leader|chief|captain|shaman|berserker)$/i;
-  static get SUFFIX_PATTERN() {
-    return NameMatcher.#SUFFIX_PATTERN;
-  }
-
-  /**
-   * Variant transforms for Stage 2 name matching
-   * Strips common prefixes, suffixes, or both
-   * @type {Array<function(string): string>}
-   * @static
-   * @readonly
-   */
-  static #VARIANT_TRANSFORMS = Object.freeze([
-    name => name.replace(NameMatcher.#PREFIX_PATTERN, ""),
-    name => name.replace(NameMatcher.#SUFFIX_PATTERN, ""),
-    name => name.replace(NameMatcher.#PREFIX_PATTERN, "").replace(NameMatcher.#SUFFIX_PATTERN, "")
-  ]);
-  static get VARIANT_TRANSFORMS() {
-    return NameMatcher.#VARIANT_TRANSFORMS;
-  }
-
-  /**
-   * Normalize a creature name for matching
-   * Converts to lowercase, trims whitespace, removes special characters,
-   * and normalizes internal whitespace
-   * @param {string} name - The creature name to normalize
-   * @returns {string} Normalized name suitable for comparison
-   * @static
-   * @example
-   * NameMatcher.normalizeName('Goblin Warrior'); // returns 'goblin warrior'
-   * NameMatcher.normalizeName('  Dire Wolf  ');  // returns 'dire wolf'
-   * NameMatcher.normalizeName("Mind Flayer's Minion"); // returns 'mind flayers minion'
-   */
-  static normalizeName(name) {
-    if (!name) return "";
-    return name
-      .toLowerCase()
-      .trim()
-      .replace(/[^\p{L}\p{N}\s]/gu, "") // Remove non-letter/non-number chars (Unicode-safe)
-      .replace(/\s+/g, " ");   // Normalize whitespace
-  }
-
-  /**
-   * Select the best match from a list of matches based on compendium priority
-   * When multiple compendiums contain the same creature, this selects the one
-   * from the highest priority compendium (adventures > expansions > core > SRD)
-   * @param {Array<{entry: Object, pack: CompendiumCollection}>} matches - Array of match objects
-   * @returns {{entry: Object, pack: CompendiumCollection}|null} The best match or null if empty
-   * @static
-   * @example
-   * const matches = [
-   *   { entry: goblinSRD, pack: srdPack },
-   *   { entry: goblinMM, pack: monsterManualPack }
-   * ];
-   * const best = NameMatcher.selectBestMatch(matches);
-   * // Returns the Monster Manual version (higher priority)
-   */
-  static selectBestMatch(matches) {
-    if (!matches || matches.length === 0) return null;
-    if (matches.length === 1) return matches[0];
-
-    // Helper to get priority (use pre-computed field when available)
-    const getPriority = m => m.priority ?? CompendiumManager.getCompendiumPriority(m.pack);
-
-    // Log all matches for debugging (verbose — gated to avoid template literal cost in hot path)
-    if (Logger.debugEnabled) {
-      Logger.debug(`  Found ${matches.length} matches across compendiums:`);
-      matches.forEach(m => {
-        const pkgName = m.pack.metadata.packageName || "unknown";
-        Logger.debug(`    - ${m.entry.name} from "${m.pack.metadata.label}" (package: ${pkgName}, priority: ${getPriority(m)})`);
-      });
-    }
-
-    // O(n) max-scan — no mutation of input array
-    // Tie-break by pack collection name for deterministic results
-    const best = matches.reduce((a, b) => {
-      const pa = getPriority(a);
-      const pb = getPriority(b);
-      if (pb !== pa) return pb > pa ? b : a;
-      return a.pack.collection < b.pack.collection ? a : b;
-    });
-    Logger.debug(`  Selected: ${best.pack.metadata.label} (priority ${getPriority(best)})`);
-
-    return best;
-  }
-
-  /**
-   * Find a creature in the combined compendium index
-   * Uses a multi-stage matching strategy:
-   * 1. Exact match (after normalization)
-   * 2. Variant match (strips common prefixes/suffixes)
-   * 3. Partial match (word-level matching for longer names)
-   *
-   * Prioritizes matches from adventures/expansions > Monster Manual > SRD
-   * @param {string} creatureName - The creature name to search for
-   * @param {Array<{entry: Object, pack: CompendiumCollection}>} index - Array of index entries from loadMonsterIndex()
-   * @returns {{entry: Object, pack: CompendiumCollection}|null} Object with entry and pack, or null if not found
-   * @static
-   * @example
-   * const match = NameMatcher.findMatch('Goblin', monsterIndex);
-   * if (match) {
-   *   console.log(`Found: ${match.entry.name} in ${match.pack.metadata.label}`);
-   * }
-   */
-  static findMatch(creatureName, index) {
-    const normalizedSearch = NameMatcher.normalizeName(creatureName);
-
-    if (!normalizedSearch) {
-      Logger.log("Empty creature name provided");
-      return null;
-    }
-
-    // Stage 1: Exact match via O(1) Map lookup
-    const indexMap = CompendiumManager.getIndexMap();
-    let matches = indexMap ? (indexMap.get(normalizedSearch) || []) :
-      index.filter(item => (item.normalizedName || NameMatcher.normalizeName(item.entry.name)) === normalizedSearch);
-    if (matches.length > 0) {
-      const match = NameMatcher.selectBestMatch(matches);
-      Logger.log(`Exact match found: "${creatureName}" -> "${match.entry.name}" (${match.pack.metadata.label}, priority ${match.priority ?? CompendiumManager.getCompendiumPriority(match.pack)})`);
-      return match;
-    }
-
-    // Stage 2: Variant transforms - try without common suffixes/prefixes
-    for (const transform of NameMatcher.VARIANT_TRANSFORMS) {
-      const variant = transform(normalizedSearch);
-      // Only check if variant is different from original
-      if (variant !== normalizedSearch && variant.length > 0) {
-        matches = indexMap ? (indexMap.get(variant) || []) :
-          index.filter(item => (item.normalizedName || NameMatcher.normalizeName(item.entry.name)) === variant);
-        if (matches.length > 0) {
-          const match = NameMatcher.selectBestMatch(matches);
-          Logger.log(`Variant match found: "${creatureName}" -> "${match.entry.name}" (${match.pack.metadata.label}, priority ${match.priority ?? CompendiumManager.getCompendiumPriority(match.pack)})`);
-          return match;
-        }
-      }
-    }
-
-    // Stage 3: Partial match - require majority of significant words to overlap
-    if (normalizedSearch.length >= NameMatcher.MIN_PARTIAL_LENGTH) {
-      const searchWords = normalizedSearch.split(" ");
-      const significantSearchWords = searchWords.filter(w => w.length >= NameMatcher.MIN_PARTIAL_LENGTH);
-
-      if (significantSearchWords.length > 0) {
-        const threshold = Math.max(1, Math.ceil(significantSearchWords.length * 2 / 3));
-        // Build search word Set once — avoids per-entry Set allocation
-        const searchWordSet = new Set(significantSearchWords);
-
-        matches = index.filter(item => {
-          // Use pre-computed significantWords from index build time
-          const sigWords = item.significantWords;
-          if (!sigWords || sigWords.length === 0) return false;
-
-          let matchingCount = 0;
-          for (const w of sigWords) {
-            if (searchWordSet.has(w)) matchingCount++;
-          }
-          // Bidirectional check: search words must meet threshold AND
-          // matched words must cover at least half of entry's significant words
-          return matchingCount >= threshold
-            && matchingCount / sigWords.length >= 0.5;
-        });
-      } else {
-        matches = [];
-      }
-
-      if (matches.length > 0) {
-        const match = NameMatcher.selectBestMatch(matches);
-        Logger.log(`Partial match found: "${creatureName}" -> "${match.entry.name}" (${match.pack.metadata.label}, priority ${match.priority ?? CompendiumManager.getCompendiumPriority(match.pack)})`);
-        return match;
-      }
-    }
-
-    Logger.log(`No match found for: "${creatureName}"`);
-    return null;
-  }
-}
+// Wire late-bound dependency — NameMatcher needs CompendiumManager for priority lookups
+NameMatcher.setCompendiumManager(CompendiumManager);
 
 /**
  * TokenReplacer utility class for token replacement operations
@@ -1349,6 +783,13 @@ class TokenReplacer {
   static async #getOrImportWorldActor(compendiumActor, compendiumEntry, pack) {
     // O(1) lookup via session-scoped Map (built by buildActorLookup before processing loop)
     let worldActor = TokenReplacer.#actorLookup?.get(compendiumActor.uuid) || null;
+
+    // BUG-01: Guard against stale cached references (actor deleted between sessions)
+    if (worldActor && !game.actors.has(worldActor.id)) {
+      Logger.warn(`Cached actor "${worldActor.name}" (id: ${worldActor.id}) no longer exists in game.actors, will re-import`);
+      TokenReplacer.#actorLookup.delete(compendiumActor.uuid);
+      worldActor = null;
+    }
 
     if (worldActor) {
       Logger.log(`Using existing imported actor "${worldActor.name}"`);
@@ -1561,116 +1002,124 @@ class NPCTokenReplacerController {
     return true;
   }
 
+  // Removed: showConfirmationDialog — replaced by showPreviewDialog
+
   /**
-   * Show a confirmation dialog before replacing tokens
-   * Displays a scrollable list of tokens that will be replaced
-   * @param {TokenDocument[]} tokens - The tokens to replace
+   * Show a preview dialog with token-to-creature match mapping
+   * Replaces the old confirmation dialog with a rich 3-column table showing
+   * Token Name | Will Match As | Source Compendium for each token.
+   * Matched tokens appear first, unmatched tokens last.
+   * @param {Array<{tokenDoc: Object, creatureName: string, match: Object|null}>} matchResults - Pre-computed match results from computeMatches
    * @returns {Promise<boolean>} Whether user confirmed to proceed
    * @static
-   * @example
-   * const confirmed = await NPCTokenReplacerController.showConfirmationDialog(npcTokens);
-   * if (!confirmed) {
-   *   Logger.log("Replacement cancelled by user");
-   *   return;
-   * }
    */
-  static async showConfirmationDialog(tokens) {
-    // Build token list HTML in single pass without intermediate string array
-    let tokenListHtml = "";
-    for (const t of tokens) {
-      tokenListHtml += `<li>${escapeHtml(t.actor?.name || t.name)}</li>`;
+  static async showPreviewDialog(matchResults) {
+    const matched = matchResults.filter(r => r.match !== null);
+    const unmatched = matchResults.filter(r => r.match === null);
+    const sorted = [...matched, ...unmatched];
+
+    const noMatchText = game.i18n.localize("NPC_REPLACER.PreviewNoMatch");
+
+    let rowsHtml = "";
+    for (const result of sorted) {
+      if (result.match) {
+        rowsHtml += `<tr>
+          <td>${escapeHtml(result.creatureName)}</td>
+          <td>${escapeHtml(result.match.entry.name)}</td>
+          <td>${escapeHtml(result.match.pack.metadata.label)}</td>
+        </tr>`;
+      } else {
+        rowsHtml += `<tr>
+          <td>${escapeHtml(result.creatureName)}</td>
+          <td style="color: red;">${noMatchText}</td>
+          <td>&mdash;</td>
+        </tr>`;
+      }
     }
 
+    const summary = game.i18n.format("NPC_REPLACER.PreviewSummary", {
+      matched: matched.length,
+      total: matchResults.length
+    });
+
     const content = `
-      <p>${game.i18n.format("NPC_REPLACER.ConfirmContent", { count: tokens.length })}</p>
-      <ul style="max-height: 200px; overflow-y: auto; margin: 10px 0;">
-        ${tokenListHtml}
-      </ul>
-      <p><strong>${game.i18n.localize("NPC_REPLACER.ConfirmProceed")}</strong></p>
+      <p>${summary}</p>
+      <div style="max-height: 300px; overflow-y: auto; margin: 10px 0;">
+        <table style="width: 100%; border-collapse: collapse;">
+          <thead>
+            <tr>
+              <th>${game.i18n.localize("NPC_REPLACER.PreviewColToken")}</th>
+              <th>${game.i18n.localize("NPC_REPLACER.PreviewColMatch")}</th>
+              <th>${game.i18n.localize("NPC_REPLACER.PreviewColSource")}</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${rowsHtml}
+          </tbody>
+        </table>
+      </div>
     `;
 
+    const dialogOpts = {
+      title: game.i18n.localize("NPC_REPLACER.PreviewTitle"),
+      content,
+      yes: null,
+      no: null,
+      defaultYes: false,
+      close: null
+    };
+
+    // When all tokens are unmatched, disable the Replace/yes button
+    if (matched.length === 0) {
+      dialogOpts.render = (html) => {
+        html.find('.yes, [data-button="yes"]').prop("disabled", true);
+      };
+    }
+
     return new Promise(resolve => {
-      Dialog.confirm({
-        title: game.i18n.localize("NPC_REPLACER.ConfirmTitle"),
-        content,
-        yes: () => resolve(true),
-        no: () => resolve(false),
-        defaultYes: false,
-        close: () => resolve(false)
-      });
+      dialogOpts.yes = () => resolve(true);
+      dialogOpts.no = () => resolve(false);
+      dialogOpts.close = () => resolve(false);
+      Dialog.confirm(dialogOpts);
     });
   }
 
-  /**
-   * Process a single token for replacement
-   * Finds matching compendium entry and replaces the token if found
-   * @param {TokenDocument} tokenDoc - The token document to process
-   * @param {Array<{entry: Object, pack: CompendiumCollection}>} index - The monster index
-   * @param {Set<string>} processedIds - Set of already processed token IDs
-   * @returns {Promise<{status: 'replaced'|'not_found'|'error'|'skipped', name: string}>} Processing result
-   * @static
-   * @private
-   */
-  static async #processToken(tokenDoc, index, processedIds) {
-    const creatureName = tokenDoc.actor?.name || tokenDoc.name;
-
-    // Skip if already processed (handles duplicate entries)
-    if (processedIds.has(tokenDoc.id)) {
-      Logger.log(`Skipping already processed token: ${tokenDoc.name}`);
-      return { status: "skipped", name: creatureName };
-    }
-
-    // Check if token still exists in scene BEFORE processing
-    if (!canvas.scene.tokens.has(tokenDoc.id)) {
-      Logger.log(`Token "${tokenDoc.name}" no longer exists, skipping`);
-      return { status: "skipped", name: creatureName };
-    }
-
-    processedIds.add(tokenDoc.id);
-
-    try {
-      const match = NameMatcher.findMatch(creatureName, index);
-
-      if (match) {
-        // match is {entry, pack} - pass the entry and its source pack
-        await TokenReplacer.replaceToken(tokenDoc, match.entry, match.pack);
-        return { status: "replaced", name: creatureName };
-      } else {
-        return { status: "not_found", name: creatureName };
-      }
-    } catch (error) {
-      Logger.error(`Error replacing token ${tokenDoc.name}`, error);
-      return { status: "error", name: creatureName };
-    }
-  }
+  // Removed: #processToken — replacement logic inlined in replaceNPCTokens using pre-computed matches
 
   /**
    * Report the results of a replacement session
    * Displays appropriate notifications and logs details
    * @param {number} replaced - Count of successfully replaced tokens
    * @param {string[]} notFound - Names of tokens not found in compendiums
-   * @param {string[]} errors - Names of tokens that had errors during replacement
+   * @param {string[]} importFailed - Names of tokens that failed during import
+   * @param {string[]} creationFailed - Names of tokens that failed during creation
    * @returns {void}
    * @static
    * @private
    */
-  static #reportResults(replaced, notFound, errors) {
-    // Report results
+  static #reportResults(replaced, notFound, importFailed, creationFailed) {
     if (replaced > 0) {
       ui.notifications.info(game.i18n.format("NPC_REPLACER.Complete", { count: replaced }));
     }
 
     if (notFound.length > 0) {
       ui.notifications.warn(game.i18n.format("NPC_REPLACER.NotFoundCount", { count: notFound.length }));
-      Logger.log("Creatures not found in Monster Manual:", notFound);
+      Logger.log("Creatures not found in compendiums:", notFound);
     }
 
-    if (errors.length > 0) {
-      ui.notifications.error(game.i18n.format("NPC_REPLACER.ErrorCount", { count: errors.length }));
-      Logger.log("Errors occurred with tokens:", errors);
+    const totalErrors = importFailed.length + creationFailed.length;
+    if (totalErrors > 0) {
+      ui.notifications.error(game.i18n.format("NPC_REPLACER.SummaryPartialFailure", {
+        replaced,
+        noMatch: notFound.length,
+        importFailed: importFailed.length,
+        creationFailed: creationFailed.length
+      }));
+      if (importFailed.length > 0) Logger.log("Import failures:", importFailed);
+      if (creationFailed.length > 0) Logger.log("Creation failures:", creationFailed);
     }
 
-    Logger.log(`Replacement complete: ${replaced} replaced, ${notFound.length} not found, ${errors.length} errors`);
+    Logger.log(`Replacement complete: ${replaced} replaced, ${notFound.length} not found, ${importFailed.length} import failures, ${creationFailed.length} creation failures`);
   }
 
   /**
@@ -1733,8 +1182,12 @@ class NPCTokenReplacerController {
       const sourceDesc = isSelection ? "selected" : "in scene";
       Logger.log(`Found ${npcTokens.length} NPC tokens ${sourceDesc}`);
 
-      // Show confirmation dialog
-      const confirmed = await NPCTokenReplacerController.showConfirmationDialog(npcTokens);
+      // Pre-compute matches (scan phase with progress)
+      const scanProgress = new ProgressReporter();
+      const matchResults = NPCTokenReplacerController.computeMatches(npcTokens, index, scanProgress);
+
+      // Show preview dialog with match results
+      const confirmed = await NPCTokenReplacerController.showPreviewDialog(matchResults);
       if (!confirmed) {
         Logger.log("Token replacement cancelled by user");
         return;
@@ -1744,38 +1197,75 @@ class NPCTokenReplacerController {
       TokenReplacer.resetCounter();
       TokenReplacer.buildActorLookup();
 
+      // Filter to only matched tokens for replacement
+      const toReplace = matchResults.filter(r => r.match !== null);
+      const notFoundNames = matchResults.filter(r => r.match === null).map(r => r.creatureName);
+
       // TODO [MEDIUM] Performance: token processing loop is fully sequential — 2N socket round-trips.
       // Split into parallel resolve phase (getDocument, import, wildcard) + batched mutation phase
       // (single deleteEmbeddedDocuments + createEmbeddedDocuments call for all tokens).
       // Track results
       let replaced = 0;
-      const notFound = [];
-      const errors = [];
-      const processedIds = new Set(); // Track processed token IDs to avoid duplicates
+      const importFailed = [];
+      const creationFailed = [];
+      const processedIds = new Set();
 
-      // Show progress notification
-      ui.notifications.info(game.i18n.format("NPC_REPLACER.Processing", { count: npcTokens.length }));
+      // Start progress bar for replacement phase
+      const progress = new ProgressReporter();
+      progress.start(toReplace.length, game.i18n.format("NPC_REPLACER.ProgressStart", { count: toReplace.length }));
 
-      // Process each token
-      for (const tokenDoc of npcTokens) {
-        const result = await NPCTokenReplacerController.#processToken(tokenDoc, index, processedIds);
+      // Replace each matched token using pre-computed match data
+      for (const result of toReplace) {
+        const { tokenDoc, creatureName } = result;
 
-        switch (result.status) {
-          case "replaced":
-            replaced++;
-            break;
-          case "not_found":
-            notFound.push(result.name);
-            break;
-          case "error":
-            errors.push(result.name);
-            break;
-          // 'skipped' - no action needed
+        // Skip if already processed (handles duplicate entries)
+        if (processedIds.has(tokenDoc.id)) {
+          Logger.log(`Skipping already processed token: ${tokenDoc.name}`);
+          continue;
         }
+
+        // Check if token still exists in scene (may have been deleted during preview)
+        if (!canvas.scene.tokens.has(tokenDoc.id)) {
+          Logger.log(`Token "${tokenDoc.name}" no longer exists, skipping`);
+          continue;
+        }
+
+        processedIds.add(tokenDoc.id);
+
+        try {
+          await TokenReplacer.replaceToken(tokenDoc, result.match.entry, result.match.pack);
+          replaced++;
+        } catch (error) {
+          // Classify failure based on error message content.
+          // replaceToken throws from import stage (getDocument, #getOrImportWorldActor)
+          // or creation stage (createEmbeddedDocuments, deleteEmbeddedDocuments).
+          // Default to "creation_failed" since import is attempted first.
+          const msg = (error.message || "").toLowerCase();
+          const isImportError = msg.includes("import") ||
+                                msg.includes("failed to load") ||
+                                msg.includes("getdocument");
+          const status = isImportError ? "import_failed" : "creation_failed";
+          Logger.error(`Error replacing token ${tokenDoc.name} (${status})`, error);
+          if (status === "import_failed") {
+            importFailed.push(creatureName);
+          } else {
+            creationFailed.push(creatureName);
+          }
+        }
+
+        const processed = replaced + importFailed.length + creationFailed.length;
+        progress.update(processed,
+          game.i18n.format("NPC_REPLACER.ProgressUpdate", {
+            current: processed,
+            total: toReplace.length,
+            name: tokenDoc.name
+          }));
       }
 
+      progress.finish();
+
       // Report results
-      NPCTokenReplacerController.#reportResults(replaced, notFound, errors);
+      NPCTokenReplacerController.#reportResults(replaced, notFoundNames, importFailed, creationFailed);
     } finally {
       // Always release the lock and clean up session state
       NPCTokenReplacerController.#isProcessing = false;
@@ -1800,6 +1290,37 @@ class NPCTokenReplacerController {
     WildcardResolver.clearCache();
     TokenReplacer.clearActorLookup();
     Logger.log("All caches cleared");
+  }
+
+  /**
+   * Pre-compute matches for all tokens against the monster index
+   * Separates "find matches" from "replace tokens" so a preview dialog
+   * can be shown between the two steps (dry-run preview).
+   * @param {Object[]} tokens - Array of token documents to match
+   * @param {Object[]} index - The combined monster index
+   * @param {ProgressReporter} progress - Progress reporter instance
+   * @returns {Array<{tokenDoc: Object, creatureName: string, match: Object|null}>} Match results
+   * @static
+   */
+  static computeMatches(tokens, index, progress) {
+    progress.start(tokens.length, game.i18n.localize("NPC_REPLACER.PreviewScanning"));
+
+    const results = [];
+    for (let i = 0; i < tokens.length; i++) {
+      const tokenDoc = tokens[i];
+      const creatureName = tokenDoc.actor?.name || tokenDoc.name;
+      const match = NameMatcher.findMatch(creatureName, index);
+      results.push({ tokenDoc, creatureName, match });
+
+      progress.update(i + 1, game.i18n.format("NPC_REPLACER.ProgressUpdate", {
+        current: i + 1,
+        total: tokens.length,
+        name: tokenDoc.name
+      }));
+    }
+
+    progress.finish();
+    return results;
   }
 
   /**
@@ -1855,6 +1376,7 @@ class NPCTokenReplacerController {
       detectWOTCCompendiums: () => CompendiumManager.detectWOTCCompendiums(),
       getEnabledCompendiums: () => CompendiumManager.getEnabledCompendiums(),
       clearCache: () => NPCTokenReplacerController.clearCache(),
+      getLastLoadErrors: () => CompendiumManager.getLastLoadErrors(),
       get debugEnabled() { return Logger.debugEnabled; },
       set debugEnabled(v) { Logger.debugEnabled = v; }
     };
@@ -1891,6 +1413,17 @@ function registerSettings() {
     config: false, // We'll use a custom form for this
     type: String,
     default: JSON.stringify(["default"])
+  });
+
+  // HTTP timeout setting for wildcard HEAD requests
+  game.settings.register(MODULE_ID, "httpTimeout", {
+    name: game.i18n.localize("NPC_REPLACER.Settings.HttpTimeout.Name"),
+    hint: game.i18n.localize("NPC_REPLACER.Settings.HttpTimeout.Hint"),
+    scope: "world",
+    config: true,
+    type: Number,
+    range: { min: 1, max: 30, step: 1 },
+    default: 5
   });
 
   // Register the settings menu for compendium selection
@@ -2149,3 +1682,6 @@ Hooks.once("ready", async () => {
  * Register control button hook
  */
 Hooks.on("getSceneControlButtons", registerControlButton);
+
+// Named exports for testing — classes remain in main.js due to Foundry global dependencies
+export { FolderManager, CompendiumManager, TokenReplacer, NPCTokenReplacerController };

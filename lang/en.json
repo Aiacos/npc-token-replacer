@@ -3,6 +3,8 @@
     "Title": "NPC Token Replacer",
     "Button": "Replace NPC Tokens",
     "Processing": "Processing {count} tokens...",
+    "ProgressStart": "Replacing {count} tokens...",
+    "ProgressUpdate": "({current}/{total}) {name}",
     "Complete": "Replaced {count} tokens successfully",
     "NoTokens": "No NPC tokens found in the current scene",
     "NoSelectedNPCs": "No NPC tokens in selection (select NPC tokens or deselect all to process entire scene)",
@@ -10,10 +12,22 @@
     "NotFoundCount": "{count} creatures not found in compendiums",
     "Error": "Error replacing token: {name}",
     "ErrorCount": "{count} errors occurred during replacement",
+    "SummaryPartialFailure": "Replacement completed with issues: {replaced} replaced, {noMatch} not found, {importFailed} import failures, {creationFailed} creation failures",
+    "ErrorSettingsRetrieve": "Failed to read compendium settings. Using default compendiums.",
+    "ErrorSettingsParse": "Compendium settings are corrupted. Using default compendiums.",
+    "ErrorCompendiumLoad": "Failed to load compendium: {name}",
+    "ErrorFolderCreate": "Failed to create import folder. Actors will be imported to root.",
     "NoScene": "No active scene found",
     "NoModule": "No official D&D compendiums found. Install official D&D content (Monster Manual, Adventures, etc.)",
     "NoCompendium": "No compendiums available for token replacement",
     "GMOnly": "Only the GM can replace tokens",
+    "PreviewScanning": "Scanning tokens...",
+    "PreviewTitle": "Token Replacement Preview",
+    "PreviewSummary": "{matched} of {total} tokens matched",
+    "PreviewColToken": "Token Name",
+    "PreviewColMatch": "Will Match As",
+    "PreviewColSource": "Source Compendium",
+    "PreviewNoMatch": "No match found",
     "ConfirmTitle": "Confirm Token Replacement",
     "ConfirmContent": "The following {count} NPC tokens will be replaced with official D&D versions:",
     "ConfirmProceed": "Do you want to proceed?",
@@ -46,6 +60,10 @@
         "SelectCompendiums": "Available Compendiums:",
         "Saved": "Compendium settings saved. The index will be reloaded on next use.",
         "SaveError": "Failed to save compendium settings. Please try again."
+      },
+      "HttpTimeout": {
+        "Name": "HTTP Timeout (seconds)",
+        "Hint": "Timeout for network requests when resolving wildcard token paths. Increase for slow connections."
       }
     }
   }

@@ -54,3 +54,6 @@ release/
 
 # Auto Claude data directory
 .auto-claude/
+
+# Test coverage output
+coverage/
