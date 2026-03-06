@@ -4,7 +4,7 @@
  */
 
 import { Logger, MODULE_ID } from "./lib/logger.js";
-import { WildcardResolver, DEFAULT_HTTP_TIMEOUT_MS } from "./lib/wildcard-resolver.js";
+import { WildcardResolver } from "./lib/wildcard-resolver.js";
 import { NameMatcher } from "./lib/name-matcher.js";
 import { ProgressReporter } from "./lib/progress-reporter.js";
 
@@ -1362,6 +1362,17 @@ function registerSettings() {
     config: false, // We'll use a custom form for this
     type: String,
     default: JSON.stringify(["default"])
+  });
+
+  // HTTP timeout setting for wildcard HEAD requests
+  game.settings.register(MODULE_ID, "httpTimeout", {
+    name: game.i18n.localize("NPC_REPLACER.Settings.HttpTimeout.Name"),
+    hint: game.i18n.localize("NPC_REPLACER.Settings.HttpTimeout.Hint"),
+    scope: "world",
+    config: true,
+    type: Number,
+    range: { min: 1, max: 30, step: 1 },
+    default: 5
   });
 
   // Register the settings menu for compendium selection

@@ -1,4 +1,4 @@
-import { Logger } from "./logger.js";
+import { Logger, MODULE_ID } from "./logger.js";
 
 /**
  * Default timeout for HTTP requests in milliseconds
@@ -32,7 +32,11 @@ class WildcardResolver {
    * @readonly
    */
   static get DEFAULT_TIMEOUT() {
-    return DEFAULT_HTTP_TIMEOUT_MS;
+    try {
+      return game.settings.get(MODULE_ID, "httpTimeout") * 1000;
+    } catch {
+      return DEFAULT_HTTP_TIMEOUT_MS;
+    }
   }
 
   /**

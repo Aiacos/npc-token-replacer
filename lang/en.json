@@ -53,6 +53,10 @@
         "SelectCompendiums": "Available Compendiums:",
         "Saved": "Compendium settings saved. The index will be reloaded on next use.",
         "SaveError": "Failed to save compendium settings. Please try again."
+      },
+      "HttpTimeout": {
+        "Name": "HTTP Timeout (seconds)",
+        "Hint": "Timeout for network requests when resolving wildcard token paths. Increase for slow connections."
       }
     }
   }

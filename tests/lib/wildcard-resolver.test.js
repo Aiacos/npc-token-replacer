@@ -174,3 +174,47 @@ describe("resolve", () => {
     expect(result.resolvedPath).toBe("icons/svg/mystery-man.svg");
   });
 });
+
+// ---------------------------------------------------------------------------
+// Test group 5: DEFAULT_TIMEOUT with httpTimeout setting
+// ---------------------------------------------------------------------------
+describe("DEFAULT_TIMEOUT with httpTimeout setting", () => {
+  let originalGet;
+
+  beforeEach(() => {
+    // Save original game.settings.get so we can mock per-test
+    originalGet = globalThis.game.settings.get;
+  });
+
+  afterEach(() => {
+    // Restore original
+    globalThis.game.settings.get = originalGet;
+  });
+
+  it("reads from game.settings.get and multiplies by 1000", () => {
+    globalThis.game.settings.get = vi.fn((moduleId, key) => {
+      if (moduleId === "npc-token-replacer" && key === "httpTimeout") return 10;
+      return originalGet(moduleId, key);
+    });
+
+    expect(WildcardResolver.DEFAULT_TIMEOUT).toBe(10000);
+    expect(globalThis.game.settings.get).toHaveBeenCalledWith("npc-token-replacer", "httpTimeout");
+  });
+
+  it("returns default value (5s) when setting returns default", () => {
+    globalThis.game.settings.get = vi.fn((moduleId, key) => {
+      if (moduleId === "npc-token-replacer" && key === "httpTimeout") return 5;
+      return originalGet(moduleId, key);
+    });
+
+    expect(WildcardResolver.DEFAULT_TIMEOUT).toBe(5000);
+  });
+
+  it("falls back to 5000 when game.settings.get throws", () => {
+    globalThis.game.settings.get = vi.fn(() => {
+      throw new Error("Settings not registered yet");
+    });
+
+    expect(WildcardResolver.DEFAULT_TIMEOUT).toBe(5000);
+  });
+});
