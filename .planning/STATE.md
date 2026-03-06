@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.4
 milestone_name: milestone
 status: in-progress
-stopped_at: Completed 06-01-PLAN.md
-last_updated: "2026-03-06T06:50:22Z"
-last_activity: "2026-03-06 — Phase 6 Plan 1 executed: httpTimeout setting + computeMatches method"
+stopped_at: Completed 06-02-PLAN.md
+last_updated: "2026-03-06T06:59:17Z"
+last_activity: "2026-03-06 — Phase 6 Plan 2 executed: preview dialog and replacement flow refactor"
 progress:
   total_phases: 6
-  completed_phases: 5
+  completed_phases: 6
   total_plans: 10
-  completed_plans: 9
-  percent: 90
+  completed_plans: 10
+  percent: 100
 ---
 
 # Project State
@@ -21,23 +21,23 @@ progress:
 See: .planning/PROJECT.md (updated 2026-02-28)
 
 **Core value:** Token replacement must work correctly and predictably every time — no silent failures, no corrupted state, no confusing errors.
-**Current focus:** Phase 6 in progress — Dry-Run Preview. Plan 1 complete, Plan 2 remaining.
+**Current focus:** All 6 phases complete. Milestone v1.4 delivered.
 
 ## Current Position
 
 Phase: 6 of 6 (Dry-Run Preview)
-Plan: 1 of 2 in current phase
-Status: Plan 1 complete — httpTimeout setting + computeMatches method, 119 tests passing
-Last activity: 2026-03-06 — Phase 6 Plan 1 executed: httpTimeout setting + computeMatches method
+Plan: 2 of 2 in current phase
+Status: Phase 6 complete — preview dialog + replaceNPCTokens refactor, 136 tests passing
+Last activity: 2026-03-06 — Phase 6 Plan 2 executed: preview dialog and replacement flow refactor
 
-Progress: [█████████░] 90%
+Progress: [██████████] 100%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 9
-- Average duration: 3.7 min
-- Total execution time: 0.55 hours
+- Total plans completed: 10
+- Average duration: 3.8 min
+- Total execution time: 0.63 hours
 
 **By Phase:**
 
@@ -48,10 +48,10 @@ Progress: [█████████░] 90%
 | 3. Unit Tests | 2 | 5 min | 2.5 min |
 | 4. Error Handling | 2 | 13 min | 6.5 min |
 | 5. Progress Bar | 1 | 2 min | 2 min |
-| 6. Dry-Run Preview | 1 | 3 min | 3 min |
+| 6. Dry-Run Preview | 2 | 8 min | 4 min |
 
 **Recent Trend:**
-- Last 5 plans: 04-01 (8 min), 04-02 (5 min), 05-01 (2 min), 05-02 (2 min), 06-01 (3 min)
+- Last 5 plans: 04-02 (5 min), 05-01 (2 min), 05-02 (2 min), 06-01 (3 min), 06-02 (5 min)
 - Trend: stable
 
 *Updated after each plan completion*
@@ -60,6 +60,7 @@ Progress: [█████████░] 90%
 | Phase 05 P01 | 2min | 2 tasks | 2 files |
 | Phase 05 P02 | 2min | 2 tasks | 3 files |
 | Phase 06 P01 | 3min | 2 tasks | 5 files |
+| Phase 06 P02 | 5min | 2 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -95,6 +96,9 @@ Recent decisions affecting current work:
 - [Phase 05]: SceneNavigation mock added to global test setup for v12 fallback coverage
 - [06-01]: WildcardResolver.DEFAULT_TIMEOUT uses try/catch around game.settings.get for safe fallback when settings not yet registered
 - [06-01]: computeMatches is public static (not private) to enable testing and Plan 02 preview flow access
+- [06-02]: showPreviewDialog uses Dialog.confirm pattern matching existing codebase conventions
+- [06-02]: Render callback disables yes button only when matched.length===0 (all unmatched)
+- [06-02]: Error classification logic inlined from removed #processToken into replacement loop
 
 ### Pending Todos
 
@@ -108,6 +112,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-06T06:50:22Z
-Stopped at: Completed 06-01-PLAN.md
-Resume file: .planning/phases/06-dry-run-preview/06-01-SUMMARY.md
+Last session: 2026-03-06T06:59:17Z
+Stopped at: Completed 06-02-PLAN.md — All phases complete
+Resume file: .planning/phases/06-dry-run-preview/06-02-SUMMARY.md
