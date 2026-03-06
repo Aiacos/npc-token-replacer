@@ -50,6 +50,13 @@ if (typeof globalThis.TokenDocument === "undefined") {
   globalThis.TokenDocument = class MockTokenDocument {};
 }
 
+// SceneNavigation -- used by ProgressReporter v12 fallback path
+if (typeof globalThis.SceneNavigation === "undefined") {
+  globalThis.SceneNavigation = {
+    displayProgressBar: vi.fn()
+  };
+}
+
 // FilePicker -- used by WildcardResolver for wildcard path probing
 if (typeof globalThis.FilePicker === "undefined") {
   globalThis.FilePicker = {

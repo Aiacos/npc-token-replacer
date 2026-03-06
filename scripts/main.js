@@ -6,6 +6,7 @@
 import { Logger, MODULE_ID } from "./lib/logger.js";
 import { WildcardResolver, DEFAULT_HTTP_TIMEOUT_MS } from "./lib/wildcard-resolver.js";
 import { NameMatcher } from "./lib/name-matcher.js";
+import { ProgressReporter } from "./lib/progress-reporter.js";
 
 // Note: WOTC_MODULE_PREFIXES and COMPENDIUM_PRIORITIES are defined as
 // static getters in CompendiumManager class for better encapsulation
@@ -1209,8 +1210,9 @@ class NPCTokenReplacerController {
       const creationFailed = [];
       const processedIds = new Set(); // Track processed token IDs to avoid duplicates
 
-      // Show progress notification
-      ui.notifications.info(game.i18n.format("NPC_REPLACER.Processing", { count: npcTokens.length }));
+      // Start progress bar
+      const progress = new ProgressReporter();
+      progress.start(npcTokens.length, game.i18n.format("NPC_REPLACER.ProgressStart", { count: npcTokens.length }));
 
       // Process each token
       for (const tokenDoc of npcTokens) {
@@ -1231,7 +1233,16 @@ class NPCTokenReplacerController {
             break;
           // 'skipped' - no action needed
         }
+
+        progress.update(replaced + notFound.length + importFailed.length + creationFailed.length,
+          game.i18n.format("NPC_REPLACER.ProgressUpdate", {
+            current: replaced + notFound.length + importFailed.length + creationFailed.length,
+            total: npcTokens.length,
+            name: tokenDoc.name
+          }));
       }
+
+      progress.finish();
 
       // Report results
       NPCTokenReplacerController.#reportResults(replaced, notFound, importFailed, creationFailed);
