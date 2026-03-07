@@ -77,7 +77,8 @@ describe("NPCTokenReplacerController.computeMatches", () => {
     expect(progress.start).toHaveBeenCalledTimes(1);
     expect(progress.start).toHaveBeenCalledWith(3, expect.any(String));
     expect(progress.update).toHaveBeenCalledTimes(3);
-    expect(progress.finish).toHaveBeenCalledTimes(1);
+    // progress.finish() is now called by the caller (replaceNPCTokens try/finally), not computeMatches
+    expect(progress.finish).toHaveBeenCalledTimes(0);
   });
 
   it("creatureName uses tokenDoc.actor.name when available, falls back to tokenDoc.name", () => {
@@ -213,15 +214,17 @@ describe("NPCTokenReplacerController.showPreviewDialog", () => {
     // When all unmatched, a render callback should be provided
     expect(capturedOptions.render).toBeDefined();
 
-    // Simulate the render callback with a mock jQuery html object
+    // Simulate the render callback — code wraps with $(html) for v12/v13 compat
     const mockButton = { prop: vi.fn() };
-    const mockHtml = {
-      find: vi.fn(() => mockButton)
-    };
-    capturedOptions.render(mockHtml);
+    const mockJquery = { find: vi.fn(() => mockButton) };
+    globalThis.jQuery = vi.fn(() => mockJquery);
+    globalThis.$ = globalThis.jQuery;
+    capturedOptions.render(document.createElement("div"));
 
-    expect(mockHtml.find).toHaveBeenCalledWith(expect.stringContaining("yes"));
+    expect(mockJquery.find).toHaveBeenCalledWith(expect.stringContaining("yes"));
     expect(mockButton.prop).toHaveBeenCalledWith("disabled", true);
+    delete globalThis.jQuery;
+    delete globalThis.$;
   });
 
   it("does NOT provide render callback when some tokens are matched", async () => {

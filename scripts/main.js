@@ -8,6 +8,17 @@ import { WildcardResolver } from "./lib/wildcard-resolver.js";
 import { NameMatcher } from "./lib/name-matcher.js";
 import { ProgressReporter } from "./lib/progress-reporter.js";
 
+/**
+ * Structured error for token replacement failures with a phase indicator
+ * Replaces fragile string-matching on error.message for failure classification
+ */
+class TokenReplacerError extends Error {
+  constructor(message, phase) {
+    super(message);
+    this.phase = phase; // "import_failed", "creation_failed", "delete_failed"
+  }
+}
+
 // Note: WOTC_MODULE_PREFIXES and COMPENDIUM_PRIORITIES are defined as
 // static getters in CompendiumManager class for better encapsulation
 
@@ -905,10 +916,20 @@ class TokenReplacer {
     Logger.log(`Replacing token "${originalName}" with "${compendiumEntry.name}"`);
 
     // Get the full actor document from the compendium
-    const compendiumActor = await pack.getDocument(compendiumEntry._id);
+    let compendiumActor;
+    try {
+      compendiumActor = await pack.getDocument(compendiumEntry._id);
+    } catch (error) {
+      throw new TokenReplacerError(`Failed to load "${compendiumEntry.name}" from compendium: ${error.message}`, "import_failed");
+    }
 
     // Get or import the world actor
-    const worldActor = await TokenReplacer.#getOrImportWorldActor(compendiumActor, compendiumEntry, pack);
+    let worldActor;
+    try {
+      worldActor = await TokenReplacer.#getOrImportWorldActor(compendiumActor, compendiumEntry, pack);
+    } catch (error) {
+      throw new TokenReplacerError(`Failed to import "${compendiumEntry.name}": ${error.message}`, "import_failed");
+    }
 
     // IMPORTANT: Always use the COMPENDIUM actor's prototypeToken to get the correct Monster Manual 2024 token image
     // The world actor might have been imported from a different source (old SRD) with different token art
@@ -924,15 +945,27 @@ class TokenReplacer {
     const newTokenData = TokenReplacer.#prepareNewTokenData(prototypeToken, originalProps, worldActor.id);
 
     // Create new token first, then delete old one — avoids data loss if creation fails
-    const createdTokens = await canvas.scene.createEmbeddedDocuments("Token", [newTokenData]);
-    const newToken = createdTokens[0];
-
-    if (!newToken) {
-      throw new Error(`Failed to create new token for "${compendiumEntry.name}"`);
+    let newToken;
+    try {
+      const createdTokens = await canvas.scene.createEmbeddedDocuments("Token", [newTokenData]);
+      newToken = createdTokens[0];
+      if (!newToken) {
+        throw new Error("createEmbeddedDocuments returned empty result");
+      }
+    } catch (error) {
+      throw new TokenReplacerError(`Failed to create token for "${compendiumEntry.name}": ${error.message}`, "creation_failed");
     }
 
     // Safe to delete now — new token exists
-    await canvas.scene.deleteEmbeddedDocuments("Token", [tokenDoc.id]);
+    try {
+      await canvas.scene.deleteEmbeddedDocuments("Token", [tokenDoc.id]);
+    } catch (deleteError) {
+      Logger.error(`Created new token but failed to delete old "${originalName}" — duplicate may exist`, deleteError);
+      throw new TokenReplacerError(
+        `delete_failed: new token created but old "${originalName}" could not be removed`,
+        "delete_failed"
+      );
+    }
 
     Logger.log(`Successfully replaced "${originalName}" with "${compendiumEntry.name}"`);
 
@@ -1018,7 +1051,7 @@ class NPCTokenReplacerController {
     const unmatched = matchResults.filter(r => r.match === null);
     const sorted = [...matched, ...unmatched];
 
-    const noMatchText = game.i18n.localize("NPC_REPLACER.PreviewNoMatch");
+    const noMatchText = escapeHtml(game.i18n.localize("NPC_REPLACER.PreviewNoMatch"));
 
     let rowsHtml = "";
     for (const result of sorted) {
@@ -1037,10 +1070,10 @@ class NPCTokenReplacerController {
       }
     }
 
-    const summary = game.i18n.format("NPC_REPLACER.PreviewSummary", {
+    const summary = escapeHtml(game.i18n.format("NPC_REPLACER.PreviewSummary", {
       matched: matched.length,
       total: matchResults.length
-    });
+    }));
 
     const content = `
       <p>${summary}</p>
@@ -1048,9 +1081,9 @@ class NPCTokenReplacerController {
         <table style="width: 100%; border-collapse: collapse;">
           <thead>
             <tr>
-              <th>${game.i18n.localize("NPC_REPLACER.PreviewColToken")}</th>
-              <th>${game.i18n.localize("NPC_REPLACER.PreviewColMatch")}</th>
-              <th>${game.i18n.localize("NPC_REPLACER.PreviewColSource")}</th>
+              <th>${escapeHtml(game.i18n.localize("NPC_REPLACER.PreviewColToken"))}</th>
+              <th>${escapeHtml(game.i18n.localize("NPC_REPLACER.PreviewColMatch"))}</th>
+              <th>${escapeHtml(game.i18n.localize("NPC_REPLACER.PreviewColSource"))}</th>
             </tr>
           </thead>
           <tbody>
@@ -1072,7 +1105,9 @@ class NPCTokenReplacerController {
     // When all tokens are unmatched, disable the Replace/yes button
     if (matched.length === 0) {
       dialogOpts.render = (html) => {
-        html.find('.yes, [data-button="yes"]').prop("disabled", true);
+        // v12: .yes or [data-button="yes"], v13 ApplicationV2: [data-action="yes"]
+        const el = html instanceof jQuery ? html : $(html);
+        el.find('.yes, [data-button="yes"], [data-action="yes"]').prop("disabled", true);
       };
     }
 
@@ -1184,7 +1219,12 @@ class NPCTokenReplacerController {
 
       // Pre-compute matches (scan phase with progress)
       const scanProgress = new ProgressReporter();
-      const matchResults = NPCTokenReplacerController.computeMatches(npcTokens, index, scanProgress);
+      let matchResults;
+      try {
+        matchResults = NPCTokenReplacerController.computeMatches(npcTokens, index, scanProgress);
+      } finally {
+        scanProgress.finish();
+      }
 
       // Show preview dialog with match results
       const confirmed = await NPCTokenReplacerController.showPreviewDialog(matchResults);
@@ -1214,55 +1254,49 @@ class NPCTokenReplacerController {
       const progress = new ProgressReporter();
       progress.start(toReplace.length, game.i18n.format("NPC_REPLACER.ProgressStart", { count: toReplace.length }));
 
-      // Replace each matched token using pre-computed match data
-      for (const result of toReplace) {
-        const { tokenDoc, creatureName } = result;
+      try {
+        // Replace each matched token using pre-computed match data
+        for (const result of toReplace) {
+          const { tokenDoc, creatureName } = result;
 
-        // Skip if already processed (handles duplicate entries)
-        if (processedIds.has(tokenDoc.id)) {
-          Logger.log(`Skipping already processed token: ${tokenDoc.name}`);
-          continue;
-        }
-
-        // Check if token still exists in scene (may have been deleted during preview)
-        if (!canvas.scene.tokens.has(tokenDoc.id)) {
-          Logger.log(`Token "${tokenDoc.name}" no longer exists, skipping`);
-          continue;
-        }
-
-        processedIds.add(tokenDoc.id);
-
-        try {
-          await TokenReplacer.replaceToken(tokenDoc, result.match.entry, result.match.pack);
-          replaced++;
-        } catch (error) {
-          // Classify failure based on error message content.
-          // replaceToken throws from import stage (getDocument, #getOrImportWorldActor)
-          // or creation stage (createEmbeddedDocuments, deleteEmbeddedDocuments).
-          // Default to "creation_failed" since import is attempted first.
-          const msg = (error.message || "").toLowerCase();
-          const isImportError = msg.includes("import") ||
-                                msg.includes("failed to load") ||
-                                msg.includes("getdocument");
-          const status = isImportError ? "import_failed" : "creation_failed";
-          Logger.error(`Error replacing token ${tokenDoc.name} (${status})`, error);
-          if (status === "import_failed") {
-            importFailed.push(creatureName);
-          } else {
-            creationFailed.push(creatureName);
+          // Skip if already processed (handles duplicate entries)
+          if (processedIds.has(tokenDoc.id)) {
+            Logger.log(`Skipping already processed token: ${tokenDoc.name}`);
+            continue;
           }
+
+          // Check if token still exists in scene (may have been deleted during preview)
+          if (!canvas.scene.tokens.has(tokenDoc.id)) {
+            Logger.log(`Token "${tokenDoc.name}" no longer exists, skipping`);
+            continue;
+          }
+
+          processedIds.add(tokenDoc.id);
+
+          try {
+            await TokenReplacer.replaceToken(tokenDoc, result.match.entry, result.match.pack);
+            replaced++;
+          } catch (error) {
+            const status = error instanceof TokenReplacerError ? error.phase : "creation_failed";
+            Logger.error(`Error replacing token ${tokenDoc.name} (${status})`, error);
+            if (status === "import_failed") {
+              importFailed.push(creatureName);
+            } else {
+              creationFailed.push(creatureName);
+            }
+          }
+
+          const processed = replaced + importFailed.length + creationFailed.length;
+          progress.update(processed,
+            game.i18n.format("NPC_REPLACER.ProgressUpdate", {
+              current: processed,
+              total: toReplace.length,
+              name: tokenDoc.name
+            }));
         }
-
-        const processed = replaced + importFailed.length + creationFailed.length;
-        progress.update(processed,
-          game.i18n.format("NPC_REPLACER.ProgressUpdate", {
-            current: processed,
-            total: toReplace.length,
-            name: tokenDoc.name
-          }));
+      } finally {
+        progress.finish();
       }
-
-      progress.finish();
 
       // Report results
       NPCTokenReplacerController.#reportResults(replaced, notFoundNames, importFailed, creationFailed);
@@ -1319,7 +1353,6 @@ class NPCTokenReplacerController {
       }));
     }
 
-    progress.finish();
     return results;
   }
 
@@ -1350,6 +1383,7 @@ class NPCTokenReplacerController {
         Logger.log("Monster index pre-cached successfully");
       } catch (error) {
         Logger.error("Failed to pre-cache monster index", error);
+        ui.notifications.warn(game.i18n.localize("NPC_REPLACER.ErrorIndexLoad"));
       }
     }
   }
@@ -1659,6 +1693,7 @@ Hooks.once("ready", async () => {
     await NPCTokenReplacerController.initialize();
   } catch (error) {
     Logger.error("Failed to initialize NPC Token Replacer", error);
+    ui.notifications.error(game.i18n.localize("NPC_REPLACER.ErrorInitFailed"));
   }
 
   /**
@@ -1684,4 +1719,4 @@ Hooks.once("ready", async () => {
 Hooks.on("getSceneControlButtons", registerControlButton);
 
 // Named exports for testing — classes remain in main.js due to Foundry global dependencies
-export { FolderManager, CompendiumManager, TokenReplacer, NPCTokenReplacerController };
+export { FolderManager, CompendiumManager, TokenReplacer, NPCTokenReplacerController, TokenReplacerError };

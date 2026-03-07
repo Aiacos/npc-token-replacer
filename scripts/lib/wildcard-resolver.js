@@ -33,8 +33,12 @@ class WildcardResolver {
    */
   static get DEFAULT_TIMEOUT() {
     try {
-      return game.settings.get(MODULE_ID, "httpTimeout") * 1000;
-    } catch {
+      const value = game.settings.get(MODULE_ID, "httpTimeout") * 1000;
+      if (Number.isFinite(value) && value > 0) return value;
+      Logger.warn(`Invalid httpTimeout setting value, using default ${DEFAULT_HTTP_TIMEOUT_MS}ms`);
+      return DEFAULT_HTTP_TIMEOUT_MS;
+    } catch (error) {
+      Logger.debug(`httpTimeout setting not available: ${error.message}`);
       return DEFAULT_HTTP_TIMEOUT_MS;
     }
   }
@@ -73,6 +77,8 @@ class WildcardResolver {
    * @example
    * const response = await WildcardResolver.fetchWithTimeout('/path/to/file.webp', { method: 'HEAD' }, 5000);
    */
+  // TODO [LOW] Security: no URL validation — accepts any protocol/path including http:// and file://.
+  // Consider validating that URLs are relative paths to Foundry data directory.
   static async fetchWithTimeout(url, options = {}, timeout = WildcardResolver.DEFAULT_TIMEOUT) {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), timeout);
@@ -263,6 +269,8 @@ class WildcardResolver {
       };
     }
 
+    // TODO [MEDIUM] Silent Failure: mystery-man fallback has no ui.notifications — user sees
+    // wrong token art with no actionable feedback about why the expected art is missing.
     // Last resort: use mystery man token
     Logger.log("Using default mystery-man token as last resort");
     return {

@@ -3,7 +3,8 @@ import {
   NPCTokenReplacerController,
   CompendiumManager,
   FolderManager,
-  TokenReplacer
+  TokenReplacer,
+  TokenReplacerError
 } from "../scripts/main.js";
 import { WildcardResolver } from "../scripts/lib/wildcard-resolver.js";
 import { NameMatcher } from "../scripts/lib/name-matcher.js";
@@ -369,7 +370,7 @@ describe("ERR-02 — Failure classification via replaceNPCTokens", () => {
 
     // Mock TokenReplacer.replaceToken to throw an import error
     const replaceSpy = vi.spyOn(TokenReplacer, "replaceToken")
-      .mockRejectedValue(new Error("Failed to import actor from compendium"));
+      .mockRejectedValue(new TokenReplacerError("Failed to import actor from compendium", "import_failed"));
 
     // Run the full flow
     await NPCTokenReplacerController.replaceNPCTokens();
@@ -418,7 +419,7 @@ describe("ERR-02 — Failure classification via replaceNPCTokens", () => {
 
     // Mock TokenReplacer.replaceToken to throw a creation error (no "import" keyword)
     const replaceSpy = vi.spyOn(TokenReplacer, "replaceToken")
-      .mockRejectedValue(new Error("Failed to create new token for Dragon"));
+      .mockRejectedValue(new TokenReplacerError("Failed to create new token for Dragon", "creation_failed"));
 
     await NPCTokenReplacerController.replaceNPCTokens();
 
@@ -461,8 +462,8 @@ describe("ERR-02 — Failure classification via replaceNPCTokens", () => {
 
     // First token: import error; Second token: creation error
     const replaceSpy = vi.spyOn(TokenReplacer, "replaceToken")
-      .mockRejectedValueOnce(new Error("Failed to import actor"))
-      .mockRejectedValueOnce(new Error("Failed to create new token"));
+      .mockRejectedValueOnce(new TokenReplacerError("Failed to import actor", "import_failed"))
+      .mockRejectedValueOnce(new TokenReplacerError("Failed to create new token", "creation_failed"));
 
     await NPCTokenReplacerController.replaceNPCTokens();
 

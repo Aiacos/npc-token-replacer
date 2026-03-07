@@ -16,6 +16,8 @@
     "ErrorSettingsRetrieve": "Failed to read compendium settings. Using default compendiums.",
     "ErrorSettingsParse": "Compendium settings are corrupted. Using default compendiums.",
     "ErrorCompendiumLoad": "Failed to load compendium: {name}",
+    "ErrorIndexLoad": "Failed to load monster index. Token replacement may not work correctly.",
+    "ErrorInitFailed": "NPC Token Replacer failed to initialize. Check the browser console for details.",
     "ErrorFolderCreate": "Failed to create import folder. Actors will be imported to root.",
     "NoScene": "No active scene found",
     "NoModule": "No official D&D compendiums found. Install official D&D content (Monster Manual, Adventures, etc.)",
