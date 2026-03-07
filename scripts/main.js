@@ -673,6 +673,7 @@ class TokenReplacer {
    * @private
    */
   static #compendiumDocCache = new Map();
+  static #COMPENDIUM_DOC_CACHE_MAX = 100;
 
   /**
    * Build the actor lookup Map for the current session
@@ -890,7 +891,12 @@ class TokenReplacer {
 
     // Use cached variation mode (read once per session)
     if (!TokenReplacer.#variationMode) {
-      TokenReplacer.#variationMode = game.settings.get(MODULE_ID, "tokenVariationMode");
+      try {
+        TokenReplacer.#variationMode = game.settings.get(MODULE_ID, "tokenVariationMode");
+      } catch (error) {
+        Logger.warn(`Failed to read tokenVariationMode setting, using "sequential": ${error.message}`);
+        TokenReplacer.#variationMode = "sequential";
+      }
       Logger.log(`Token variation mode: ${TokenReplacer.#variationMode}`);
     }
     const variationMode = TokenReplacer.#variationMode;
@@ -909,7 +915,12 @@ class TokenReplacer {
       TokenReplacer.#sequentialCounter = result.nextIndex;
     }
 
-    Logger.log(`Resolved wildcard for ${creatureName}: ${result.resolvedPath}`);
+    if (result.resolvedPath === "icons/svg/mystery-man.svg") {
+      Logger.warn(`No token art variants found for "${creatureName}" — using placeholder`);
+      ui.notifications.warn(game.i18n.format("NPC_REPLACER.WildcardFallback", { name: creatureName }));
+    } else {
+      Logger.log(`Resolved wildcard for ${creatureName}: ${result.resolvedPath}`);
+    }
     prototypeToken.texture.src = result.resolvedPath;
   }
 
@@ -965,6 +976,11 @@ class TokenReplacer {
       compendiumActor = TokenReplacer.#compendiumDocCache.get(docCacheKey);
       if (!compendiumActor) {
         compendiumActor = await pack.getDocument(compendiumEntry._id);
+        if (TokenReplacer.#compendiumDocCache.size >= TokenReplacer.#COMPENDIUM_DOC_CACHE_MAX) {
+          // Evict oldest entry (Map preserves insertion order)
+          const oldest = TokenReplacer.#compendiumDocCache.keys().next().value;
+          TokenReplacer.#compendiumDocCache.delete(oldest);
+        }
         TokenReplacer.#compendiumDocCache.set(docCacheKey, compendiumActor);
       }
     } catch (error) {
@@ -1165,11 +1181,17 @@ class NPCTokenReplacerController {
       };
     }
 
+    // TODO [HIGH] Reliability: Dialog timeout does not close the dialog UI.
+    // When timeout fires, the Promise.race resolves false but the Dialog window stays open.
+    // Fix: capture the Dialog instance from `new Dialog(...)` and call `dialog.close()` on timeout.
+    // Also wrap Promise.race in try/finally to always clearTimeout (prevents dangling timer).
     let dialogTimeoutMinutes = 5;
     try {
       const value = game.settings.get(MODULE_ID, "dialogTimeout");
       if (Number.isFinite(value) && value > 0) dialogTimeoutMinutes = value;
-    } catch { /* setting not registered yet — use default */ }
+    } catch (error) {
+      Logger.debug(`dialogTimeout setting not available, using default ${dialogTimeoutMinutes}min: ${error.message}`);
+    }
     const DIALOG_TIMEOUT_MS = dialogTimeoutMinutes * 60 * 1000;
     const dialogPromise = new Promise(resolve => {
       dialogOpts.yes = () => resolve(true);
@@ -1255,6 +1277,7 @@ class NPCTokenReplacerController {
     // Prevent double execution — acquire lock immediately to avoid TOCTOU race
     if (NPCTokenReplacerController.#isProcessing) {
       Logger.log("Already processing tokens, ignoring duplicate call");
+      ui.notifications.warn(game.i18n.localize("NPC_REPLACER.AlreadyProcessing"));
       return;
     }
     NPCTokenReplacerController.#isProcessing = true;
@@ -1571,8 +1594,10 @@ function registerSettings() {
  * @class
  * @extends FormApplication
  */
-// TODO [LOW] Compatibility: CompendiumSelectorForm uses v12 FormApplication only.
-// Add an ApplicationV2 subclass branch for Foundry v13+ to avoid deprecation warnings.
+// TODO [HIGH] Compatibility: CompendiumSelectorForm uses v12 FormApplication only.
+// Foundry v14 will likely remove FormApplication. Add an ApplicationV2 branch with
+// feature detection (same pattern as registerControlButton's v12/v13 handling).
+// Without this, users cannot configure compendiums when v14 ships.
 class CompendiumSelectorForm extends FormApplication {
   /**
    * Get the default options for the form application

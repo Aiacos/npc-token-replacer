@@ -279,7 +279,7 @@ class WildcardResolver {
       };
     }
 
-    // Last resort: use mystery man token
+    // Last resort: use mystery man token (caller surfaces this to user via notification)
     Logger.warn(`No wildcard variants found for "${wildcardPath}" — using placeholder token art`);
     return {
       resolvedPath: "icons/svg/mystery-man.svg",

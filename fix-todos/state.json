@@ -1,16 +1,17 @@
 {
   "session_start": "2026-03-07T12:00:00Z",
-  "total_findings": 52,
-  "resolved": 49,
+  "total_findings": 58,
+  "resolved": 55,
   "deferred": 3,
-  "current_index": 52,
-  "last_completed": "Stage 3 reverse word index + dialog timeout setting",
-  "iteration": 2,
+  "current_index": 58,
+  "last_completed": "Iteration 9: fix review + prediction TODOs",
+  "iteration": 9,
   "status": "CONVERGED",
-  "source": "Code review agents + /create-todos + /fix-todos",
+  "source": "Code review agents + /create-todos + /fix-todos + /review + /predict-issues",
   "deferred_items": [
-    "TODO [MEDIUM] Performance: sequential token loop — requires batch mutation refactor",
-    "TODO [LOW] Compatibility: CompendiumSelectorForm v12 FormApplication only — needs v13 runtime testing",
+    "TODO [HIGH] Reliability: Dialog timeout does not close the dialog UI — requires Foundry runtime testing of Dialog instance API",
+    "TODO [HIGH] Compatibility: CompendiumSelectorForm v12 FormApplication — needs ApplicationV2 migration with runtime testing",
+    "TODO [MEDIUM] Performance: sequential token loop 2N round-trips — requires batch mutation refactor",
     "TODO [LOW] Maintainability: VARIANT_SUFFIXES hardcoded — needs FilePicker.browse() investigation"
   ]
 }

@@ -34,14 +34,16 @@ class ProgressReporter {
    */
   start(total, label) {
     this.#total = total;
-    if (total <= 0) return; // Nothing to track
+    if (total <= 0) return;
 
-    if (ProgressReporter.#isV13ProgressAvailable()) {
-      this.#notification = ui.notifications.info(label, { progress: true });
-    } else {
-      if (typeof SceneNavigation?.displayProgressBar === "function") {
+    try {
+      if (ProgressReporter.#isV13ProgressAvailable()) {
+        this.#notification = ui.notifications.info(label, { progress: true });
+      } else if (typeof SceneNavigation?.displayProgressBar === "function") {
         SceneNavigation.displayProgressBar({ label, pct: 0 });
       }
+    } catch (error) {
+      Logger.debug(`Progress bar start failed: ${error.message}`);
     }
   }
 
@@ -51,15 +53,17 @@ class ProgressReporter {
    * @param {string} label - Label to display on the progress bar
    */
   update(current, label) {
-    if (this.#total === 0) return; // No active progress session
+    if (this.#total === 0) return;
     const pct = Math.min(current / this.#total, 1);
 
-    if (this.#notification) {
-      this.#notification.update({ pct, message: label });
-    } else {
-      if (typeof SceneNavigation?.displayProgressBar === "function") {
+    try {
+      if (this.#notification) {
+        this.#notification.update({ pct, message: label });
+      } else if (typeof SceneNavigation?.displayProgressBar === "function") {
         SceneNavigation.displayProgressBar({ label, pct: Math.round(pct * 100) });
       }
+    } catch (error) {
+      Logger.debug(`Progress bar update failed: ${error.message}`);
     }
   }
 
@@ -67,13 +71,16 @@ class ProgressReporter {
    * Finish progress tracking, set to 100%
    */
   finish() {
-    if (this.#notification) {
-      this.#notification.update({ pct: 1.0 });
-      this.#notification = null;
-    } else {
-      if (typeof SceneNavigation?.displayProgressBar === "function") {
+    try {
+      if (this.#notification) {
+        this.#notification.update({ pct: 1.0 });
+        this.#notification = null;
+      } else if (typeof SceneNavigation?.displayProgressBar === "function") {
         SceneNavigation.displayProgressBar({ label: "", pct: 100 });
       }
+    } catch (error) {
+      Logger.debug(`Progress bar finish failed: ${error.message}`);
+      this.#notification = null;
     }
     this.#total = 0;
   }

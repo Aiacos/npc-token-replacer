@@ -102,12 +102,24 @@
 | 51 | LOW | Dialog timeout hardcoded at 5 min | RESOLVED — exposed as `dialogTimeout` setting |
 | 52 | LOW | Stage 3 O(n) full index scan | RESOLVED — reverse word index in CompendiumManager |
 
+## Iteration 9 — /review + /predict-issues + /fix-todos (Session 3)
+
+| # | Priority | Issue | Status |
+|---|----------|-------|--------|
+| 53 | HIGH | variationMode settings read has no try/catch | RESOLVED — added try/catch with "sequential" fallback |
+| 54 | MEDIUM | Empty catch block swallows dialogTimeout errors | RESOLVED — added Logger.debug with error message |
+| 55 | MEDIUM | AlreadyProcessing not surfaced to user | RESOLVED — added ui.notifications.warn |
+| 56 | MEDIUM | #compendiumDocCache grows unbounded | RESOLVED — bounded to 100 entries with FIFO eviction |
+| 57 | MEDIUM | ProgressReporter methods can abort replacement | RESOLVED — wrapped start/update/finish in try/catch |
+| 58 | MEDIUM | Mystery-man fallback never notified to user | RESOLVED — added WildcardFallback notification in caller |
+
 ## Still Deferred
 
 | # | Priority | Issue | Reason |
 |---|----------|-------|--------|
+| — | HIGH | Dialog timeout doesn't close dialog UI | Requires Foundry Dialog instance API; `Dialog.confirm()` returns Promise not instance |
+| — | HIGH | CompendiumSelectorForm v12 FormApplication only | Needs ApplicationV2 branch with Foundry v13+ runtime testing |
 | 8 | MEDIUM | Sequential token loop (2N round-trips) | Requires batch mutation refactor — changes entire replacement flow |
-| — | LOW | CompendiumSelectorForm v12 only | FormApplication still works in v13; ApplicationV2 needs runtime testing |
 | — | LOW | VARIANT_SUFFIXES hardcoded probe list | FilePicker.browse() may not work for module paths; needs investigation |
 
 ## Post-fix review findings
