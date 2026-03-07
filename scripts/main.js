@@ -1111,12 +1111,17 @@ class NPCTokenReplacerController {
       };
     }
 
-    return new Promise(resolve => {
+    const DIALOG_TIMEOUT_MS = 300000; // 5 minutes
+    const dialogPromise = new Promise(resolve => {
       dialogOpts.yes = () => resolve(true);
       dialogOpts.no = () => resolve(false);
       dialogOpts.close = () => resolve(false);
       Dialog.confirm(dialogOpts);
     });
+    const timeoutPromise = new Promise(resolve =>
+      setTimeout(() => resolve(false), DIALOG_TIMEOUT_MS)
+    );
+    return Promise.race([dialogPromise, timeoutPromise]);
   }
 
   // Removed: #processToken — replacement logic inlined in replaceNPCTokens using pre-computed matches
@@ -1133,7 +1138,8 @@ class NPCTokenReplacerController {
    * @private
    */
   static #reportResults(replaced, notFound, importFailed, creationFailed) {
-    if (replaced > 0) {
+    const totalErrors = importFailed.length + creationFailed.length;
+    if (replaced > 0 && totalErrors === 0 && notFound.length === 0) {
       ui.notifications.info(game.i18n.format("NPC_REPLACER.Complete", { count: replaced }));
     }
 
@@ -1142,7 +1148,6 @@ class NPCTokenReplacerController {
       Logger.log("Creatures not found in compendiums:", notFound);
     }
 
-    const totalErrors = importFailed.length + creationFailed.length;
     if (totalErrors > 0) {
       ui.notifications.error(game.i18n.format("NPC_REPLACER.SummaryPartialFailure", {
         replaced,
@@ -1200,7 +1205,7 @@ class NPCTokenReplacerController {
       const index = await CompendiumManager.loadMonsterIndex();
 
       if (index.length === 0) {
-        ui.notifications.error(game.i18n.localize("NPC_REPLACER.NoCompendium"));
+        ui.notifications.error(game.i18n.localize("NPC_REPLACER.IndexEmpty"));
         return;
       }
 

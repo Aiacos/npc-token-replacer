@@ -23,6 +23,7 @@
     "NoScene": "No active scene found",
     "NoModule": "No official D&D compendiums found. Install official D&D content (Monster Manual, Adventures, etc.)",
     "NoCompendium": "No compendiums available for token replacement",
+    "IndexEmpty": "Monster index is empty — compendiums may have failed to load. Check the console for details.",
     "GMOnly": "Only the GM can replace tokens",
     "PreviewScanning": "Scanning tokens...",
     "PreviewTitle": "Token Replacement Preview",
