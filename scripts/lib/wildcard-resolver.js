@@ -77,9 +77,11 @@ class WildcardResolver {
    * @example
    * const response = await WildcardResolver.fetchWithTimeout('/path/to/file.webp', { method: 'HEAD' }, 5000);
    */
-  // TODO [LOW] Security: no URL validation — accepts any protocol/path including http:// and file://.
-  // Consider validating that URLs are relative paths to Foundry data directory.
   static async fetchWithTimeout(url, options = {}, timeout = WildcardResolver.DEFAULT_TIMEOUT) {
+    // Reject absolute URLs with external protocols — only allow relative paths
+    if (typeof url === "string" && /^(?:https?|file|data|ftp):/i.test(url)) {
+      throw new Error(`Refusing to fetch external URL: ${url}`);
+    }
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), timeout);
 
@@ -269,10 +271,9 @@ class WildcardResolver {
       };
     }
 
-    // TODO [MEDIUM] Silent Failure: mystery-man fallback has no ui.notifications — user sees
-    // wrong token art with no actionable feedback about why the expected art is missing.
     // Last resort: use mystery man token
-    Logger.log("Using default mystery-man token as last resort");
+    Logger.warn(`No wildcard variants found for "${wildcardPath}" — using placeholder token art`);
+    ui.notifications.warn(game.i18n.localize("NPC_REPLACER.WarnWildcardFallback"));
     return {
       resolvedPath: "icons/svg/mystery-man.svg",
       nextIndex: sequentialIndex
