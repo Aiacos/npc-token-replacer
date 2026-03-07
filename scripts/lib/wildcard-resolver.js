@@ -152,9 +152,10 @@ class WildcardResolver {
         }
       }
 
+      const timeout = WildcardResolver.DEFAULT_TIMEOUT;
       const results = await Promise.allSettled(
         candidates.map(path =>
-          WildcardResolver.fetchWithTimeout(path, { method: "HEAD" }, WildcardResolver.DEFAULT_TIMEOUT)
+          WildcardResolver.fetchWithTimeout(path, { method: "HEAD" }, timeout)
             .then(response => response.ok ? path : null)
         )
       );
@@ -169,13 +170,13 @@ class WildcardResolver {
       }
 
       if (networkErrors > 0 && availableVariants.length === 0) {
-        Logger.warn(`All ${networkErrors} wildcard probe requests failed for ${wildcardPath} — possible network or server configuration issue`);
+        Logger.warn(`All ${networkErrors} wildcard probe requests failed for ${wildcardPath} — skipping cache to allow retry`);
+        return availableVariants;
       }
 
       Logger.debug(`Found ${availableVariants.length} variants for ${wildcardPath}`);
     } catch (e) {
       Logger.error("Error resolving wildcard variants", e);
-      // Do NOT cache failed results — allow retry on subsequent calls
       return availableVariants;
     }
 
