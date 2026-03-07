@@ -476,7 +476,7 @@ class CompendiumManager {
 
     if (enabledPacks.length === 0) {
       Logger.log("No enabled compendiums found");
-      CompendiumManager.#indexCache = [];
+      CompendiumManager.#indexCache = Object.freeze([]);
       CompendiumManager.#indexMap = new Map();
       return CompendiumManager.#indexCache;
     }
@@ -1162,19 +1162,25 @@ class NPCTokenReplacerController {
    * @param {string[]} notFound - Names of tokens not found in compendiums
    * @param {string[]} importFailed - Names of tokens that failed during import
    * @param {string[]} creationFailed - Names of tokens that failed during creation
+   * @param {string[]} deleteFailed - Names of tokens where old token could not be removed (duplicate may exist)
    * @returns {void}
    * @static
    * @private
    */
-  static #reportResults(replaced, notFound, importFailed, creationFailed) {
+  static #reportResults(replaced, notFound, importFailed, creationFailed, deleteFailed = []) {
     const totalErrors = importFailed.length + creationFailed.length;
-    if (replaced > 0 && totalErrors === 0 && notFound.length === 0) {
+    if (replaced > 0 && totalErrors === 0 && notFound.length === 0 && deleteFailed.length === 0) {
       ui.notifications.info(game.i18n.format("NPC_REPLACER.Complete", { count: replaced }));
     }
 
     if (notFound.length > 0) {
       ui.notifications.warn(game.i18n.format("NPC_REPLACER.NotFoundCount", { count: notFound.length }));
       Logger.log("Creatures not found in compendiums:", notFound);
+    }
+
+    if (deleteFailed.length > 0) {
+      ui.notifications.warn(game.i18n.format("NPC_REPLACER.DeleteFailedCount", { count: deleteFailed.length }));
+      Logger.log("Delete failures (duplicates may exist):", deleteFailed);
     }
 
     if (totalErrors > 0) {
@@ -1188,7 +1194,7 @@ class NPCTokenReplacerController {
       if (creationFailed.length > 0) Logger.log("Creation failures:", creationFailed);
     }
 
-    Logger.log(`Replacement complete: ${replaced} replaced, ${notFound.length} not found, ${importFailed.length} import failures, ${creationFailed.length} creation failures`);
+    Logger.log(`Replacement complete: ${replaced} replaced, ${notFound.length} not found, ${importFailed.length} import failures, ${creationFailed.length} creation failures, ${deleteFailed.length} delete failures`);
   }
 
   /**
@@ -1282,6 +1288,7 @@ class NPCTokenReplacerController {
       let replaced = 0;
       const importFailed = [];
       const creationFailed = [];
+      const deleteFailed = [];
       const processedIds = new Set();
 
       // Start progress bar for replacement phase
@@ -1315,12 +1322,15 @@ class NPCTokenReplacerController {
             Logger.error(`Error replacing token ${tokenDoc.name} (${status})`, error);
             if (status === "import_failed") {
               importFailed.push(creatureName);
+            } else if (status === "delete_failed") {
+              deleteFailed.push(creatureName);
+              replaced++; // New token was created successfully despite delete failure
             } else {
               creationFailed.push(creatureName);
             }
           }
 
-          const processed = replaced + importFailed.length + creationFailed.length;
+          const processed = replaced + importFailed.length + creationFailed.length + deleteFailed.length;
           progress.update(processed,
             game.i18n.format("NPC_REPLACER.ProgressUpdate", {
               current: processed,
@@ -1333,7 +1343,7 @@ class NPCTokenReplacerController {
       }
 
       // Report results
-      NPCTokenReplacerController.#reportResults(replaced, notFoundNames, importFailed, creationFailed);
+      NPCTokenReplacerController.#reportResults(replaced, notFoundNames, importFailed, creationFailed, deleteFailed);
     } finally {
       // Always release the lock and clean up session state
       NPCTokenReplacerController.#isProcessing = false;

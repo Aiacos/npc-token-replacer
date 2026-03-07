@@ -79,7 +79,7 @@ class WildcardResolver {
    */
   static async fetchWithTimeout(url, options = {}, timeout = WildcardResolver.DEFAULT_TIMEOUT) {
     // Reject absolute URLs with external protocols — only allow relative paths
-    if (typeof url === "string" && (url.includes(":") || url.startsWith("//"))) {
+    if (typeof url === "string" && (/^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(url) || url.startsWith("//"))) {
       throw new Error(`Refusing to fetch external URL: ${url}`);
     }
     const controller = new AbortController();

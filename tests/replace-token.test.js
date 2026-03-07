@@ -211,4 +211,17 @@ describe("TokenReplacer.replaceToken", () => {
     expect(canvas.scene.createEmbeddedDocuments).toHaveBeenCalledTimes(1);
   });
 
+  // ─── Race condition: token deleted by another GM ──────────────────────────
+
+  it("skips delete when token no longer exists in scene (multi-GM race condition)", async () => {
+    canvas.scene.tokens.has = vi.fn(() => false);
+
+    await TokenReplacer.replaceToken(mockTokenDoc, compendiumEntry, mockPack);
+
+    // New token should still be created
+    expect(canvas.scene.createEmbeddedDocuments).toHaveBeenCalledTimes(1);
+    // Old token should NOT be deleted (it no longer exists)
+    expect(canvas.scene.deleteEmbeddedDocuments).not.toHaveBeenCalled();
+  });
+
 });
