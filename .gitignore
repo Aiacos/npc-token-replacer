@@ -55,5 +55,11 @@ release/
 # Auto Claude data directory
 .auto-claude/
 
+# BMAD framework
+_bmad/
+
+# Security scan session
+security-scan/
+
 # Test coverage output
 coverage/
