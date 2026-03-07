@@ -234,6 +234,15 @@ class CompendiumManager {
   static #indexMap = null;
 
   /**
+   * Reverse word index for efficient Stage 3 partial matching:
+   * significantWord -> Array<index entry refs>
+   * @type {Map<string, Array>|null}
+   * @static
+   * @private
+   */
+  static #wordIndex = null;
+
+  /**
    * Cache for enabled compendium packs (avoids re-parsing JSON settings)
    * @type {CompendiumCollection[]|null}
    * @static
@@ -478,6 +487,7 @@ class CompendiumManager {
       Logger.log("No enabled compendiums found");
       CompendiumManager.#indexCache = Object.freeze([]);
       CompendiumManager.#indexMap = new Map();
+      CompendiumManager.#wordIndex = new Map();
       return CompendiumManager.#indexCache;
     }
 
@@ -531,14 +541,25 @@ class CompendiumManager {
 
     // Build O(1) lookup Map by normalized name
     const indexMap = new Map();
+    // Build reverse word index for Stage 3 partial matching
+    const wordIndex = new Map();
     for (const item of combinedIndex) {
       const key = item.normalizedName;
       if (!indexMap.has(key)) indexMap.set(key, []);
       indexMap.get(key).push(item);
+
+      // Populate word index with each significant word
+      if (item.significantWords) {
+        for (const word of item.significantWords) {
+          if (!wordIndex.has(word)) wordIndex.set(word, []);
+          wordIndex.get(word).push(item);
+        }
+      }
     }
 
     CompendiumManager.#indexCache = Object.freeze(combinedIndex);
     CompendiumManager.#indexMap = indexMap;
+    CompendiumManager.#wordIndex = wordIndex;
 
     return CompendiumManager.#indexCache;
   }
@@ -555,6 +576,7 @@ class CompendiumManager {
   static clearCache() {
     CompendiumManager.#indexCache = null;
     CompendiumManager.#indexMap = null;
+    CompendiumManager.#wordIndex = null;
     CompendiumManager.#wotcCompendiumsCache = null;
     CompendiumManager.#enabledPacksCache = null;
     CompendiumManager.#lastLoadErrors = [];
@@ -577,6 +599,15 @@ class CompendiumManager {
    */
   static getIndexMap() {
     return CompendiumManager.#indexMap;
+  }
+
+  /**
+   * Get the reverse word index for Stage 3 partial matching
+   * @returns {Map<string, Array>|null} Map of significantWord -> matching entries, or null if not loaded
+   * @static
+   */
+  static getWordIndex() {
+    return CompendiumManager.#wordIndex;
   }
 
   /**
@@ -1134,7 +1165,12 @@ class NPCTokenReplacerController {
       };
     }
 
-    const DIALOG_TIMEOUT_MS = 300000; // 5 minutes
+    let dialogTimeoutMinutes = 5;
+    try {
+      const value = game.settings.get(MODULE_ID, "dialogTimeout");
+      if (Number.isFinite(value) && value > 0) dialogTimeoutMinutes = value;
+    } catch { /* setting not registered yet — use default */ }
+    const DIALOG_TIMEOUT_MS = dialogTimeoutMinutes * 60 * 1000;
     const dialogPromise = new Promise(resolve => {
       dialogOpts.yes = () => resolve(true);
       dialogOpts.no = () => resolve(false);
@@ -1495,6 +1531,17 @@ function registerSettings() {
     default: JSON.stringify(["default"])
   });
 
+  // Dialog timeout setting (minutes before preview dialog auto-closes)
+  game.settings.register(MODULE_ID, "dialogTimeout", {
+    name: game.i18n.localize("NPC_REPLACER.Settings.DialogTimeout.Name"),
+    hint: game.i18n.localize("NPC_REPLACER.Settings.DialogTimeout.Hint"),
+    scope: "world",
+    config: true,
+    type: Number,
+    range: { min: 1, max: 30, step: 1 },
+    default: 5
+  });
+
   // HTTP timeout setting for wildcard HEAD requests
   game.settings.register(MODULE_ID, "httpTimeout", {
     name: game.i18n.localize("NPC_REPLACER.Settings.HttpTimeout.Name"),
@@ -1524,6 +1571,8 @@ function registerSettings() {
  * @class
  * @extends FormApplication
  */
+// TODO [LOW] Compatibility: CompendiumSelectorForm uses v12 FormApplication only.
+// Add an ApplicationV2 subclass branch for Foundry v13+ to avoid deprecation warnings.
 class CompendiumSelectorForm extends FormApplication {
   /**
    * Get the default options for the form application

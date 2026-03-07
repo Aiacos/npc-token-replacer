@@ -5,6 +5,34 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.4.1] - 2025-03-07
+
+### Added
+- **Configurable dialog timeout**: New "Preview Dialog Timeout" setting (1-30 minutes) controls how long the preview dialog stays open before auto-closing
+- **Reverse word index**: O(1) lookup for Stage 3 partial name matching, significantly faster for large monster indexes
+- **Compendium document cache**: Avoids repeated `getDocument()` calls during batch replacements
+- **New unit tests**: Added test suites for FolderManager, registerControlButton, and TokenReplacer.replaceToken
+
+### Changed
+- **Parallel compendium loading**: Monster indexes are now loaded in parallel via `Promise.allSettled` instead of sequentially
+- **Immutable caches**: All cached arrays are now frozen with `Object.freeze` to prevent accidental mutation
+- **Structured errors**: New `TokenReplacerError` class replaces fragile string-matching for failure classification
+- **CSS extraction**: Moved inline styles from preview dialog and templates to dedicated CSS classes
+- **Token properties**: `extractTokenProperties` now uses a `PRESERVED_PROPERTIES` constant instead of hardcoded property list
+- **Actor link preservation**: Token replacement now preserves `actorLink` from prototype token data
+
+### Fixed
+- Dialog timeout and notification timing issues resolved
+- Wildcard resolver no longer permanently caches failed network probes
+- Execution lock bug in `NPCTokenReplacerController` fixed
+- `FolderManager.getFolderPath` now handles null folder input gracefully
+- Fixed missing `await` in `computeMatches` test
+- i18n key corrections for compendium priority labels
+
+### Security
+- Resolved npm audit vulnerabilities in dependencies
+- Added `_bmad/` directory to `.gitignore`
+
 ## [1.4.0] - 2025-01-XX
 
 ### Changed

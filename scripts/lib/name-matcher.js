@@ -187,6 +187,7 @@ class NameMatcher {
     }
 
     // Stage 3: Partial match - require majority of significant words to overlap
+    // Uses reverse word index (word -> entries[]) when available for O(candidates) instead of O(index)
     if (normalizedSearch.length >= NameMatcher.MIN_PARTIAL_LENGTH) {
       const searchWords = normalizedSearch.split(" ");
       const significantSearchWords = searchWords.filter(w => w.length >= NameMatcher.MIN_PARTIAL_LENGTH);
@@ -199,7 +200,30 @@ class NameMatcher {
         // Build search word Set once — avoids per-entry Set allocation
         const searchWordSet = new Set(significantSearchWords);
 
-        matches = index.filter(item => {
+        // Use reverse word index to narrow candidates when available
+        const wordIndex = _CompendiumManager?.getWordIndex() ?? null;
+        let candidates;
+        if (wordIndex) {
+          // Collect unique candidate entries from word index
+          const seen = new Set();
+          candidates = [];
+          for (const word of significantSearchWords) {
+            const entries = wordIndex.get(word);
+            if (!entries) continue;
+            for (const item of entries) {
+              // Use entry._id + pack.collection as unique key
+              const key = `${item.pack.collection}|${item.entry._id}`;
+              if (!seen.has(key)) {
+                seen.add(key);
+                candidates.push(item);
+              }
+            }
+          }
+        } else {
+          candidates = index;
+        }
+
+        matches = candidates.filter(item => {
           // Use pre-computed significantWords from index build time
           const sigWords = item.significantWords;
           if (!sigWords || sigWords.length === 0) return false;

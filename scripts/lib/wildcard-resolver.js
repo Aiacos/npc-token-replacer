@@ -61,6 +61,9 @@ class WildcardResolver {
    * @static
    * @readonly
    */
+  // TODO [LOW] Maintainability: VARIANT_SUFFIXES is a hardcoded probe list.
+  // If WotC adds more variant patterns (e.g. 06-10, f-j), this silently misses them.
+  // Consider a Foundry FilePicker.browse() approach if the API becomes available.
   static #VARIANT_SUFFIXES = Object.freeze(["1", "2", "3", "4", "5", "01", "02", "03", "04", "05", "a", "b", "c", "d", "e"]);
   static get VARIANT_SUFFIXES() {
     return WildcardResolver.#VARIANT_SUFFIXES;

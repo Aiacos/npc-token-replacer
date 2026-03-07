@@ -71,6 +71,10 @@
         "Saved": "Compendium settings saved. The index will be reloaded on next use.",
         "SaveError": "Failed to save compendium settings. Please try again."
       },
+      "DialogTimeout": {
+        "Name": "Preview Dialog Timeout (minutes)",
+        "Hint": "How long to wait before auto-closing the preview dialog. Increase for large scenes or slow review."
+      },
       "HttpTimeout": {
         "Name": "HTTP Timeout (seconds)",
         "Hint": "Timeout for network requests when resolving wildcard token paths. Increase for slow connections."

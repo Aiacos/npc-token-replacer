@@ -118,6 +118,8 @@ Access the module settings via **Game Settings** > **Configure Settings** > **Mo
 | Setting | Options | Description |
 |---------|---------|-------------|
 | Token Variation Mode | None, Sequential, Random | How to select token art when multiple variations are available |
+| Preview Dialog Timeout | 1-30 minutes (default: 5) | How long to wait before auto-closing the preview dialog |
+| HTTP Timeout | 1-30 seconds (default: 5) | Timeout for network requests when resolving wildcard token paths |
 | Configure Compendiums | Button | Opens dialog to select which compendiums to use |
 
 ### Token Variation Mode

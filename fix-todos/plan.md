@@ -1,9 +1,9 @@
 # TODO Fix Plan
 
 ## Summary
-- Total: 13 + 11 + 7 + 4 + 5 + 3 + 5 + 2 = 50 findings
+- Total: 52 findings across all iterations
 - Resolved: 49
-- Deferred: 1 (batch token mutations — requires major refactor)
+- Deferred: 3 (require Foundry runtime testing or major refactor)
 
 ## Original Resolution Status (Iteration 0)
 
@@ -94,6 +94,21 @@
 |---|----------|-------|--------|
 | 49 | HIGH | _updateObject settings save not wrapped in try/catch | RESOLVED |
 | 50 | LOW | Stack trace logged in enabledCompendiums parse error | RESOLVED |
+
+## Iteration 8 — /create-todos + /fix-todos (Session 2)
+
+| # | Priority | Issue | Status |
+|---|----------|-------|--------|
+| 51 | LOW | Dialog timeout hardcoded at 5 min | RESOLVED — exposed as `dialogTimeout` setting |
+| 52 | LOW | Stage 3 O(n) full index scan | RESOLVED — reverse word index in CompendiumManager |
+
+## Still Deferred
+
+| # | Priority | Issue | Reason |
+|---|----------|-------|--------|
+| 8 | MEDIUM | Sequential token loop (2N round-trips) | Requires batch mutation refactor — changes entire replacement flow |
+| — | LOW | CompendiumSelectorForm v12 only | FormApplication still works in v13; ApplicationV2 needs runtime testing |
+| — | LOW | VARIANT_SUFFIXES hardcoded probe list | FilePicker.browse() may not work for module paths; needs investigation |
 
 ## Post-fix review findings
 - Fix #5 partial matching direction was inverted (entry→search vs search→entry) — corrected
