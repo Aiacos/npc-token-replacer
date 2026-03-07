@@ -1550,6 +1550,29 @@ class CompendiumSelectorForm extends FormApplication {
   }
 
   /**
+   * Activate event listeners for the form
+   * Handles mode radio changes to enable/disable the compendium list
+   * @param {jQuery} html - The rendered HTML content
+   * @override
+   */
+  activateListeners(html) {
+    super.activateListeners(html);
+    const list = html.find('#compendium-list');
+    html.find('input[name="mode"]').on('change', function(e) {
+      if (e.target.value === 'custom') {
+        list.removeClass('disabled');
+      } else {
+        list.addClass('disabled');
+      }
+    });
+    // Set initial state based on currently selected radio
+    const selectedMode = html.find('input[name="mode"]:checked').val();
+    if (selectedMode && selectedMode !== 'custom') {
+      list.addClass('disabled');
+    }
+  }
+
+  /**
    * Process form submission and save the compendium selection
    * Converts form data to the appropriate setting format and clears caches
    * @param {Event} event - The form submission event

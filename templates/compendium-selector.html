@@ -99,7 +99,7 @@
     font-weight: bold;
   }
   .priority-badge.priority-1 {
-    background: #666;
+    background: #555;
     color: white;
   }
   .priority-badge.priority-2 {
@@ -118,26 +118,3 @@
     opacity: 0.7;
   }
 </style>
-
-<script>
-  // Handle mode changes to enable/disable compendium list
-  document.querySelectorAll('input[name="mode"]').forEach(radio => {
-    radio.addEventListener('change', function(e) {
-      const compendiumList = document.getElementById('compendium-list');
-      if (e.target.value === 'custom') {
-        compendiumList.classList.remove('disabled');
-      } else {
-        compendiumList.classList.add('disabled');
-      }
-    });
-  });
-
-  // Initialize state on load
-  (function() {
-    const selectedMode = document.querySelector('input[name="mode"]:checked');
-    const compendiumList = document.getElementById('compendium-list');
-    if (selectedMode && selectedMode.value !== 'custom') {
-      compendiumList.classList.add('disabled');
-    }
-  })();
-</script>
