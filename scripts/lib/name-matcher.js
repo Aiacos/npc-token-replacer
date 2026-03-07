@@ -36,7 +36,7 @@ class NameMatcher {
    * @static
    * @readonly
    */
-  static #PREFIX_PATTERN = /^(young|adult|ancient|elder|greater|lesser)\s+/i;
+  static #PREFIX_PATTERN = /^(young|adult|ancient|elder|greater|lesser)\s+/;
   static get PREFIX_PATTERN() {
     return NameMatcher.#PREFIX_PATTERN;
   }
@@ -48,7 +48,7 @@ class NameMatcher {
    * @static
    * @readonly
    */
-  static #SUFFIX_PATTERN = /\s+(warrior|guard|scout|champion|leader|chief|captain|shaman|berserker)$/i;
+  static #SUFFIX_PATTERN = /\s+(warrior|guard|scout|champion|leader|chief|captain|shaman|berserker)$/;
   static get SUFFIX_PATTERN() {
     return NameMatcher.#SUFFIX_PATTERN;
   }
@@ -193,6 +193,9 @@ class NameMatcher {
 
       if (significantSearchWords.length > 0) {
         const threshold = Math.max(1, Math.ceil(significantSearchWords.length * 2 / 3));
+        // For single-word searches, require the entry to also be a single significant word
+        // to avoid "Shadow" matching "Shadow Demon", "Shadow Dragon", etc.
+        const requireExactWordCount = significantSearchWords.length === 1;
         // Build search word Set once — avoids per-entry Set allocation
         const searchWordSet = new Set(significantSearchWords);
 
@@ -207,6 +210,7 @@ class NameMatcher {
           }
           // Bidirectional check: search words must meet threshold AND
           // matched words must cover at least half of entry's significant words
+          if (requireExactWordCount && sigWords.length > 1) return false;
           return matchingCount >= threshold
             && matchingCount / sigWords.length >= 0.5;
         });

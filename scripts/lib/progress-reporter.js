@@ -34,6 +34,7 @@ class ProgressReporter {
    */
   start(total, label) {
     this.#total = total;
+    if (total <= 0) return; // Nothing to track
 
     if (ProgressReporter.#isV13ProgressAvailable()) {
       this.#notification = ui.notifications.info(label, { progress: true });

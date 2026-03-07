@@ -95,6 +95,7 @@ class FolderManager {
    * // Returns "/Monsters/Humanoids/Goblins"
    */
   static getFolderPath(folder) {
+    if (!folder) return "";
     const parts = [folder.name];
     let parent = folder.folder;
     while (parent) {
@@ -489,32 +490,40 @@ class CompendiumManager {
       CompendiumManager.getCompendiumPriority(b) - CompendiumManager.getCompendiumPriority(a)
     );
 
-    for (const pack of sortedPacks) {
-      try {
-        await pack.getIndex({ fields: ["name", "type"] });
-        const priority = CompendiumManager.getCompendiumPriority(pack);
-        const priorityLabel = CompendiumManager.PRIORITY_LABELS[priority] || "UNKNOWN";
-        for (const entry of pack.index.contents) {
-          const normalizedName = NameMatcher.normalizeName(entry.name);
-          const significantWords = normalizedName.split(" ").filter(w => w.length >= NameMatcher.MIN_PARTIAL_LENGTH);
-          combinedIndex.push({
-            entry,
-            pack,
-            normalizedName,
-            significantWords,
-            priority
-          });
-        }
-        Logger.log(`  [${priority}-${priorityLabel}] Loaded ${pack.index.size} entries from ${pack.metadata.label}`);
-      } catch (error) {
+    // Load all pack indexes in parallel
+    const indexResults = await Promise.allSettled(
+      sortedPacks.map(pack => pack.getIndex({ fields: ["name", "type"] }).then(() => pack))
+    );
+
+    for (let i = 0; i < indexResults.length; i++) {
+      const result = indexResults[i];
+      const pack = sortedPacks[i];
+
+      if (result.status === "rejected") {
         CompendiumManager.#lastLoadErrors.push({
           packId: pack.collection,
           packLabel: pack.metadata.label,
-          error: error.message
+          error: result.reason?.message || String(result.reason)
         });
-        Logger.error(`Failed to load index from ${pack.collection}`, error);
+        Logger.error(`Failed to load index from ${pack.collection}`, result.reason);
         ui.notifications.error(game.i18n.format("NPC_REPLACER.ErrorCompendiumLoad", { name: pack.metadata.label }));
+        continue;
       }
+
+      const priority = CompendiumManager.getCompendiumPriority(pack);
+      const priorityLabel = CompendiumManager.PRIORITY_LABELS[priority] || "UNKNOWN";
+      for (const entry of pack.index.contents) {
+        const normalizedName = NameMatcher.normalizeName(entry.name);
+        const significantWords = normalizedName.split(" ").filter(w => w.length >= NameMatcher.MIN_PARTIAL_LENGTH);
+        combinedIndex.push({
+          entry,
+          pack,
+          normalizedName,
+          significantWords,
+          priority
+        });
+      }
+      Logger.log(`  [${priority}-${priorityLabel}] Loaded ${pack.index.size} entries from ${pack.metadata.label}`);
     }
 
     Logger.log(`Total: ${combinedIndex.length} entries from all compendiums`);
@@ -966,7 +975,12 @@ class TokenReplacer {
 
     // Safe to delete now — new token exists
     try {
-      await canvas.scene.deleteEmbeddedDocuments("Token", [tokenDoc.id]);
+      // Verify token still exists (another GM may have deleted it)
+      if (!canvas.scene.tokens.has(tokenDoc.id)) {
+        Logger.warn(`Token "${originalName}" was already removed — skipping delete`);
+      } else {
+        await canvas.scene.deleteEmbeddedDocuments("Token", [tokenDoc.id]);
+      }
     } catch (deleteError) {
       Logger.error(`Created new token but failed to delete old "${originalName}" — duplicate may exist`, deleteError);
       throw new TokenReplacerError(
@@ -1692,6 +1706,10 @@ function registerControlButton(controls) {
 
   // Foundry v13+ uses object structure
   if (controls.tokens && typeof controls.tokens === "object" && !Array.isArray(controls.tokens)) {
+    if (!controls.tokens.tools) {
+      Logger.error("Token controls found but 'tools' property is missing — toolbar button not registered");
+      return;
+    }
     controls.tokens.tools.npcReplacer = toolConfig;
   } else if (Array.isArray(controls)) {
     // Foundry v12 and earlier uses array structure
@@ -1764,4 +1782,4 @@ Hooks.once("ready", async () => {
 Hooks.on("getSceneControlButtons", registerControlButton);
 
 // Named exports for testing — classes remain in main.js due to Foundry global dependencies
-export { FolderManager, CompendiumManager, TokenReplacer, NPCTokenReplacerController, TokenReplacerError };
+export { FolderManager, CompendiumManager, TokenReplacer, NPCTokenReplacerController, TokenReplacerError, registerControlButton };
