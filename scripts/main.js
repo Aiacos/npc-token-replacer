@@ -626,6 +626,14 @@ class TokenReplacer {
   static #actorLookup = null;
 
   /**
+   * Cache for compendium documents to avoid repeated getDocument() calls
+   * @type {Map<string, Object>}
+   * @static
+   * @private
+   */
+  static #compendiumDocCache = new Map();
+
+  /**
    * Build the actor lookup Map for the current session
    * @returns {void}
    * @static
@@ -647,6 +655,7 @@ class TokenReplacer {
   static clearActorLookup() {
     TokenReplacer.#actorLookup = null;
     TokenReplacer.#variationMode = null;
+    TokenReplacer.#compendiumDocCache.clear();
     Logger.debug("Actor lookup Map and variation mode cleared");
   }
 
@@ -918,7 +927,12 @@ class TokenReplacer {
     // Get the full actor document from the compendium
     let compendiumActor;
     try {
-      compendiumActor = await pack.getDocument(compendiumEntry._id);
+      const docCacheKey = `${pack.collection}|${compendiumEntry._id}`;
+      compendiumActor = TokenReplacer.#compendiumDocCache.get(docCacheKey);
+      if (!compendiumActor) {
+        compendiumActor = await pack.getDocument(compendiumEntry._id);
+        TokenReplacer.#compendiumDocCache.set(docCacheKey, compendiumActor);
+      }
     } catch (error) {
       throw new TokenReplacerError(`Failed to load "${compendiumEntry.name}" from compendium: ${error.message}`, "import_failed");
     }
@@ -1226,7 +1240,7 @@ class NPCTokenReplacerController {
       const scanProgress = new ProgressReporter();
       let matchResults;
       try {
-        matchResults = NPCTokenReplacerController.computeMatches(npcTokens, index, scanProgress);
+        matchResults = await NPCTokenReplacerController.computeMatches(npcTokens, index, scanProgress);
       } finally {
         scanProgress.finish();
       }
@@ -1341,7 +1355,7 @@ class NPCTokenReplacerController {
    * @returns {Array<{tokenDoc: Object, creatureName: string, match: Object|null}>} Match results
    * @static
    */
-  static computeMatches(tokens, index, progress) {
+  static async computeMatches(tokens, index, progress) {
     progress.start(tokens.length, game.i18n.localize("NPC_REPLACER.PreviewScanning"));
 
     const results = [];
@@ -1356,6 +1370,8 @@ class NPCTokenReplacerController {
         total: tokens.length,
         name: tokenDoc.name
       }));
+
+      if (i % 10 === 9) await new Promise(resolve => setTimeout(resolve, 0));
     }
 
     return results;
