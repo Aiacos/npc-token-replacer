@@ -15,6 +15,7 @@ import { ProgressReporter } from "./lib/progress-reporter.js";
 class TokenReplacerError extends Error {
   constructor(message, phase) {
     super(message);
+    this.name = "TokenReplacerError";
     this.phase = phase; // "import_failed", "creation_failed", "delete_failed"
   }
 }
@@ -379,8 +380,8 @@ class CompendiumManager {
       Logger.log(`  - ${pack.collection} (${pack.metadata.label}) [package: ${pack.metadata.packageName}, priority: ${priority}-${priorityLabel}]`);
     });
 
-    CompendiumManager.#wotcCompendiumsCache = wotcPacks;
-    return wotcPacks;
+    CompendiumManager.#wotcCompendiumsCache = Object.freeze(wotcPacks);
+    return CompendiumManager.#wotcCompendiumsCache;
   }
 
   /**
@@ -409,8 +410,8 @@ class CompendiumManager {
       Logger.warn(`Failed to retrieve enabledCompendiums setting (${e.name}: ${e.message})`);
       ui.notifications.error(game.i18n.localize("NPC_REPLACER.ErrorSettingsRetrieve"));
       const result = allPacks.filter(pack => CompendiumManager.getCompendiumPriority(pack) <= 2);
-      CompendiumManager.#enabledPacksCache = result;
-      return result;
+      CompendiumManager.#enabledPacksCache = Object.freeze(result);
+      return CompendiumManager.#enabledPacksCache;
     }
 
     let enabledPackIds;
@@ -444,8 +445,8 @@ class CompendiumManager {
       Logger.log(`Enabled compendiums: ${result.map(p => p.metadata.label).join(", ")}`);
     }
 
-    CompendiumManager.#enabledPacksCache = result;
-    return result;
+    CompendiumManager.#enabledPacksCache = Object.freeze(result);
+    return CompendiumManager.#enabledPacksCache;
   }
 
   /**
@@ -527,7 +528,7 @@ class CompendiumManager {
       indexMap.get(key).push(item);
     }
 
-    CompendiumManager.#indexCache = combinedIndex;
+    CompendiumManager.#indexCache = Object.freeze(combinedIndex);
     CompendiumManager.#indexMap = indexMap;
 
     return CompendiumManager.#indexCache;
@@ -709,18 +710,11 @@ class TokenReplacer {
    * // Returns: { x: 100, y: 200, elevation: 0, width: 1, height: 1, ... }
    */
   static extractTokenProperties(tokenDoc) {
-    return {
-      x: tokenDoc.x,
-      y: tokenDoc.y,
-      elevation: tokenDoc.elevation,
-      width: tokenDoc.width,
-      height: tokenDoc.height,
-      hidden: tokenDoc.hidden,
-      rotation: tokenDoc.rotation,
-      disposition: tokenDoc.disposition,
-      locked: tokenDoc.locked,
-      alpha: tokenDoc.alpha
-    };
+    const props = {};
+    for (const prop of TokenReplacer.PRESERVED_PROPERTIES) {
+      props[prop] = tokenDoc[prop];
+    }
+    return props;
   }
 
   /**
@@ -897,7 +891,7 @@ class TokenReplacer {
       ...prototypeToken,
       ...overrides,
       actorId: worldActorId,
-      actorLink: false
+      actorLink: prototypeToken.actorLink ?? false
     };
   }
 
@@ -1067,22 +1061,23 @@ class NPCTokenReplacerController {
 
     const noMatchText = escapeHtml(game.i18n.localize("NPC_REPLACER.PreviewNoMatch"));
 
-    let rowsHtml = "";
+    const rows = [];
     for (const result of sorted) {
       if (result.match) {
-        rowsHtml += `<tr>
+        rows.push(`<tr>
           <td>${escapeHtml(result.creatureName)}</td>
           <td>${escapeHtml(result.match.entry.name)}</td>
           <td>${escapeHtml(result.match.pack.metadata.label)}</td>
-        </tr>`;
+        </tr>`);
       } else {
-        rowsHtml += `<tr>
+        rows.push(`<tr>
           <td>${escapeHtml(result.creatureName)}</td>
-          <td style="color: red;">${noMatchText}</td>
+          <td class="npc-replacer-no-match">${noMatchText}</td>
           <td>&mdash;</td>
-        </tr>`;
+        </tr>`);
       }
     }
+    const rowsHtml = rows.join("");
 
     const summary = escapeHtml(game.i18n.format("NPC_REPLACER.PreviewSummary", {
       matched: matched.length,
@@ -1091,8 +1086,8 @@ class NPCTokenReplacerController {
 
     const content = `
       <p>${summary}</p>
-      <div style="max-height: 300px; overflow-y: auto; margin: 10px 0;">
-        <table style="width: 100%; border-collapse: collapse;">
+      <div class="npc-replacer-preview-table-container">
+        <table class="npc-replacer-preview-table">
           <thead>
             <tr>
               <th>${escapeHtml(game.i18n.localize("NPC_REPLACER.PreviewColToken"))}</th>
@@ -1132,10 +1127,16 @@ class NPCTokenReplacerController {
       dialogOpts.close = () => resolve(false);
       Dialog.confirm(dialogOpts);
     });
-    const timeoutPromise = new Promise(resolve =>
-      setTimeout(() => resolve(false), DIALOG_TIMEOUT_MS)
-    );
-    return Promise.race([dialogPromise, timeoutPromise]);
+    let timeoutId;
+    const timeoutPromise = new Promise(resolve => {
+      timeoutId = setTimeout(() => {
+        ui.notifications.warn(game.i18n.localize("NPC_REPLACER.DialogTimeout"));
+        resolve(false);
+      }, DIALOG_TIMEOUT_MS);
+    });
+    const result = await Promise.race([dialogPromise, timeoutPromise]);
+    clearTimeout(timeoutId);
+    return result;
   }
 
   // Removed: #processToken — replacement logic inlined in replaceNPCTokens using pre-computed matches

@@ -79,7 +79,7 @@ class WildcardResolver {
    */
   static async fetchWithTimeout(url, options = {}, timeout = WildcardResolver.DEFAULT_TIMEOUT) {
     // Reject absolute URLs with external protocols — only allow relative paths
-    if (typeof url === "string" && /^(?:https?|file|data|ftp):/i.test(url)) {
+    if (typeof url === "string" && (url.includes(":") || url.startsWith("//"))) {
       throw new Error(`Refusing to fetch external URL: ${url}`);
     }
     const controller = new AbortController();
@@ -175,6 +175,10 @@ class WildcardResolver {
       }
 
       Logger.debug(`Found ${availableVariants.length} variants for ${wildcardPath}`);
+
+      if (availableVariants.length === 0) {
+        return availableVariants; // Don't cache empty results
+      }
     } catch (e) {
       Logger.error("Error resolving wildcard variants", e);
       return availableVariants;
@@ -274,7 +278,6 @@ class WildcardResolver {
 
     // Last resort: use mystery man token
     Logger.warn(`No wildcard variants found for "${wildcardPath}" — using placeholder token art`);
-    ui.notifications.warn(game.i18n.localize("NPC_REPLACER.WarnWildcardFallback"));
     return {
       resolvedPath: "icons/svg/mystery-man.svg",
       nextIndex: sequentialIndex

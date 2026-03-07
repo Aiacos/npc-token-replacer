@@ -1,0 +1,124 @@
+/* ============================================================
+   NPC Token Replacer — Foundry VTT Module Styles
+   ============================================================ */
+
+/* ------------------------------------------------------------------
+   CSS Custom Properties (theming)
+   ------------------------------------------------------------------ */
+:root {
+  --npc-replacer-badge-fallback-bg: #555;
+  --npc-replacer-badge-core-bg: #2a7c2a;
+  --npc-replacer-badge-expansion-bg: #7c5a2a;
+  --npc-replacer-badge-adventure-bg: #7a1010;
+  --npc-replacer-badge-text: white;
+  --npc-replacer-expansion-opacity: 0.7;
+}
+
+/* ------------------------------------------------------------------
+   Compendium Selector Form
+   ------------------------------------------------------------------ */
+.mode-selection {
+  margin-bottom: 1rem;
+}
+
+.mode-option {
+  padding: 0.5rem 0;
+  padding-left: 0.5rem;
+  border-left: 3px solid transparent;
+}
+
+.mode-option:has(input:checked) {
+  border-left-color: var(--color-border-highlight);
+  background: var(--color-bg-option);
+}
+
+.mode-option label {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  cursor: pointer;
+}
+
+.mode-option .hint {
+  margin: 0.25rem 0 0 1.5rem;
+  font-size: 0.85em;
+  color: var(--color-text-dark-secondary);
+}
+
+.compendium-list {
+  max-height: 300px;
+  overflow-y: auto;
+  border: 1px solid var(--color-border-light-tertiary);
+  padding: 0.5rem;
+  margin-top: 0.5rem;
+}
+
+.compendium-list.disabled {
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+.compendium-item {
+  padding: 0.25rem 0;
+}
+
+.compendium-item label {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  cursor: pointer;
+}
+
+.compendium-item .module-name {
+  color: var(--color-text-dark-secondary);
+  font-size: 0.85em;
+}
+
+.priority-badge {
+  font-size: 0.7em;
+  padding: 0.1rem 0.4rem;
+  border-radius: 3px;
+  font-weight: bold;
+}
+
+.priority-badge.priority-1 {
+  background: var(--npc-replacer-badge-fallback-bg);
+  color: var(--npc-replacer-badge-text);
+}
+
+.priority-badge.priority-2 {
+  background: var(--npc-replacer-badge-core-bg);
+  color: var(--npc-replacer-badge-text);
+}
+
+.priority-badge.priority-3 {
+  background: var(--npc-replacer-badge-expansion-bg);
+  color: var(--npc-replacer-badge-text);
+}
+
+.priority-badge.priority-4 {
+  background: var(--npc-replacer-badge-adventure-bg);
+  color: var(--npc-replacer-badge-text);
+}
+
+.compendium-item.expansion-adventure {
+  opacity: var(--npc-replacer-expansion-opacity);
+}
+
+/* ------------------------------------------------------------------
+   Preview Dialog (replaces inline styles in main.js)
+   ------------------------------------------------------------------ */
+.npc-replacer-preview-table-container {
+  max-height: 300px;
+  overflow-y: auto;
+  margin: 10px 0;
+}
+
+.npc-replacer-preview-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.npc-replacer-no-match {
+  color: var(--color-level-error, red);
+}

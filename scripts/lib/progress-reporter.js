@@ -38,7 +38,9 @@ class ProgressReporter {
     if (ProgressReporter.#isV13ProgressAvailable()) {
       this.#notification = ui.notifications.info(label, { progress: true });
     } else {
-      SceneNavigation.displayProgressBar({ label, pct: 0 });
+      if (typeof SceneNavigation?.displayProgressBar === "function") {
+        SceneNavigation.displayProgressBar({ label, pct: 0 });
+      }
     }
   }
 
@@ -54,7 +56,9 @@ class ProgressReporter {
     if (this.#notification) {
       this.#notification.update({ pct, message: label });
     } else {
-      SceneNavigation.displayProgressBar({ label, pct: Math.round(pct * 100) });
+      if (typeof SceneNavigation?.displayProgressBar === "function") {
+        SceneNavigation.displayProgressBar({ label, pct: Math.round(pct * 100) });
+      }
     }
   }
 
@@ -66,7 +70,9 @@ class ProgressReporter {
       this.#notification.update({ pct: 1.0 });
       this.#notification = null;
     } else {
-      SceneNavigation.displayProgressBar({ label: "", pct: 100 });
+      if (typeof SceneNavigation?.displayProgressBar === "function") {
+        SceneNavigation.displayProgressBar({ label: "", pct: 100 });
+      }
     }
     this.#total = 0;
   }

@@ -33,7 +33,7 @@ describe("normalizeName", () => {
 
   it("removes special characters (Unicode-safe)", () => {
     expect(NameMatcher.normalizeName("Mind Flayer's Minion")).toBe("mind flayers minion");
-    expect(NameMatcher.normalizeName("Half-Dragon")).toBe("halfdragon");
+    expect(NameMatcher.normalizeName("Half-Dragon")).toBe("half dragon");
   });
 
   it("normalizes internal whitespace", () => {

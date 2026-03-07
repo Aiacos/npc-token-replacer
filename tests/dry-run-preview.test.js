@@ -42,9 +42,9 @@ describe("NPCTokenReplacerController.computeMatches", () => {
     });
   });
 
-  it("returns array with {tokenDoc, creatureName, match} for each token", () => {
+  it("returns array with {tokenDoc, creatureName, match} for each token", async () => {
     const progress = createMockProgress();
-    const results = NPCTokenReplacerController.computeMatches(mockTokens, mockIndex, progress);
+    const results = await NPCTokenReplacerController.computeMatches(mockTokens, mockIndex, progress);
 
     expect(results).toHaveLength(3);
     expect(results[0]).toEqual({ tokenDoc: mockTokens[0], creatureName: "Goblin", match: mockMatchGoblin });
@@ -52,9 +52,9 @@ describe("NPCTokenReplacerController.computeMatches", () => {
     expect(results[2]).toEqual({ tokenDoc: mockTokens[2], creatureName: "Unknown Beast", match: null });
   });
 
-  it("calls NameMatcher.findMatch once per token (no double-matching)", () => {
+  it("calls NameMatcher.findMatch once per token (no double-matching)", async () => {
     const progress = createMockProgress();
-    NPCTokenReplacerController.computeMatches(mockTokens, mockIndex, progress);
+    await NPCTokenReplacerController.computeMatches(mockTokens, mockIndex, progress);
 
     expect(findMatchSpy).toHaveBeenCalledTimes(3);
     expect(findMatchSpy).toHaveBeenCalledWith("Goblin", mockIndex);
@@ -62,17 +62,17 @@ describe("NPCTokenReplacerController.computeMatches", () => {
     expect(findMatchSpy).toHaveBeenCalledWith("Unknown Beast", mockIndex);
   });
 
-  it("matched tokens have match={entry, pack}, unmatched have match=null", () => {
+  it("matched tokens have match={entry, pack}, unmatched have match=null", async () => {
     const progress = createMockProgress();
-    const results = NPCTokenReplacerController.computeMatches(mockTokens, mockIndex, progress);
+    const results = await NPCTokenReplacerController.computeMatches(mockTokens, mockIndex, progress);
 
     expect(results[0].match).toBe(mockMatchGoblin);
     expect(results[2].match).toBeNull();
   });
 
-  it("calls progress.start, progress.update per token, and progress.finish", () => {
+  it("calls progress.start, progress.update per token, and progress.finish", async () => {
     const progress = createMockProgress();
-    NPCTokenReplacerController.computeMatches(mockTokens, mockIndex, progress);
+    await NPCTokenReplacerController.computeMatches(mockTokens, mockIndex, progress);
 
     expect(progress.start).toHaveBeenCalledTimes(1);
     expect(progress.start).toHaveBeenCalledWith(3, expect.any(String));
@@ -81,9 +81,9 @@ describe("NPCTokenReplacerController.computeMatches", () => {
     expect(progress.finish).toHaveBeenCalledTimes(0);
   });
 
-  it("creatureName uses tokenDoc.actor.name when available, falls back to tokenDoc.name", () => {
+  it("creatureName uses tokenDoc.actor.name when available, falls back to tokenDoc.name", async () => {
     const progress = createMockProgress();
-    const results = NPCTokenReplacerController.computeMatches(mockTokens, mockIndex, progress);
+    const results = await NPCTokenReplacerController.computeMatches(mockTokens, mockIndex, progress);
 
     // Token t1: actor.name = "Goblin"
     expect(results[0].creatureName).toBe("Goblin");
@@ -428,7 +428,8 @@ describe("replaceNPCTokens integration with preview flow", () => {
     await NPCTokenReplacerController.replaceNPCTokens();
 
     // 2 replaced, 1 not found (Unknown)
-    expect(ui.notifications.info).toHaveBeenCalled();
+    // info is NOT called when there are unmatched tokens (notFound.length > 0)
+    expect(ui.notifications.info).not.toHaveBeenCalled();
     expect(ui.notifications.warn).toHaveBeenCalled();
     expect(game.i18n.format).toHaveBeenCalledWith(
       "NPC_REPLACER.NotFoundCount",

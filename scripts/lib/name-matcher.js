@@ -86,6 +86,7 @@ class NameMatcher {
     return name
       .toLowerCase()
       .trim()
+      .replace(/-/g, " ") // Replace hyphens with spaces to preserve word boundaries
       .replace(/[^\p{L}\p{N}\s]/gu, "") // Remove non-letter/non-number chars (Unicode-safe)
       .replace(/\s+/g, " ");   // Normalize whitespace
   }

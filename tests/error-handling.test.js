@@ -73,12 +73,8 @@ describe("BUG-01 — TokenReplacer.buildActorLookup", () => {
     };
     game.actors.has = vi.fn(() => true);
 
-    TokenReplacer.buildActorLookup();
-
-    // The lookup should have one entry
-    // We can't directly access the private #actorLookup, but we verify
-    // buildActorLookup completes without error when actors have compendiumSource
-    expect(true).toBe(true);
+    // Verify buildActorLookup completes without error when actors have compendiumSource
+    expect(() => TokenReplacer.buildActorLookup()).not.toThrow();
   });
 
   it("populates lookup map from game.actors with flags.core.sourceId fallback", () => {
@@ -93,9 +89,8 @@ describe("BUG-01 — TokenReplacer.buildActorLookup", () => {
       yield* actorsArray;
     };
 
-    TokenReplacer.buildActorLookup();
-    // No error means it handled the fallback path correctly
-    expect(true).toBe(true);
+    // Verify it handled the flags.core.sourceId fallback path correctly
+    expect(() => TokenReplacer.buildActorLookup()).not.toThrow();
   });
 
   it("skips actors without compendium source", () => {
@@ -110,9 +105,8 @@ describe("BUG-01 — TokenReplacer.buildActorLookup", () => {
       yield* actorsArray;
     };
 
-    TokenReplacer.buildActorLookup();
     // Should complete without error, actor is simply skipped
-    expect(true).toBe(true);
+    expect(() => TokenReplacer.buildActorLookup()).not.toThrow();
   });
 
 });
