@@ -48,9 +48,10 @@ jobs:
           DOWNLOAD_URL="https://github.com/${{ github.repository }}/releases/download/v${VERSION}/${MODULE_ID}-v${VERSION}.zip"
           MANIFEST_URL="https://github.com/${{ github.repository }}/releases/latest/download/module.json"
 
-          # Create a standalone module.json with correct URLs for the release asset
+          # Overwrite module.json in place with correct URLs for the release asset
           jq --arg dl "$DOWNLOAD_URL" --arg mf "$MANIFEST_URL" \
-            '.download = $dl | .manifest = $mf' module.json > release-module.json
+            '.download = $dl | .manifest = $mf' module.json > module-release.json
+          mv module-release.json module.json
 
       - name: Create GitHub Release
         env:
@@ -62,7 +63,7 @@ jobs:
 
           gh release create "v${VERSION}" \
             "$ZIP_FILE" \
-            "release-module.json#module.json" \
+            module.json \
             --title "v${VERSION}" \
             --generate-notes \
             --latest
