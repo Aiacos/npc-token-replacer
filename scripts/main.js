@@ -762,10 +762,6 @@ class NPCTokenReplacerController {
       };
     }
 
-    // TODO [HIGH] Reliability: Dialog timeout does not close the dialog UI.
-    // When timeout fires, the Promise.race resolves false but the Dialog window stays open.
-    // Fix: capture the Dialog instance from `new Dialog(...)` and call `dialog.close()` on timeout.
-    // Also wrap Promise.race in try/finally to always clearTimeout (prevents dangling timer).
     let dialogTimeoutMinutes = 5;
     try {
       const value = game.settings.get(MODULE_ID, "dialogTimeout");
@@ -774,22 +770,37 @@ class NPCTokenReplacerController {
       Logger.debug(`dialogTimeout setting not available, using default ${dialogTimeoutMinutes}min: ${error.message}`);
     }
     const DIALOG_TIMEOUT_MS = dialogTimeoutMinutes * 60 * 1000;
-    const dialogPromise = new Promise(resolve => {
-      dialogOpts.yes = () => resolve(true);
-      dialogOpts.no = () => resolve(false);
-      dialogOpts.close = () => resolve(false);
-      Dialog.confirm(dialogOpts);
-    });
+
+    let dialogInstance;
     let timeoutId;
-    const timeoutPromise = new Promise(resolve => {
-      timeoutId = setTimeout(() => {
-        ui.notifications.warn(game.i18n.localize("NPC_REPLACER.DialogTimeout"));
-        resolve(false);
-      }, DIALOG_TIMEOUT_MS);
-    });
-    const result = await Promise.race([dialogPromise, timeoutPromise]);
-    clearTimeout(timeoutId);
-    return result;
+    try {
+      const dialogPromise = new Promise(resolve => {
+        dialogInstance = new Dialog({
+          title: dialogOpts.title,
+          content: dialogOpts.content,
+          buttons: {
+            yes: { icon: '<i class="fas fa-check"></i>', label: game.i18n.localize("NPC_REPLACER.ConfirmYes"), callback: () => resolve(true) },
+            no: { icon: '<i class="fas fa-times"></i>', label: game.i18n.localize("NPC_REPLACER.ConfirmNo"), callback: () => resolve(false) }
+          },
+          default: "no",
+          render: dialogOpts.render ?? undefined,
+          close: () => resolve(false)
+        });
+        dialogInstance.render(true);
+      });
+
+      const timeoutPromise = new Promise(resolve => {
+        timeoutId = setTimeout(() => {
+          ui.notifications.warn(game.i18n.localize("NPC_REPLACER.DialogTimeout"));
+          try { dialogInstance?.close(); } catch (_) { /* dialog may already be closed */ }
+          resolve(false);
+        }, DIALOG_TIMEOUT_MS);
+      });
+
+      return await Promise.race([dialogPromise, timeoutPromise]);
+    } finally {
+      clearTimeout(timeoutId);
+    }
   }
 
   /** Display result notifications and log replacement summary. */

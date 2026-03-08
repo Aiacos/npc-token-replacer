@@ -133,11 +133,17 @@ describe("NPCTokenReplacerController.showPreviewDialog", () => {
   beforeEach(() => {
     vi.restoreAllMocks();
     capturedOptions = null;
-    // Mock Dialog.confirm to capture options and trigger yes callback
-    globalThis.Dialog.confirm = vi.fn((opts) => {
+    // Mock Dialog constructor — capture opts and auto-trigger yes button callback
+    const OrigDialog = globalThis.Dialog;
+    globalThis.Dialog = function (opts) {
       capturedOptions = opts;
-      if (opts.yes) opts.yes();
-    });
+      this.render = vi.fn(() => {
+        // Auto-trigger yes callback by default
+        if (opts.buttons?.yes?.callback) opts.buttons.yes.callback();
+      });
+      this.close = vi.fn();
+    };
+    globalThis.Dialog.confirm = OrigDialog?.confirm;
   });
 
   it("renders a table with Token Name, Will Match As, Source Compendium columns", async () => {
@@ -238,30 +244,33 @@ describe("NPCTokenReplacerController.showPreviewDialog", () => {
   });
 
   it("resolves true on yes callback", async () => {
-    globalThis.Dialog.confirm = vi.fn((opts) => {
+    globalThis.Dialog = function (opts) {
       capturedOptions = opts;
-      opts.yes();
-    });
+      this.render = vi.fn(() => { opts.buttons.yes.callback(); });
+      this.close = vi.fn();
+    };
 
     const result = await NPCTokenReplacerController.showPreviewDialog(createMatchResults());
     expect(result).toBe(true);
   });
 
   it("resolves false on no callback", async () => {
-    globalThis.Dialog.confirm = vi.fn((opts) => {
+    globalThis.Dialog = function (opts) {
       capturedOptions = opts;
-      opts.no();
-    });
+      this.render = vi.fn(() => { opts.buttons.no.callback(); });
+      this.close = vi.fn();
+    };
 
     const result = await NPCTokenReplacerController.showPreviewDialog(createMatchResults());
     expect(result).toBe(false);
   });
 
   it("resolves false on close callback", async () => {
-    globalThis.Dialog.confirm = vi.fn((opts) => {
+    globalThis.Dialog = function (opts) {
       capturedOptions = opts;
-      opts.close();
-    });
+      this.render = vi.fn(() => { opts.close(); });
+      this.close = vi.fn();
+    };
 
     const result = await NPCTokenReplacerController.showPreviewDialog(createMatchResults());
     expect(result).toBe(false);
