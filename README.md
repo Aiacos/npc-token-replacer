@@ -226,7 +226,7 @@ If specific tokens fail to replace, check the console for error details. Common 
 
 ## Architecture
 
-The module follows an object-oriented design with well-defined classes, each with a single responsibility. All logic is contained in `scripts/main.js` as plain JavaScript ES modules (no build system required).
+The module follows an object-oriented design with well-defined classes, each with a single responsibility. Core orchestration lives in `scripts/main.js` with supporting classes extracted to `scripts/lib/` — all plain JavaScript ES modules (no build system required).
 
 ### Class Hierarchy
 
@@ -267,6 +267,11 @@ The module follows an object-oriented design with well-defined classes, each wit
                         │   Logger   │           │ CompendiumSelectorForm│
                         │ (logging)  │           │ (settings UI)        │
                         └────────────┘           └─────────────────────┘
+
+                        ┌──────────────────┐
+                        │ ProgressReporter │
+                        │ (v12/v13 bars)   │
+                        └──────────────────┘
 ```
 
 ### Class Responsibilities
@@ -279,6 +284,7 @@ The module follows an object-oriented design with well-defined classes, each wit
 | **NameMatcher** | Normalizes creature names and matches them to compendium entries using multi-stage matching algorithms |
 | **WildcardResolver** | Resolves Monster Manual 2024 wildcard token paths (e.g., `specter-*.webp`) to actual image files |
 | **FolderManager** | Manages Actor folders for organizing compendium imports |
+| **ProgressReporter** | Unified progress bar abstraction handling v12 (SceneNavigation) and v13 (notification) APIs |
 | **Logger** | Provides centralized logging with consistent module prefix formatting |
 | **CompendiumSelectorForm** | Foundry FormApplication subclass for the compendium selection settings UI |
 

@@ -1,37 +1,18 @@
 import { Logger } from "./logger.js";
 
 /**
- * ProgressReporter - Unified progress bar abstraction for Foundry VTT v12/v13
- *
- * Handles the different progress APIs:
- * - v13: ui.notifications.info() with { progress: true } returning updatable notification
- * - v12: SceneNavigation.displayProgressBar() with integer 0-100 pct
- *
- * Uses duck-typing (typeof ui.notifications.update) for version detection,
- * not game.version checks, per project convention.
- *
- * @class
+ * Unified progress bar for Foundry VTT v12/v13.
+ * v13: ui.notifications.info({ progress: true }), v12: SceneNavigation.displayProgressBar().
+ * Uses duck-typing for version detection per project convention.
  */
 class ProgressReporter {
-  /** @type {object|null} v13 notification object with .update() method */
   #notification = null;
-
-  /** @type {number} Total items to process */
   #total = 0;
 
-  /**
-   * Detect whether the v13 progress notification API is available
-   * @returns {boolean}
-   */
   static #isV13ProgressAvailable() {
     return typeof ui.notifications?.update === "function";
   }
 
-  /**
-   * Begin progress tracking
-   * @param {number} total - Total number of items to process
-   * @param {string} label - Label to display on the progress bar
-   */
   start(total, label) {
     this.#total = total;
     if (total <= 0) return;
@@ -47,11 +28,6 @@ class ProgressReporter {
     }
   }
 
-  /**
-   * Update progress
-   * @param {number} current - Current item number
-   * @param {string} label - Label to display on the progress bar
-   */
   update(current, label) {
     if (this.#total === 0) return;
     const pct = Math.min(current / this.#total, 1);
@@ -67,9 +43,6 @@ class ProgressReporter {
     }
   }
 
-  /**
-   * Finish progress tracking, set to 100%
-   */
   finish() {
     try {
       if (this.#notification) {

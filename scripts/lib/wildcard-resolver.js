@@ -105,15 +105,12 @@ class WildcardResolver {
       }
 
       Logger.debug(`Found ${availableVariants.length} variants for ${wildcardPath}`);
-
-      if (availableVariants.length === 0) {
-        return availableVariants;
-      }
     } catch (e) {
       Logger.error("Error resolving wildcard variants", e);
       return availableVariants;
     }
 
+    // Cache both populated and empty (404) results — network-error case already returned above
     WildcardResolver.#variantCache.set(wildcardPath, availableVariants);
     return availableVariants;
   }

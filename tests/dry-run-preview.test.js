@@ -214,17 +214,19 @@ describe("NPCTokenReplacerController.showPreviewDialog", () => {
     // When all unmatched, a render callback should be provided
     expect(capturedOptions.render).toBeDefined();
 
-    // Simulate the render callback — code wraps with $(html) for v12/v13 compat
-    const mockButton = { prop: vi.fn() };
-    const mockJquery = { find: vi.fn(() => mockButton) };
-    globalThis.jQuery = vi.fn(() => mockJquery);
-    globalThis.$ = globalThis.jQuery;
-    capturedOptions.render(document.createElement("div"));
+    // Simulate the render callback — vanilla DOM (no jQuery)
+    const container = document.createElement("div");
+    const yesBtn = document.createElement("button");
+    yesBtn.classList.add("yes");
+    container.appendChild(yesBtn);
+    const dataBtn = document.createElement("button");
+    dataBtn.setAttribute("data-button", "yes");
+    container.appendChild(dataBtn);
 
-    expect(mockJquery.find).toHaveBeenCalledWith(expect.stringContaining("yes"));
-    expect(mockButton.prop).toHaveBeenCalledWith("disabled", true);
-    delete globalThis.jQuery;
-    delete globalThis.$;
+    capturedOptions.render(container);
+
+    expect(yesBtn.disabled).toBe(true);
+    expect(dataBtn.disabled).toBe(true);
   });
 
   it("does NOT provide render callback when some tokens are matched", async () => {

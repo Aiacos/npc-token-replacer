@@ -12,7 +12,7 @@ This is a Foundry VTT module with no build system - plain JavaScript ES modules.
 
 1. Symlink or copy the module to Foundry's `Data/modules/npc-token-replacer/` directory
 2. Enable the module in a D&D 5e world
-3. Changes to `scripts/main.js` require a browser refresh (F5)
+3. Changes to `scripts/main.js` or `scripts/lib/*.js` require a browser refresh (F5)
 
 The `releases/` folder contains packaged releases - do not edit files there directly.
 
@@ -60,7 +60,21 @@ https://github.com/Aiacos/npc-token-replacer/releases/latest/download/module.jso
 
 ## Architecture
 
-**Single-file OOP module**: All logic is in `scripts/main.js` (~2000 lines), organized into well-defined classes with single responsibilities.
+**Modular OOP design**: Core orchestration in `scripts/main.js` (~1260 lines) with supporting classes extracted to `scripts/lib/`. No build system — plain JavaScript ES modules.
+
+### File Structure
+
+```
+scripts/
+├── main.js                    # FolderManager, CompendiumManager, TokenReplacer,
+│                              # NPCTokenReplacerController, CompendiumSelectorForm,
+│                              # registerSettings(), registerControlButton(), escapeHtml()
+└── lib/
+    ├── logger.js              # Logger class + MODULE_ID constant
+    ├── name-matcher.js        # NameMatcher (multi-stage creature name matching)
+    ├── wildcard-resolver.js   # WildcardResolver (HEAD-probe token art paths)
+    └── progress-reporter.js   # ProgressReporter (v12/v13 progress bar abstraction)
+```
 
 ### Class Hierarchy Diagram
 
@@ -101,19 +115,25 @@ https://github.com/Aiacos/npc-token-replacer/releases/latest/download/module.jso
                         │   Logger   │           │ CompendiumSelectorForm│
                         │ (logging)  │           │ (settings UI)        │
                         └────────────┘           └─────────────────────┘
+
+                        ┌──────────────────┐
+                        │ ProgressReporter │
+                        │ (v12/v13 bars)   │
+                        └──────────────────┘
 ```
 
 ### Class Responsibilities
 
 | Class | Responsibility | Key Methods |
 |-------|---------------|-------------|
-| **NPCTokenReplacerController** | Main facade that orchestrates token replacement workflow, validates prerequisites, and coordinates all operations | `replaceNPCTokens()`, `validatePrerequisites()`, `showConfirmationDialog()`, `clearCache()`, `initialize()`, `getDebugAPI()` |
+| **NPCTokenReplacerController** | Main facade that orchestrates token replacement workflow, validates prerequisites, and coordinates all operations | `replaceNPCTokens()`, `validatePrerequisites()`, `showPreviewDialog()`, `computeMatches()`, `clearCache()`, `initialize()`, `getDebugAPI()` |
 | **CompendiumManager** | Detects WOTC compendiums, manages enabled compendiums, loads monster indexes, handles compendium priorities | `detectWOTCCompendiums()`, `getEnabledCompendiums()`, `loadMonsterIndex()`, `getCompendiumPriority()`, `clearCache()` |
 | **TokenReplacer** | Handles token replacement operations, imports actors, creates new tokens with preserved properties | `replaceToken()`, `extractTokenProperties()`, `getNPCTokensToProcess()`, `getNPCTokensFromScene()`, `resetCounter()` |
 | **NameMatcher** | Normalizes creature names and matches them to compendium entries using multi-stage matching | `findMatch()`, `normalizeName()`, `selectBestMatch()` |
 | **WildcardResolver** | Resolves Monster Manual 2024 wildcard token paths (e.g., `specter-*.webp`) to actual files | `resolve()`, `resolveWildcardVariants()`, `selectVariant()`, `isWildcardPath()`, `clearCache()` |
 | **FolderManager** | Manages Actor folders for compendium imports | `getOrCreateImportFolder()`, `getFolderPath()`, `clearCache()` |
 | **Logger** | Provides centralized logging with module prefix | `log()`, `error()`, `warn()`, `debug()` |
+| **ProgressReporter** | Unified progress bar abstraction for v12/v13 (duck-typed version detection) | `start()`, `update()`, `finish()` |
 | **CompendiumSelectorForm** | FormApplication subclass for compendium selection UI | `getData()`, `_updateObject()` |
 
 ### Key Features by Component
@@ -131,6 +151,8 @@ https://github.com/Aiacos/npc-token-replacer/releases/latest/download/module.jso
 - `CompendiumManager.#wotcCompendiumsCache`: Detected WotC compendiums
 - `FolderManager.#importFolderCache`: Actor folder for imports
 - `WildcardResolver.#variantCache`: Resolved wildcard paths
+- `TokenReplacer.#actorLookup`: Session-scoped UUID→world Actor map (prevents duplicate imports)
+- `TokenReplacer.#compendiumDocCache`: LRU cache for `pack.getDocument()` results (max 100)
 - `NPCTokenReplacerController.#isProcessing`: Execution lock
 - `TokenReplacer.#sequentialCounter`: Token variant counter
 

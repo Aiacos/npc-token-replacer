@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+- **Lock release race condition**: Swapped `clearActorLookup()` before `#isProcessing = false` in the `finally` block to prevent re-entry with stale state
+- **Wildcard 404 cache miss**: Empty (404) results are now cached, preventing 45+ redundant HEAD requests per duplicate creature
+- **Infinite loop guard**: `FolderManager.getFolderPath` now has a `depth < 10` counter to protect against circular folder references
+
+### Changed
+- **jQuery removal**: Replaced the last jQuery usage in `showPreviewDialog` render callback with vanilla DOM (`querySelectorAll`), forward-compatible with Foundry's eventual jQuery removal
+- **JSDoc harmonization**: Condensed verbose JSDoc across all lib modules to match main.js style (logger.js -58%, name-matcher.js -19%, progress-reporter.js -16%). Zero executable code changes.
+
 ## [1.4.1] - 2025-03-07
 
 ### Added

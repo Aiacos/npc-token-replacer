@@ -8,15 +8,12 @@ import { WildcardResolver } from "./lib/wildcard-resolver.js";
 import { NameMatcher } from "./lib/name-matcher.js";
 import { ProgressReporter } from "./lib/progress-reporter.js";
 
-/**
- * Structured error for token replacement failures with a phase indicator
- * Replaces fragile string-matching on error.message for failure classification
- */
+/** Error with phase indicator ("import_failed", "creation_failed", "delete_failed"). */
 class TokenReplacerError extends Error {
   constructor(message, phase) {
     super(message);
     this.name = "TokenReplacerError";
-    this.phase = phase; // "import_failed", "creation_failed", "delete_failed"
+    this.phase = phase;
   }
 }
 
@@ -45,9 +42,11 @@ class FolderManager {
     if (!folder) return "";
     const parts = [folder.name];
     let parent = folder.folder;
-    while (parent) {
+    let depth = 0;
+    while (parent && depth < 10) {
       parts.unshift(parent.name);
       parent = parent.folder;
+      depth++;
     }
     return `/${parts.join("/")}`;
   }
@@ -411,6 +410,9 @@ class TokenReplacer {
   static #compendiumDocCache = new Map();
   static #COMPENDIUM_DOC_CACHE_MAX = 100;
 
+  // TODO [MEDIUM] Compatibility: compendiumSource path may change in future dnd5e/Foundry versions.
+  // If this path changes, lookup produces an empty Map and every replacement re-imports actors,
+  // creating duplicates. Add a fallback matching by actor name + source compendium label.
   static buildActorLookup() {
     TokenReplacer.#actorLookup = new Map();
     for (const a of game.actors) {
@@ -427,6 +429,10 @@ class TokenReplacer {
     Logger.debug("Actor lookup Map and variation mode cleared");
   }
 
+  // TODO [MEDIUM] Compatibility: allowlist silently drops properties added in new Foundry versions.
+  // Missing now: flags (module data), light, sight, detectionModes, bar1, bar2.
+  // Consider inverting to a blocklist of properties to OVERRIDE from compendium instead,
+  // so unknown properties are preserved by default. Trade-off: blocklist risks keeping stale data.
   /** Token properties preserved during replacement */
   static #PRESERVED_PROPERTIES = Object.freeze([
     "x", "y", "elevation", "width", "height",
@@ -748,9 +754,10 @@ class NPCTokenReplacerController {
     // When all tokens are unmatched, disable the Replace/yes button
     if (matched.length === 0) {
       dialogOpts.render = (html) => {
-        // v12: .yes or [data-button="yes"], v13 ApplicationV2: [data-action="yes"]
-        const el = html instanceof jQuery ? html : $(html);
-        el.find('.yes, [data-button="yes"], [data-action="yes"]').prop("disabled", true);
+        // v12 passes jQuery object, v13+ passes HTMLElement
+        const el = html instanceof HTMLElement ? html : html[0] ?? html;
+        el.querySelectorAll('.yes, [data-button="yes"], [data-action="yes"]')
+          .forEach(btn => { btn.disabled = true; });
       };
     }
 
@@ -932,8 +939,8 @@ class NPCTokenReplacerController {
 
       NPCTokenReplacerController.#reportResults(replaced, notFoundNames, importFailed, creationFailed, deleteFailed);
     } finally {
-      NPCTokenReplacerController.#isProcessing = false;
       TokenReplacer.clearActorLookup();
+      NPCTokenReplacerController.#isProcessing = false;
     }
   }
 

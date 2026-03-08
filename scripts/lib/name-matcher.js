@@ -1,111 +1,45 @@
 import { Logger } from "./logger.js";
 
-// Late-bound dependency on CompendiumManager
-// Set by main.js after both classes are loaded
+// Late-bound dependency — set by main.js after CompendiumManager is defined
 let _CompendiumManager = null;
 
-/**
- * NameMatcher utility class for creature name normalization and matching
- * Provides static methods for matching token names to compendium entries
- * @class
- */
+/** Creature name normalization and multi-stage matching against compendium entries. */
 class NameMatcher {
-  /**
-   * Set the CompendiumManager dependency for priority lookups.
-   * Called from main.js after CompendiumManager is defined.
-   * @param {object} cm - CompendiumManager class with getCompendiumPriority() and getIndexMap()
-   */
+  /** Set the CompendiumManager dependency for priority lookups. */
   static setCompendiumManager(cm) {
     _CompendiumManager = cm;
   }
 
-  /**
-   * Minimum character length for partial matching to avoid false positives
-   * @type {number}
-   * @static
-   * @readonly
-   */
-  static get MIN_PARTIAL_LENGTH() {
-    return 4;
-  }
+  static get MIN_PARTIAL_LENGTH() { return 4; }
 
-  /**
-   * Regular expression patterns for common creature name prefixes to strip
-   * Prefixes like "young", "adult", "ancient", "elder", "greater", "lesser"
-   * @type {RegExp}
-   * @static
-   * @readonly
-   */
+  /** Creature name prefixes to strip (young, adult, ancient, etc.) */
   static #PREFIX_PATTERN = /^(young|adult|ancient|elder|greater|lesser)\s+/;
-  static get PREFIX_PATTERN() {
-    return NameMatcher.#PREFIX_PATTERN;
-  }
+  static get PREFIX_PATTERN() { return NameMatcher.#PREFIX_PATTERN; }
 
-  /**
-   * Regular expression patterns for common creature name suffixes to strip
-   * Suffixes like "warrior", "guard", "scout", "champion", "leader", "chief", "captain", "shaman", "berserker"
-   * @type {RegExp}
-   * @static
-   * @readonly
-   */
+  /** Creature name suffixes to strip (warrior, guard, scout, etc.) */
   static #SUFFIX_PATTERN = /\s+(warrior|guard|scout|champion|leader|chief|captain|shaman|berserker)$/;
-  static get SUFFIX_PATTERN() {
-    return NameMatcher.#SUFFIX_PATTERN;
-  }
+  static get SUFFIX_PATTERN() { return NameMatcher.#SUFFIX_PATTERN; }
 
-  /**
-   * Variant transforms for Stage 2 name matching
-   * Strips common prefixes, suffixes, or both
-   * @type {Array<function(string): string>}
-   * @static
-   * @readonly
-   */
+  /** Stage 2 transforms: strip prefix, suffix, or both. */
   static #VARIANT_TRANSFORMS = Object.freeze([
     name => name.replace(NameMatcher.#PREFIX_PATTERN, ""),
     name => name.replace(NameMatcher.#SUFFIX_PATTERN, ""),
     name => name.replace(NameMatcher.#PREFIX_PATTERN, "").replace(NameMatcher.#SUFFIX_PATTERN, "")
   ]);
-  static get VARIANT_TRANSFORMS() {
-    return NameMatcher.#VARIANT_TRANSFORMS;
-  }
+  static get VARIANT_TRANSFORMS() { return NameMatcher.#VARIANT_TRANSFORMS; }
 
-  /**
-   * Normalize a creature name for matching
-   * Converts to lowercase, trims whitespace, removes special characters,
-   * and normalizes internal whitespace
-   * @param {string} name - The creature name to normalize
-   * @returns {string} Normalized name suitable for comparison
-   * @static
-   * @example
-   * NameMatcher.normalizeName('Goblin Warrior'); // returns 'goblin warrior'
-   * NameMatcher.normalizeName('  Dire Wolf  ');  // returns 'dire wolf'
-   * NameMatcher.normalizeName("Mind Flayer's Minion"); // returns 'mind flayers minion'
-   */
+  /** Lowercase, strip special chars, normalize whitespace (Unicode-safe). */
   static normalizeName(name) {
     if (!name) return "";
     return name
       .toLowerCase()
       .trim()
-      .replace(/-/g, " ") // Replace hyphens with spaces to preserve word boundaries
-      .replace(/[^\p{L}\p{N}\s]/gu, "") // Remove non-letter/non-number chars (Unicode-safe)
-      .replace(/\s+/g, " ");   // Normalize whitespace
+      .replace(/-/g, " ")
+      .replace(/[^\p{L}\p{N}\s]/gu, "")
+      .replace(/\s+/g, " ");
   }
 
-  /**
-   * Select the best match from a list of matches based on compendium priority
-   * When multiple compendiums contain the same creature, this selects the one
-   * from the highest priority compendium (adventures > expansions > core > SRD)
-   * @param {Array<{entry: Object, pack: CompendiumCollection}>} matches - Array of match objects
-   * @returns {{entry: Object, pack: CompendiumCollection}|null} The best match or null if empty
-   * @static
-   * @example
-   * const matches = [
-   *   { entry: goblinSRD, pack: srdPack },
-   *   { entry: goblinMM, pack: monsterManualPack }
-   * ];
-   * const best = NameMatcher.selectBestMatch(matches);
-   * // Returns the Monster Manual version (higher priority)
-   */
+  /** Pick highest-priority match. Tie-breaks by pack collection name for determinism. */
   static selectBestMatch(matches) {
     if (!matches || matches.length === 0) return null;
     if (matches.length === 1) return matches[0];
@@ -136,22 +70,8 @@ class NameMatcher {
   }
 
   /**
-   * Find a creature in the combined compendium index
-   * Uses a multi-stage matching strategy:
-   * 1. Exact match (after normalization)
-   * 2. Variant match (strips common prefixes/suffixes)
-   * 3. Partial match (word-level matching for longer names)
-   *
-   * Prioritizes matches from adventures/expansions > Monster Manual > SRD
-   * @param {string} creatureName - The creature name to search for
-   * @param {Array<{entry: Object, pack: CompendiumCollection}>} index - Array of index entries from loadMonsterIndex()
-   * @returns {{entry: Object, pack: CompendiumCollection}|null} Object with entry and pack, or null if not found
-   * @static
-   * @example
-   * const match = NameMatcher.findMatch('Goblin', monsterIndex);
-   * if (match) {
-   *   console.log(`Found: ${match.entry.name} in ${match.pack.metadata.label}`);
-   * }
+   * Find creature in index: exact match → variant transforms → partial word matching.
+   * Prioritizes adventures/expansions > Monster Manual > SRD.
    */
   static findMatch(creatureName, index) {
     const normalizedSearch = NameMatcher.normalizeName(creatureName);

@@ -1,11 +1,11 @@
 {
   "session_start": "2026-03-07T12:00:00Z",
-  "total_findings": 58,
-  "resolved": 55,
+  "total_findings": 64,
+  "resolved": 61,
   "deferred": 3,
-  "current_index": 58,
-  "last_completed": "Iteration 9: fix review + prediction TODOs",
-  "iteration": 9,
+  "current_index": 64,
+  "last_completed": "Iteration 10: fix review + prediction findings from session 3",
+  "iteration": 10,
   "status": "CONVERGED",
   "source": "Code review agents + /create-todos + /fix-todos + /review + /predict-issues",
   "deferred_items": [
@@ -13,5 +13,9 @@
     "TODO [HIGH] Compatibility: CompendiumSelectorForm v12 FormApplication — needs ApplicationV2 migration with runtime testing",
     "TODO [MEDIUM] Performance: sequential token loop 2N round-trips — requires batch mutation refactor",
     "TODO [LOW] Maintainability: VARIANT_SUFFIXES hardcoded — needs FilePicker.browse() investigation"
+  ],
+  "tracking_only": [
+    "TODO [MEDIUM] Compatibility: compendiumSource path may change — tracking only, no code fix needed now",
+    "TODO [MEDIUM] Compatibility: PRESERVED_PROPERTIES allowlist staleness — design decision pending"
   ]
 }

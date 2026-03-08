@@ -1,8 +1,8 @@
 # TODO Fix Plan
 
 ## Summary
-- Total: 52 findings across all iterations
-- Resolved: 49
+- Total: 64 findings across 10 iterations
+- Resolved: 61
 - Deferred: 3 (require Foundry runtime testing or major refactor)
 
 ## Original Resolution Status (Iteration 0)
@@ -112,6 +112,17 @@
 | 56 | MEDIUM | #compendiumDocCache grows unbounded | RESOLVED — bounded to 100 entries with FIFO eviction |
 | 57 | MEDIUM | ProgressReporter methods can abort replacement | RESOLVED — wrapped start/update/finish in try/catch |
 | 58 | MEDIUM | Mystery-man fallback never notified to user | RESOLVED — added WildcardFallback notification in caller |
+
+## Iteration 10 — /review + /predict-issues + /fix-todos (Session 3 continued)
+
+| # | Priority | Issue | Status |
+|---|----------|-------|--------|
+| 59 | HIGH | Lock release order race — cleanup after #isProcessing = false | RESOLVED — swapped line order |
+| 60 | HIGH | jQuery dependency — only usage in module, crashes on removal | RESOLVED — replaced with vanilla DOM querySelectorAll |
+| 61 | MEDIUM | Empty 404 wildcard results not cached — 45 HEAD re-probes | RESOLVED — cache empty results (network errors still skip) |
+| 62 | LOW | getFolderPath unbounded while-loop on circular data | RESOLVED — added depth < 10 guard |
+| 63 | MEDIUM | PRESERVED_PROPERTIES allowlist drops new token properties | TRACKING — design decision pending (allowlist vs blocklist) |
+| 64 | MEDIUM | compendiumSource path may change in future Foundry/dnd5e | TRACKING — future risk, no code fix needed now |
 
 ## Still Deferred
 
