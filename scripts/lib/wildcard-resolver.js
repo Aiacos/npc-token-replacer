@@ -8,6 +8,7 @@ const DEFAULT_HTTP_TIMEOUT_MS = 5000;
  */
 class WildcardResolver {
   static #variantCache = new Map();
+  static #VARIANT_CACHE_MAX = 200;
 
   static get DEFAULT_TIMEOUT() {
     try {
@@ -116,6 +117,10 @@ class WildcardResolver {
     }
 
     // Cache both populated and empty (404) results — network-error case already returned above
+    if (WildcardResolver.#variantCache.size >= WildcardResolver.#VARIANT_CACHE_MAX) {
+      const oldest = WildcardResolver.#variantCache.keys().next().value;
+      WildcardResolver.#variantCache.delete(oldest);
+    }
     WildcardResolver.#variantCache.set(wildcardPath, availableVariants);
     return availableVariants;
   }

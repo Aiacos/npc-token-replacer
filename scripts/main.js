@@ -457,6 +457,10 @@ class TokenReplacer {
     return props;
   }
 
+  static #isNPCToken(tokenDoc) {
+    return tokenDoc.actor?.type === "npc";
+  }
+
   /** Get NPC tokens: selected if any, otherwise all scene NPCs. */
   static getNPCTokensToProcess() {
     if (!canvas.scene) {
@@ -466,14 +470,9 @@ class TokenReplacer {
     const selectedTokens = canvas.tokens.controlled;
 
     if (selectedTokens.length > 0) {
-      // Filter selected tokens to only NPCs
       const selectedNPCs = selectedTokens
         .map(token => token.document)
-        .filter(tokenDoc => {
-          const actor = tokenDoc.actor;
-          if (!actor) return false;
-          return actor.type === "npc";
-        });
+        .filter(TokenReplacer.#isNPCToken);
 
       if (selectedNPCs.length > 0) {
         Logger.log(`Using ${selectedNPCs.length} selected NPC token(s) out of ${selectedTokens.length} selected`);
@@ -484,23 +483,14 @@ class TokenReplacer {
       return { tokens: [], isSelection: true };
     }
 
-    const allTokens = canvas.scene.tokens.contents;
-    const npcTokens = allTokens.filter(tokenDoc => {
-      const actor = tokenDoc.actor;
-      if (!actor) return false;
-      return actor.type === "npc";
-    });
-
+    const npcTokens = canvas.scene.tokens.contents.filter(TokenReplacer.#isNPCToken);
     return { tokens: npcTokens, isSelection: false };
   }
 
   /** Convenience: get all scene NPC tokens (ignores selection). */
   static getNPCTokensFromScene() {
     if (!canvas.scene) return [];
-    return canvas.scene.tokens.contents.filter(tokenDoc => {
-      const actor = tokenDoc.actor;
-      return actor && actor.type === "npc";
-    });
+    return canvas.scene.tokens.contents.filter(TokenReplacer.#isNPCToken);
   }
 
   /** Find existing world actor or import from compendium. */
@@ -579,7 +569,7 @@ class TokenReplacer {
   static #COMPENDIUM_TOKEN_FIELDS = Object.freeze([
     "name", "texture", "scale", "tint",
     "displayName", "displayBars",
-    "disposition", "lockRotation"
+    "lockRotation"
   ]);
 
   /** Merge compendium token identity with preserved properties from original. */

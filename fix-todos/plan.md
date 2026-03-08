@@ -135,6 +135,13 @@
 | 69 | MEDIUM | getNPCTokensFromScene violates "ignores selection" contract | RESOLVED — reimplemented to filter canvas.scene.tokens directly |
 | 70 | HIGH | module.json needs "maximum": "13" to warn users before v14 breaks module | TRACKING — requires decision |
 
+## Iteration 12 — /fix-todos (Session 5)
+
+| # | Priority | Issue | Status |
+|---|----------|-------|--------|
+| 71 | LOW | `disposition` in both COMPENDIUM_TOKEN_FIELDS and PRESERVED_PROPERTIES — dead write | RESOLVED — removed from COMPENDIUM_TOKEN_FIELDS |
+| 72 | MEDIUM | WildcardResolver.#variantCache unbounded growth (no LRU eviction) | RESOLVED — added 200-entry cap with FIFO eviction |
+
 ## Still Deferred
 
 | # | Priority | Issue | Reason |

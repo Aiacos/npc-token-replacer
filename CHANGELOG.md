@@ -11,10 +11,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Lock release race condition**: Swapped `clearActorLookup()` before `#isProcessing = false` in the `finally` block to prevent re-entry with stale state
 - **Wildcard 404 cache miss**: Empty (404) results are now cached, preventing 45+ redundant HEAD requests per duplicate creature
 - **Infinite loop guard**: `FolderManager.getFolderPath` now has a `depth < 10` counter to protect against circular folder references
+- **Disposition dead write**: Removed `disposition` from `COMPENDIUM_TOKEN_FIELDS` — it was always overwritten by `PRESERVED_PROPERTIES`, so the compendium value was silently discarded
 
 ### Changed
 - **jQuery removal**: Replaced the last jQuery usage in `showPreviewDialog` render callback with vanilla DOM (`querySelectorAll`), forward-compatible with Foundry's eventual jQuery removal
 - **JSDoc harmonization**: Condensed verbose JSDoc across all lib modules to match main.js style (logger.js -58%, name-matcher.js -19%, progress-reporter.js -16%). Zero executable code changes.
+- **NPC filter consolidation**: Extracted shared `#isNPCToken()` predicate, replacing 3 duplicated inline filter patterns
+- **Wildcard cache bounded**: Added 200-entry LRU cap to `WildcardResolver.#variantCache` to prevent unbounded memory growth
 
 ## [1.4.1] - 2025-03-07
 
