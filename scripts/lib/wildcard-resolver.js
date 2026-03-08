@@ -30,10 +30,15 @@ class WildcardResolver {
   static #VARIANT_SUFFIXES = Object.freeze(["1", "2", "3", "4", "5", "01", "02", "03", "04", "05", "a", "b", "c", "d", "e"]);
   static get VARIANT_SUFFIXES() { return WildcardResolver.#VARIANT_SUFFIXES; }
 
-  /** Fetch with timeout and SSRF protection (rejects absolute URLs). */
+  /** Fetch with timeout and SSRF protection (rejects absolute URLs and path traversal). */
   static async fetchWithTimeout(url, options = {}, timeout = WildcardResolver.DEFAULT_TIMEOUT) {
-    if (typeof url === "string" && (/^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(url) || url.startsWith("//"))) {
-      throw new Error(`Refusing to fetch external URL: ${url}`);
+    if (typeof url === "string") {
+      if (/^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(url) || url.startsWith("//")) {
+        throw new Error(`Refusing to fetch external URL: ${url}`);
+      }
+      if (/(?:^|\/)\.\.(?:\/|$)/.test(url)) {
+        throw new Error(`Refusing to fetch path with traversal segments: ${url}`);
+      }
     }
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), timeout);

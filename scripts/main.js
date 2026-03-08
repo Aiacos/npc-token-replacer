@@ -496,7 +496,11 @@ class TokenReplacer {
 
   /** Convenience: get all scene NPC tokens (ignores selection). */
   static getNPCTokensFromScene() {
-    return TokenReplacer.getNPCTokensToProcess().tokens;
+    if (!canvas.scene) return [];
+    return canvas.scene.tokens.contents.filter(tokenDoc => {
+      const actor = tokenDoc.actor;
+      return actor && actor.type === "npc";
+    });
   }
 
   /** Find existing world actor or import from compendium. */
@@ -571,18 +575,25 @@ class TokenReplacer {
     prototypeToken.texture.src = result.resolvedPath;
   }
 
-  /** Merge prototype token with preserved properties from original. */
+  /** Compendium token properties to adopt (visual/behavioral identity). */
+  static #COMPENDIUM_TOKEN_FIELDS = Object.freeze([
+    "name", "texture", "scale", "tint",
+    "displayName", "displayBars",
+    "disposition", "lockRotation"
+  ]);
+
+  /** Merge compendium token identity with preserved properties from original. */
   static #prepareNewTokenData(prototypeToken, originalProps, worldActorId) {
-    const overrides = {};
-    for (const prop of TokenReplacer.PRESERVED_PROPERTIES) {
-      overrides[prop] = originalProps[prop];
+    const newData = {};
+    for (const prop of TokenReplacer.#COMPENDIUM_TOKEN_FIELDS) {
+      if (prop in prototypeToken) newData[prop] = prototypeToken[prop];
     }
-    return {
-      ...prototypeToken,
-      ...overrides,
-      actorId: worldActorId,
-      actorLink: prototypeToken.actorLink ?? false
-    };
+    for (const prop of TokenReplacer.PRESERVED_PROPERTIES) {
+      newData[prop] = originalProps[prop];
+    }
+    newData.actorId = worldActorId;
+    newData.actorLink = prototypeToken.actorLink ?? false;
+    return newData;
   }
 
   /**
@@ -930,7 +941,7 @@ class NPCTokenReplacerController {
             game.i18n.format("NPC_REPLACER.ProgressUpdate", {
               current: processed,
               total: toReplace.length,
-              name: tokenDoc.name
+              name: escapeHtml(tokenDoc.name)
             }));
         }
       } finally {
@@ -966,7 +977,7 @@ class NPCTokenReplacerController {
       progress.update(i + 1, game.i18n.format("NPC_REPLACER.ProgressUpdate", {
         current: i + 1,
         total: tokens.length,
-        name: tokenDoc.name
+        name: escapeHtml(tokenDoc.name)
       }));
 
       if (i % 10 === 9) await new Promise(resolve => setTimeout(resolve, 0));
@@ -1132,17 +1143,21 @@ class CompendiumSelectorForm extends FormApplication {
 
   activateListeners(html) {
     super.activateListeners(html);
-    const list = html.find('#compendium-list');
-    html.find('input[name="mode"]').on('change', function(e) {
-      if (e.target.value === 'custom') {
-        list.removeClass('disabled');
-      } else {
-        list.addClass('disabled');
-      }
+    // v12 passes jQuery, v13+ may pass HTMLElement
+    const el = html instanceof HTMLElement ? html : html[0] ?? html;
+    const list = el.querySelector('#compendium-list');
+    el.querySelectorAll('input[name="mode"]').forEach(radio => {
+      radio.addEventListener('change', (e) => {
+        if (e.target.value === 'custom') {
+          list.classList.remove('disabled');
+        } else {
+          list.classList.add('disabled');
+        }
+      });
     });
-    const selectedMode = html.find('input[name="mode"]:checked').val();
-    if (selectedMode && selectedMode !== 'custom') {
-      list.addClass('disabled');
+    const selectedMode = el.querySelector('input[name="mode"]:checked');
+    if (selectedMode && selectedMode.value !== 'custom') {
+      list.classList.add('disabled');
     }
   }
 

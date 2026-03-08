@@ -124,13 +124,26 @@
 | 63 | MEDIUM | PRESERVED_PROPERTIES allowlist drops new token properties | TRACKING — design decision pending (allowlist vs blocklist) |
 | 64 | MEDIUM | compendiumSource path may change in future Foundry/dnd5e | TRACKING — future risk, no code fix needed now |
 
+## Iteration 11 — /review + /predict-issues + /create-todos (Session 4)
+
+| # | Priority | Issue | Status |
+|---|----------|-------|--------|
+| 65 | HIGH | SSRF path traversal bypass — ".." segments not blocked in fetchWithTimeout | RESOLVED — added regex guard rejecting ".." path segments |
+| 66 | HIGH | activateListeners uses jQuery .find()/.on() — breaks with ApplicationV2 | RESOLVED — replaced with vanilla DOM (querySelector, addEventListener, classList) |
+| 67 | MEDIUM | prototypeToken object spread passes unsanitized compendium data | RESOLVED — replaced spread with explicit #COMPENDIUM_TOKEN_FIELDS allowlist |
+| 68 | MEDIUM | Progress bar XSS — unescaped tokenDoc.name in displayProgressBar HTML | RESOLVED — wrapped both locations with escapeHtml() |
+| 69 | MEDIUM | getNPCTokensFromScene violates "ignores selection" contract | RESOLVED — reimplemented to filter canvas.scene.tokens directly |
+| 70 | HIGH | module.json needs "maximum": "13" to warn users before v14 breaks module | TRACKING — requires decision |
+
 ## Still Deferred
 
 | # | Priority | Issue | Reason |
 |---|----------|-------|--------|
 | — | HIGH | Dialog timeout doesn't close dialog UI | Requires Foundry Dialog instance API; `Dialog.confirm()` returns Promise not instance |
 | — | HIGH | CompendiumSelectorForm v12 FormApplication only | Needs ApplicationV2 branch with Foundry v13+ runtime testing |
+| — | HIGH | Dialog.confirm() removal in v14 | Tied to ApplicationV2 migration |
 | 8 | MEDIUM | Sequential token loop (2N round-trips) | Requires batch mutation refactor — changes entire replacement flow |
+| — | MEDIUM | WildcardResolver.#variantCache unbounded growth (no LRU eviction) | Needs LRU cap like #compendiumDocCache |
 | — | LOW | VARIANT_SUFFIXES hardcoded probe list | FilePicker.browse() may not work for module paths; needs investigation |
 
 ## Post-fix review findings
