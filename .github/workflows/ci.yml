@@ -1,0 +1,33 @@
+name: CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci
+
+      - run: npm test
+
+      - name: Validate module.json
+        run: |
+          node -e "
+            const fs = require('fs');
+            const m = JSON.parse(fs.readFileSync('module.json', 'utf8'));
+            const required = ['id', 'title', 'version', 'compatibility', 'manifest', 'download'];
+            const missing = required.filter(k => !m[k]);
+            if (missing.length) { console.error('Missing fields:', missing); process.exit(1); }
+            console.log('module.json OK — %s v%s', m.id, m.version);
+          "

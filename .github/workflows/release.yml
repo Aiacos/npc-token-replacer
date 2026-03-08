@@ -1,0 +1,68 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci
+
+      - run: npm test
+
+      - name: Extract and verify version
+        id: version
+        run: |
+          TAG_VERSION="${GITHUB_REF#refs/tags/v}"
+          JSON_VERSION=$(jq -r '.version' module.json)
+          MODULE_ID=$(jq -r '.id' module.json)
+
+          if [ "$TAG_VERSION" != "$JSON_VERSION" ]; then
+            echo "::error::Tag v${TAG_VERSION} does not match module.json version ${JSON_VERSION}"
+            exit 1
+          fi
+
+          echo "version=$TAG_VERSION" >> "$GITHUB_OUTPUT"
+          echo "module_id=$MODULE_ID" >> "$GITHUB_OUTPUT"
+
+      - name: Build release ZIP
+        run: bash build.sh
+
+      - name: Prepare release manifest
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          MODULE_ID="${{ steps.version.outputs.module_id }}"
+          DOWNLOAD_URL="https://github.com/${{ github.repository }}/releases/download/v${VERSION}/${MODULE_ID}-v${VERSION}.zip"
+          MANIFEST_URL="https://github.com/${{ github.repository }}/releases/latest/download/module.json"
+
+          # Create a standalone module.json with correct URLs for the release asset
+          jq --arg dl "$DOWNLOAD_URL" --arg mf "$MANIFEST_URL" \
+            '.download = $dl | .manifest = $mf' module.json > release-module.json
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          MODULE_ID="${{ steps.version.outputs.module_id }}"
+          ZIP_FILE="releases/${MODULE_ID}-v${VERSION}.zip"
+
+          gh release create "v${VERSION}" \
+            "$ZIP_FILE" \
+            "release-module.json#module.json" \
+            --title "v${VERSION}" \
+            --generate-notes \
+            --latest
