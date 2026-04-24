@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import { WildcardResolver, DEFAULT_HTTP_TIMEOUT_MS } from "../../scripts/lib/wildcard-resolver.js";
+import { WildcardResolver } from "../../scripts/lib/wildcard-resolver.js";
 
 beforeEach(() => {
   WildcardResolver.clearCache();

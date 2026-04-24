@@ -104,8 +104,8 @@ function createMatchResults({ matched = true, unmatched = true, htmlChars = fals
   if (matched) {
     results.push({
       tokenDoc: { id: "t1", name: "Goblin" },
-      creatureName: htmlChars ? '<script>Goblin</script>' : "Goblin",
-      match: { entry: { name: htmlChars ? '<b>Goblin</b>' : "Goblin" }, pack: mockPackLabel }
+      creatureName: htmlChars ? "<script>Goblin</script>" : "Goblin",
+      match: { entry: { name: htmlChars ? "<b>Goblin</b>" : "Goblin" }, pack: mockPackLabel }
     });
     results.push({
       tokenDoc: { id: "t2", name: "Orc" },
@@ -116,7 +116,7 @@ function createMatchResults({ matched = true, unmatched = true, htmlChars = fals
   if (unmatched) {
     results.push({
       tokenDoc: { id: "t3", name: "Unknown Beast" },
-      creatureName: htmlChars ? '<img src=x>Beast' : "Unknown Beast",
+      creatureName: htmlChars ? "<img src=x>Beast" : "Unknown Beast",
       match: null
     });
   }
@@ -347,7 +347,7 @@ describe("replaceNPCTokens integration with preview flow", () => {
         computeMatchesSpy.mockRestore();
         return NPCTokenReplacerController.computeMatches(...args);
       });
-    showPreviewSpy.mockImplementation((matchResults) => {
+    showPreviewSpy.mockImplementation((_matchResults) => {
       callOrder.push("showPreviewDialog");
       return Promise.resolve(true);
     });

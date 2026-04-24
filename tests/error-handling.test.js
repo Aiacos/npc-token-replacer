@@ -6,7 +6,6 @@ import {
   TokenReplacer
 } from "../scripts/main.js";
 import { WildcardResolver } from "../scripts/lib/wildcard-resolver.js";
-import { NameMatcher } from "../scripts/lib/name-matcher.js";
 
 /**
  * Cross-cutting Error Handling Tests
@@ -227,7 +226,7 @@ describe("ERR-03 — Per-compendium load error tracking", () => {
       collection: "dnd-broken.monsters",
       metadata: { packageName: "dnd-broken", label: "Broken Pack" },
       documentName: "Actor",
-      getIndex: vi.fn().mockRejectedValue(new Error("Network timeout")),
+      getIndex: vi.fn().mockRejectedValue(new Error("Network timeout"))
     };
 
     game.packs.filter = vi.fn(pred => [failingPack].filter(pred));
@@ -248,7 +247,7 @@ describe("ERR-03 — Per-compendium load error tracking", () => {
       collection: "dnd-broken.monsters",
       metadata: { packageName: "dnd-broken", label: "Broken Pack" },
       documentName: "Actor",
-      getIndex: vi.fn().mockRejectedValue(new Error("fail")),
+      getIndex: vi.fn().mockRejectedValue(new Error("fail"))
     };
     game.packs.filter = vi.fn(pred => [failingPack].filter(pred));
     game.settings.get = vi.fn().mockReturnValue('["all"]');
@@ -268,7 +267,7 @@ describe("ERR-03 — Per-compendium load error tracking", () => {
       collection: "dnd-broken.monsters",
       metadata: { packageName: "dnd-broken", label: "Broken Pack" },
       documentName: "Actor",
-      getIndex: vi.fn().mockRejectedValue(new Error("fail")),
+      getIndex: vi.fn().mockRejectedValue(new Error("fail"))
     };
     game.packs.filter = vi.fn(pred => [failingPack].filter(pred));
     game.settings.get = vi.fn().mockReturnValue('["all"]');
@@ -302,7 +301,7 @@ describe("ERR-02 — Failure classification via replaceNPCTokens", () => {
   const createMockToken = (id, name) => ({
     id,
     name,
-    actor: { name, type: "npc" },
+    actor: { name, type: "npc" }
   });
 
   // Helper to set up a mock pack and index for one creature

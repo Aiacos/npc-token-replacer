@@ -1,5 +1,3 @@
-import { Logger } from "./logger.js";
-
 /**
  * ProgressReporter - Unified progress bar abstraction for Foundry VTT v12/v13
  *
