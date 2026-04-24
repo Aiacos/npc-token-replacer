@@ -54,9 +54,12 @@ describe("CompendiumManager", () => {
       expect(CompendiumManager.getCompendiumPriority(pack)).toBe(4);
     });
 
-    it("defaults to priority 4 for unknown dnd- prefix packages", () => {
+    it("defaults to priority 1 for unknown dnd- prefix packages (not in whitelist)", () => {
+      // Since 1.6.0, only the 11 official WotC packages are recognised; anything
+      // else (including dnd-* homebrew or legacy books not on Foundry) falls
+      // back to priority 1.
       const pack = createMockPack("dnd-unknown-adventure", "Unknown Adventure");
-      expect(CompendiumManager.getCompendiumPriority(pack)).toBe(4);
+      expect(CompendiumManager.getCompendiumPriority(pack)).toBe(1);
     });
 
     it("defaults to priority 1 for non-dnd packages", () => {
@@ -70,21 +73,21 @@ describe("CompendiumManager", () => {
 
   describe("detectWOTCCompendiums", () => {
 
-    it("includes Actor compendiums with dnd- prefix", () => {
+    it("includes Actor compendiums from the whitelist (dnd-monster-manual)", () => {
       mockPacks = [createMockPack("dnd-monster-manual", "Monster Manual")];
       const result = CompendiumManager.detectWOTCCompendiums();
       expect(result).toHaveLength(1);
       expect(result[0].metadata.label).toBe("Monster Manual");
     });
 
-    it("includes Actor compendiums with dnd5e prefix", () => {
+    it("includes Actor compendiums from the whitelist (dnd5e)", () => {
       mockPacks = [createMockPack("dnd5e", "SRD Monsters")];
       const result = CompendiumManager.detectWOTCCompendiums();
       expect(result).toHaveLength(1);
       expect(result[0].metadata.label).toBe("SRD Monsters");
     });
 
-    it("excludes non-Actor compendiums even with dnd- prefix", () => {
+    it("excludes non-Actor compendiums even when the package is whitelisted", () => {
       mockPacks = [
         createMockPack("dnd-monster-manual", "Monster Manual"),
         createMockPack("dnd-monster-manual", "MM Items", "Item")
@@ -98,6 +101,22 @@ describe("CompendiumManager", () => {
       mockPacks = [
         createMockPack("dnd-monster-manual", "Monster Manual"),
         createMockPack("homebrew-monsters", "Homebrew")
+      ];
+      const result = CompendiumManager.detectWOTCCompendiums();
+      expect(result).toHaveLength(1);
+      expect(result[0].metadata.label).toBe("Monster Manual");
+    });
+
+    it("excludes legacy non-WotC dnd- packages (e.g. VGM, MToF, Fizban, Strahd)", () => {
+      // These books exist on D&D Beyond / legacy sources but are NOT published
+      // by WotC on Foundry VTT, so they must be rejected by the whitelist.
+      mockPacks = [
+        createMockPack("dnd-monster-manual", "Monster Manual"),
+        createMockPack("dnd-volos-guide-to-monsters", "Volo's Guide"),
+        createMockPack("dnd-mordenkainens-tome-of-foes", "MToF"),
+        createMockPack("dnd-fizbans-treasury-of-dragons", "Fizban"),
+        createMockPack("dnd-curse-of-strahd-revamped", "Strahd"),
+        createMockPack("ddb-monster-manual", "DDB-Importer MM")
       ];
       const result = CompendiumManager.detectWOTCCompendiums();
       expect(result).toHaveLength(1);
@@ -122,7 +141,7 @@ describe("CompendiumManager", () => {
         createMockPack("other-module", "Other", "JournalEntry")
       ];
       const result = CompendiumManager.detectWOTCCompendiums();
-      // Only Actor packs with dnd- or dnd5e prefix
+      // Only Actor packs whose packageName is in OFFICIAL_WOTC_PACKAGES
       expect(result).toHaveLength(3);
       const labels = result.map(p => p.metadata.label);
       expect(labels).toContain("Monster Manual");
@@ -268,16 +287,49 @@ describe("CompendiumManager", () => {
 
   describe("static getters", () => {
 
-    it("WOTC_MODULE_PREFIXES returns expected prefixes", () => {
-      expect(CompendiumManager.WOTC_MODULE_PREFIXES).toEqual(["dnd-", "dnd5e", "ddb-"]);
+    it("OFFICIAL_WOTC_PACKAGES returns the 11 official WotC packages", () => {
+      expect(CompendiumManager.OFFICIAL_WOTC_PACKAGES).toEqual([
+        "dnd5e",
+        "dnd-monster-manual",
+        "dnd-players-handbook",
+        "dnd-dungeon-masters-guide",
+        "dnd-forge-artificer",
+        "dnd-tashas-cauldron",
+        "dnd-phandelver-below",
+        "dnd-tomb-annihilation",
+        "dnd-adventures-faerun",
+        "dnd-heroes-faerun",
+        "dnd-heroes-borderlands"
+      ]);
     });
 
-    it("COMPENDIUM_PRIORITIES includes all known packages", () => {
+    it("WOTC_MODULE_PREFIXES (deprecated) still returns legacy prefixes for backward compat", () => {
+      expect(CompendiumManager.WOTC_MODULE_PREFIXES).toEqual(["dnd-", "dnd5e"]);
+    });
+
+    it("COMPENDIUM_PRIORITIES includes all 11 official WotC packages", () => {
       const priorities = CompendiumManager.COMPENDIUM_PRIORITIES;
       expect(priorities["dnd5e"]).toBe(1);
+      expect(priorities["dnd-tashas-cauldron"]).toBe(1);
       expect(priorities["dnd-monster-manual"]).toBe(2);
+      expect(priorities["dnd-players-handbook"]).toBe(2);
+      expect(priorities["dnd-dungeon-masters-guide"]).toBe(2);
       expect(priorities["dnd-forge-artificer"]).toBe(3);
       expect(priorities["dnd-phandelver-below"]).toBe(4);
+      expect(priorities["dnd-tomb-annihilation"]).toBe(4);
+      expect(priorities["dnd-adventures-faerun"]).toBe(4);
+      expect(priorities["dnd-heroes-faerun"]).toBe(4);
+      expect(priorities["dnd-heroes-borderlands"]).toBe(4);
+    });
+
+    it("COMPENDIUM_PRIORITIES does not include non-WotC legacy packages", () => {
+      const priorities = CompendiumManager.COMPENDIUM_PRIORITIES;
+      expect(priorities["dnd-volos-guide-to-monsters"]).toBeUndefined();
+      expect(priorities["dnd-mordenkainens-tome-of-foes"]).toBeUndefined();
+      expect(priorities["dnd-fizbans-treasury-of-dragons"]).toBeUndefined();
+      expect(priorities["dnd-curse-of-strahd-revamped"]).toBeUndefined();
+      expect(priorities["dnd-icewind-dale"]).toBeUndefined();
+      expect(priorities["dnd-monsters-of-the-multiverse"]).toBeUndefined();
     });
 
     it("PRIORITY_LABELS maps priority numbers to labels", () => {

@@ -1,6 +1,6 @@
 {
   "name": "npc-token-replacer",
-  "version": "1.5.1",
+  "version": "1.6.0",
   "type": "module",
   "description": "A Foundry VTT module that automatically replaces NPC tokens in your scene with official D&D compendium versions, preserving their position, elevation, dimensions, and visibility.",
   "main": "index.js",

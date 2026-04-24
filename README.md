@@ -18,34 +18,25 @@ A Foundry VTT module that automatically replaces NPC tokens in your scene with o
 
 ## Supported Official D&D Content
 
-The module explicitly recognises **37 official WotC module IDs** across four priority tiers,
-and auto-discovers any additional `dnd-*` or `ddb-*` compendiums at runtime.
+The module recognises **exactly the 11 official Wizards of the Coast packages
+published on Foundry VTT** (see the
+[Foundry VTT creator page](https://foundryvtt.com/creators/wizards-of-the-coast/)).
+Only these packages are treated as authoritative sources of Actor data.
+
+Third-party content — DDB-Importer (`ddb-*`), community homebrew modules, and
+legacy books that have never been ported to Foundry by WotC (Volo's, MToF,
+MPMM, Fizban's, Curse of Strahd, Icewind Dale, Descent into Avernus, etc.) —
+are deliberately excluded from the whitelist.
 
 ### Priority 4 — ADVENTURE (highest — adventure-specific tokens preferred)
 
 | Module ID | Content |
 |-----------|---------|
-| `dnd-vecna-eve-of-ruin` | Vecna: Eve of Ruin |
-| `dnd-quests-from-the-infinite-staircase` | Quests from the Infinite Staircase |
-| `dnd-book-of-many-things` | The Book of Many Things |
 | `dnd-phandelver-below` | Phandelver and Below: The Shattered Obelisk |
 | `dnd-tomb-annihilation` | Tomb of Annihilation |
 | `dnd-adventures-faerun` | Forgotten Realms: Adventures in Faerûn |
 | `dnd-heroes-faerun` | Forgotten Realms: Heroes of Faerûn |
 | `dnd-heroes-borderlands` | Heroes of the Borderlands |
-| `dnd-curse-of-strahd-revamped` | Curse of Strahd: Revamped |
-| `dnd-descent-into-avernus` | Baldur's Gate: Descent into Avernus |
-| `dnd-icewind-dale` | Icewind Dale: Rime of the Frostmaiden |
-| `dnd-ghosts-of-saltmarsh` | Ghosts of Saltmarsh |
-| `dnd-candlekeep-mysteries` | Candlekeep Mysteries |
-| `dnd-wild-beyond-witchlight` | The Wild Beyond the Witchlight |
-| `dnd-strixhaven-curriculum-chaos` | Strixhaven: A Curriculum of Chaos |
-| `dnd-keys-from-the-golden-vault` | Keys from the Golden Vault |
-| `dnd-call-of-the-netherdeep` | Critical Role: Call of the Netherdeep |
-| `dnd-spelljammer-adventures-in-space` | Spelljammer: Adventures in Space |
-| `dnd-journeys-radiant-citadel` | Journeys through the Radiant Citadel |
-| `dnd-dragonlance-shadow-dragon-queen` | Dragonlance: Shadow of the Dragon Queen |
-| `dnd-planescape-adventures-multiverse` | Planescape: Adventures in the Multiverse |
 
 ### Priority 3 — EXPANSION
 
@@ -61,22 +52,12 @@ and auto-discovers any additional `dnd-*` or `ddb-*` compendiums at runtime.
 | `dnd-players-handbook` | Player's Handbook (2024) |
 | `dnd-dungeon-masters-guide` | Dungeon Master's Guide (2024) |
 
-### Priority 1 — FALLBACK (legacy books & SRD)
+### Priority 1 — FALLBACK (SRD & options)
 
 | Module ID | Content |
 |-----------|---------|
-| `dnd-volos-guide-to-monsters` | Volo's Guide to Monsters |
-| `dnd-mordenkainens-tome-of-foes` | Mordenkainen's Tome of Foes |
-| `dnd-monsters-of-the-multiverse` | Monsters of the Multiverse |
-| `dnd-mordenkainen-monsters-multiverse` | Mordenkainen Presents: Monsters of the Multiverse *(alias)* |
-| `dnd-fizbans-treasury-of-dragons` | Fizban's Treasury of Dragons |
-| `dnd-mythic-odysseys-of-theros` | Mythic Odysseys of Theros |
-| `dnd-eberron-rising-last-war` | Eberron: Rising from the Last War |
-| `dnd-explorers-guide-wildemount` | Explorer's Guide to Wildemount |
-| `dnd-van-richtens-guide-ravenloft` | Van Richten's Guide to Ravenloft |
-| `dnd-spelljammer-light-of-xaryxis` | Spelljammer: Light of Xaryxis |
+| `dnd5e` | D&D 5e System SRD Monsters (free) |
 | `dnd-tashas-cauldron` | Tasha's Cauldron of Everything |
-| `dnd5e` | D&D 5e System SRD Monsters |
 
 ### Compendium Priority System
 
@@ -87,10 +68,12 @@ system to select the best match:
    adventure-specific art and stat blocks.
 2. **Priority 3 – EXPANSION**: Expansion books with new or variant creatures.
 3. **Priority 2 – CORE**: 2024 core rulebooks (Monster Manual, PHB, DMG).
-4. **Priority 1 – FALLBACK**: Legacy 2014-era books and the SRD, used as last resort.
+4. **Priority 1 – FALLBACK**: SRD and options (Tasha's), used as last resort.
 
-Any `dnd-*` or `ddb-*` compendium **not** in the explicit list is automatically assigned
-priority 4 (ADVENTURE) — so newly released content works without a module update.
+Packages not in the whitelist receive priority 1 (fallback) but are **not**
+auto-included in detection — a compendium is only considered "official" if its
+packageName matches one of the 11 IDs above. When WotC releases a new premium
+package on Foundry, this whitelist must be extended in a new minor release.
 
 ## Requirements
 

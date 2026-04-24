@@ -245,110 +245,83 @@ class CompendiumManager {
   static #lastLoadErrors = [];
 
   /**
-   * Known official WOTC module prefixes for auto-detection
+   * Official Wizards of the Coast package IDs for Foundry VTT.
+   *
+   * Authoritative whitelist sourced from https://foundryvtt.com/creators/wizards-of-the-coast/
+   * as of April 2026 (11 packages: 1 free system + 10 premium modules).
+   *
+   * We do NOT auto-include modules by prefix (e.g. "dnd-") because many
+   * third-party packages and importers use the same prefix without being
+   * official WotC content (e.g. homebrew, community adventures, DDB-Importer).
+   *
    * @type {string[]}
    * @static
    * @readonly
    */
-  static #WOTC_MODULE_PREFIXES = Object.freeze(["dnd-", "dnd5e", "ddb-"]);
+  static #OFFICIAL_WOTC_PACKAGES = Object.freeze([
+    "dnd5e",                         // D&D 5e system SRD (free)
+    "dnd-monster-manual",            // Monster Manual (2024)
+    "dnd-players-handbook",          // Player's Handbook (2024)
+    "dnd-dungeon-masters-guide",     // Dungeon Master's Guide (2024)
+    "dnd-forge-artificer",           // Eberron: Forge of the Artificer
+    "dnd-tashas-cauldron",           // Tasha's Cauldron of Everything
+    "dnd-phandelver-below",          // Phandelver and Below: The Shattered Obelisk
+    "dnd-tomb-annihilation",         // Tomb of Annihilation
+    "dnd-adventures-faerun",         // Forgotten Realms: Adventures in Faerûn
+    "dnd-heroes-faerun",             // Forgotten Realms: Heroes of Faerûn
+    "dnd-heroes-borderlands"         // Heroes of the Borderlands
+  ]);
+  static get OFFICIAL_WOTC_PACKAGES() {
+    return CompendiumManager.#OFFICIAL_WOTC_PACKAGES;
+  }
+
+  /**
+   * @deprecated since 1.6.0 — retained for backward compatibility only.
+   * Use {@link OFFICIAL_WOTC_PACKAGES} instead. The previous prefix-based
+   * matching was too permissive and caught non-WotC modules.
+   * @type {string[]}
+   * @static
+   * @readonly
+   */
+  static #WOTC_MODULE_PREFIXES = Object.freeze(["dnd-", "dnd5e"]);
   static get WOTC_MODULE_PREFIXES() {
     return CompendiumManager.#WOTC_MODULE_PREFIXES;
   }
 
   /**
-   * Compendium priority levels (higher = preferred)
-   * Priority 1: SRD and Tasha's (lowest - fallback/options)
-   * Priority 2: Core Rulebooks (Monster Manual, PHB, DMG)
-   * Priority 3: Expansions (Forge of Artificer, etc.)
-   * Priority 4: Adventures (highest - most specific content)
+   * Compendium priority levels (higher = preferred).
+   *
+   * Covers ONLY the 11 official Wizards of the Coast packages on Foundry VTT
+   * (see {@link OFFICIAL_WOTC_PACKAGES}).
+   *
+   * Priority 1: SRD / Tasha's (lowest — fallback/options)
+   * Priority 2: Core Rulebooks 2024 (Monster Manual, PHB, DMG)
+   * Priority 3: Expansions (Forge of the Artificer)
+   * Priority 4: Adventures (highest — adventure-specific reskins preferred)
+   *
    * @type {Object<string, number>}
    * @static
    * @readonly
    */
   static #COMPENDIUM_PRIORITIES = Object.freeze({
     // ── Priority 1 ─ FALLBACK ─────────────────────────────────────────────────
-    // SRD system compendium and older sourcebooks used as last-resort fallback.
-    "dnd5e": 1,
-    // Tasha's Cauldron of Everything (2020) - subclass options, some creatures
-    "dnd-tashas-cauldron": 1,
-
-    // ── Priority 1 ─ LEGACY MONSTER BOOKS (2014 era) ─────────────────────────
-    // Still widely used; treated as fallback so 2024 editions take precedence.
-    // Volo's Guide to Monsters (2016)
-    "dnd-volos-guide-to-monsters": 1,
-    // Mordenkainen's Tome of Foes (2018)
-    "dnd-mordenkainens-tome-of-foes": 1,
-    // Monsters of the Multiverse (2022) — composite of VGM + MToF
-    "dnd-monsters-of-the-multiverse": 1,
-    // Alternate slug sometimes used by DDB-Importer
-    "dnd-mordenkainen-monsters-multiverse": 1,
-    // Fizban's Treasury of Dragons (2021)
-    "dnd-fizbans-treasury-of-dragons": 1,
-    // Mythic Odysseys of Theros (2020)
-    "dnd-mythic-odysseys-of-theros": 1,
-    // Eberron: Rising from the Last War (2019)
-    "dnd-eberron-rising-last-war": 1,
-    // Explorer's Guide to Wildemount (2020)
-    "dnd-explorers-guide-wildemount": 1,
-    // Van Richten's Guide to Ravenloft (2021)
-    "dnd-van-richtens-guide-ravenloft": 1,
-    // Spelljammer: Adventures in Space (2022) — note: also listed under adventures
-    "dnd-spelljammer-light-of-xaryxis": 1,
+    "dnd5e": 1,                           // D&D 5e system SRD monsters
+    "dnd-tashas-cauldron": 1,             // Tasha's Cauldron of Everything
 
     // ── Priority 2 ─ CORE (2024 edition) ──────────────────────────────────────
-    // 2024 core rulebooks take precedence over legacy books.
-    "dnd-monster-manual": 2,
-    "dnd-players-handbook": 2,
-    "dnd-dungeon-masters-guide": 2,
+    "dnd-monster-manual": 2,              // Monster Manual (2024)
+    "dnd-players-handbook": 2,            // Player's Handbook (2024)
+    "dnd-dungeon-masters-guide": 2,       // Dungeon Master's Guide (2024)
 
     // ── Priority 3 ─ EXPANSIONS ───────────────────────────────────────────────
-    // Expansion sourcebooks with new/variant monsters.
-    // Eberron: Forge of the Artificer (2024)
-    "dnd-forge-artificer": 3,
-    // --- Placeholders for upcoming 2024/2025 sourcebooks (uncomment when released) ---
-    // "dnd-planescape-adventures-2024": 3,   // Planescape (2024 rework, TBD)
-    // "dnd-spelljammer-2024": 3,             // Spelljammer rework (2024, TBD)
-    // "dnd-greyhawk-2024": 3,                // Greyhawk (2024, TBD)
+    "dnd-forge-artificer": 3,             // Eberron: Forge of the Artificer
 
     // ── Priority 4 ─ ADVENTURES ───────────────────────────────────────────────
-    // Adventure modules ship bespoke/reskinned tokens — always preferred.
-    // 2024+ Adventures
-    "dnd-vecna-eve-of-ruin": 4,
-    "dnd-quests-from-the-infinite-staircase": 4,
-    "dnd-book-of-many-things": 4,              // The Book of Many Things (2023)
-    // Phandelver and Below: The Shattered Obelisk (2023)
-    "dnd-phandelver-below": 4,
-    // Legacy adventures still in active use
-    "dnd-tomb-annihilation": 4,
-    "dnd-adventures-faerun": 4,
-    "dnd-heroes-faerun": 4,
-    "dnd-heroes-borderlands": 4,
-    // Curse of Strahd: Revamped (2020)
-    "dnd-curse-of-strahd-revamped": 4,
-    // Descent into Avernus (2019)
-    "dnd-descent-into-avernus": 4,
-    // Rime of the Frostmaiden / Icewind Dale (2020)
-    "dnd-icewind-dale": 4,
-    // Ghosts of Saltmarsh (2019)
-    "dnd-ghosts-of-saltmarsh": 4,
-    // Candlekeep Mysteries (2021)
-    "dnd-candlekeep-mysteries": 4,
-    // The Wild Beyond the Witchlight (2021)
-    "dnd-wild-beyond-witchlight": 4,
-    // Strixhaven: A Curriculum of Chaos (2021)
-    "dnd-strixhaven-curriculum-chaos": 4,
-    // Keys from the Golden Vault (2023)
-    "dnd-keys-from-the-golden-vault": 4,
-    // Call of the Netherdeep (2022)
-    "dnd-call-of-the-netherdeep": 4,
-    // Spelljammer: Adventures in Space (2022)
-    "dnd-spelljammer-adventures-in-space": 4,
-    // Journeys through the Radiant Citadel (2022)
-    "dnd-journeys-radiant-citadel": 4,
-    // Dragonlance: Shadow of the Dragon Queen (2022)
-    "dnd-dragonlance-shadow-dragon-queen": 4,
-    // Planescape: Adventures in the Multiverse (2023)
-    "dnd-planescape-adventures-multiverse": 4
+    "dnd-phandelver-below": 4,            // Phandelver and Below: The Shattered Obelisk
+    "dnd-tomb-annihilation": 4,           // Tomb of Annihilation
+    "dnd-adventures-faerun": 4,           // Forgotten Realms: Adventures in Faerûn
+    "dnd-heroes-faerun": 4,               // Forgotten Realms: Heroes of Faerûn
+    "dnd-heroes-borderlands": 4           // Heroes of the Borderlands
   });
   static get COMPENDIUM_PRIORITIES() {
     return CompendiumManager.#COMPENDIUM_PRIORITIES;
@@ -368,55 +341,24 @@ class CompendiumManager {
   });
 
   /**
-   * Human-readable names for known WotC module IDs
-   * Used for display in logs and settings UI
+   * Human-readable labels for the 11 official WotC packages.
+   * Used for display in logs and settings UI.
    * @type {Object<string, string>}
    * @static
    * @readonly
    */
   static #KNOWN_MODULE_LABELS = Object.freeze({
-    // Fallback / SRD
     "dnd5e": "D&D 5e SRD Monsters",
     "dnd-tashas-cauldron": "Tasha's Cauldron of Everything",
-    // Legacy monster books (priority 1)
-    "dnd-volos-guide-to-monsters": "Volo's Guide to Monsters",
-    "dnd-mordenkainens-tome-of-foes": "Mordenkainen's Tome of Foes",
-    "dnd-monsters-of-the-multiverse": "Monsters of the Multiverse",
-    "dnd-mordenkainen-monsters-multiverse": "Mordenkainen Presents: Monsters of the Multiverse",
-    "dnd-fizbans-treasury-of-dragons": "Fizban's Treasury of Dragons",
-    "dnd-mythic-odysseys-of-theros": "Mythic Odysseys of Theros",
-    "dnd-eberron-rising-last-war": "Eberron: Rising from the Last War",
-    "dnd-explorers-guide-wildemount": "Explorer's Guide to Wildemount",
-    "dnd-van-richtens-guide-ravenloft": "Van Richten's Guide to Ravenloft",
-    "dnd-spelljammer-light-of-xaryxis": "Spelljammer: Light of Xaryxis",
-    // Core 2024
     "dnd-monster-manual": "Monster Manual (2024)",
     "dnd-players-handbook": "Player's Handbook (2024)",
     "dnd-dungeon-masters-guide": "Dungeon Master's Guide (2024)",
-    // Expansions
     "dnd-forge-artificer": "Eberron: Forge of the Artificer",
-    // Adventures
-    "dnd-vecna-eve-of-ruin": "Vecna: Eve of Ruin",
-    "dnd-quests-from-the-infinite-staircase": "Quests from the Infinite Staircase",
-    "dnd-book-of-many-things": "The Book of Many Things",
     "dnd-phandelver-below": "Phandelver and Below: The Shattered Obelisk",
     "dnd-tomb-annihilation": "Tomb of Annihilation",
     "dnd-adventures-faerun": "Forgotten Realms: Adventures in Faerûn",
     "dnd-heroes-faerun": "Forgotten Realms: Heroes of Faerûn",
-    "dnd-heroes-borderlands": "Heroes of the Borderlands",
-    "dnd-curse-of-strahd-revamped": "Curse of Strahd: Revamped",
-    "dnd-descent-into-avernus": "Baldur's Gate: Descent into Avernus",
-    "dnd-icewind-dale": "Icewind Dale: Rime of the Frostmaiden",
-    "dnd-ghosts-of-saltmarsh": "Ghosts of Saltmarsh",
-    "dnd-candlekeep-mysteries": "Candlekeep Mysteries",
-    "dnd-wild-beyond-witchlight": "The Wild Beyond the Witchlight",
-    "dnd-strixhaven-curriculum-chaos": "Strixhaven: A Curriculum of Chaos",
-    "dnd-keys-from-the-golden-vault": "Keys from the Golden Vault",
-    "dnd-call-of-the-netherdeep": "Critical Role: Call of the Netherdeep",
-    "dnd-spelljammer-adventures-in-space": "Spelljammer: Adventures in Space",
-    "dnd-journeys-radiant-citadel": "Journeys through the Radiant Citadel",
-    "dnd-dragonlance-shadow-dragon-queen": "Dragonlance: Shadow of the Dragon Queen",
-    "dnd-planescape-adventures-multiverse": "Planescape: Adventures in the Multiverse"
+    "dnd-heroes-borderlands": "Heroes of the Borderlands"
   });
   static get KNOWN_MODULE_LABELS() {
     return CompendiumManager.#KNOWN_MODULE_LABELS;
@@ -439,15 +381,15 @@ class CompendiumManager {
   static getCompendiumPriority(pack) {
     const packageName = pack.metadata.packageName || "";
 
-    // Check if we have a specific priority defined
+    // Strict whitelist lookup — only official WotC packages have a priority.
     if (packageName in CompendiumManager.COMPENDIUM_PRIORITIES) {
       return CompendiumManager.COMPENDIUM_PRIORITIES[packageName];
     }
 
-    // Default for unknown dnd- modules: assume they are adventures (highest priority)
-    if (packageName.startsWith("dnd-")) {
-      return 4;
-    }
+    // Non-WotC packages receive no implicit priority. Any other dnd-* module
+    // (homebrew, DDB-Importer, community content) is deliberately excluded —
+    // previous prefix-based fallback caused false positives with third-party
+    // content. See OFFICIAL_WOTC_PACKAGES for the authoritative list.
 
     // Fallback for unknown packages (non-WOTC)
     return 1;
@@ -474,9 +416,12 @@ class CompendiumManager {
       // Only Actor compendiums
       if (pack.documentName !== "Actor") return false;
 
-      // Check if package name starts with known WOTC prefixes
+      // Whitelist check: include only the 11 official WotC packages on Foundry VTT
+      // (see OFFICIAL_WOTC_PACKAGES). Prefix-based matching was removed in 1.6.0
+      // because it captured third-party modules (DDB-Importer, homebrew, legacy
+      // books not published by WotC on Foundry).
       const packageName = pack.metadata.packageName || "";
-      const isWotc = CompendiumManager.WOTC_MODULE_PREFIXES.some(prefix => packageName.startsWith(prefix));
+      const isWotc = CompendiumManager.OFFICIAL_WOTC_PACKAGES.includes(packageName);
 
       return isWotc;
     });

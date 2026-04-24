@@ -118,7 +118,7 @@ https://github.com/Aiacos/npc-token-replacer/releases/latest/download/module.jso
 
 ### Key Features by Component
 
-**Compendium Detection** (`CompendiumManager`): Auto-discovers WotC Actor compendiums by `dnd-` and `dnd5e` prefixes
+**Compendium Detection** (`CompendiumManager`): Detects WotC Actor compendiums using a strict whitelist (`OFFICIAL_WOTC_PACKAGES`) of the 11 packages published by Wizards of the Coast on Foundry VTT
 
 **Priority System** (`CompendiumManager.COMPENDIUM_PRIORITIES`): 4-tier system (Adventure > Expansion > Core > Fallback) determines which compendium version to use when duplicates exist
 
@@ -181,6 +181,7 @@ In addition to classes, three standalone utility functions remain:
 ```javascript
 const MODULE_ID = "npc-token-replacer";     // Module identifier
 const DEFAULT_HTTP_TIMEOUT_MS = 5000;        // HTTP timeout for HEAD requests
-const WOTC_MODULE_PREFIXES = ["dnd-", "dnd5e"]; // WOTC package prefixes
+const OFFICIAL_WOTC_PACKAGES = [ /* 11 WotC package IDs, see main.js */ ];
+const WOTC_MODULE_PREFIXES = ["dnd-", "dnd5e"]; // DEPRECATED since 1.6.0
 const COMPENDIUM_PRIORITIES = {...};         // Priority levels by package name
 ```

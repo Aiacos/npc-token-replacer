@@ -222,9 +222,11 @@ describe("ERR-03 — Per-compendium load error tracking", () => {
   });
 
   it("records per-pack errors during loadMonsterIndex", async () => {
+    // Use a whitelisted WotC packageName so detectWOTCCompendiums accepts it;
+    // the pack still simulates a failing getIndex() to trigger error tracking.
     const failingPack = {
-      collection: "dnd-broken.monsters",
-      metadata: { packageName: "dnd-broken", label: "Broken Pack" },
+      collection: "dnd-monster-manual.monsters",
+      metadata: { packageName: "dnd-monster-manual", label: "Broken Pack" },
       documentName: "Actor",
       getIndex: vi.fn().mockRejectedValue(new Error("Network timeout"))
     };
@@ -236,16 +238,16 @@ describe("ERR-03 — Per-compendium load error tracking", () => {
 
     const errors = CompendiumManager.getLastLoadErrors();
     expect(errors).toHaveLength(1);
-    expect(errors[0].packId).toBe("dnd-broken.monsters");
+    expect(errors[0].packId).toBe("dnd-monster-manual.monsters");
     expect(errors[0].packLabel).toBe("Broken Pack");
     expect(errors[0].error).toBe("Network timeout");
   });
 
   it("resets errors on each loadMonsterIndex call", async () => {
-    // First call with failure
+    // First call with failure — use whitelisted package so detection picks it up.
     const failingPack = {
-      collection: "dnd-broken.monsters",
-      metadata: { packageName: "dnd-broken", label: "Broken Pack" },
+      collection: "dnd-monster-manual.monsters",
+      metadata: { packageName: "dnd-monster-manual", label: "Broken Pack" },
       documentName: "Actor",
       getIndex: vi.fn().mockRejectedValue(new Error("fail"))
     };
@@ -264,8 +266,8 @@ describe("ERR-03 — Per-compendium load error tracking", () => {
 
   it("clearCache resets lastLoadErrors", async () => {
     const failingPack = {
-      collection: "dnd-broken.monsters",
-      metadata: { packageName: "dnd-broken", label: "Broken Pack" },
+      collection: "dnd-monster-manual.monsters",
+      metadata: { packageName: "dnd-monster-manual", label: "Broken Pack" },
       documentName: "Actor",
       getIndex: vi.fn().mockRejectedValue(new Error("fail"))
     };

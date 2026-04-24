@@ -5,6 +5,55 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.6.0] - 2026-04-24
+
+### Changed (BREAKING)
+
+- **Strict whitelist of official Wizards of the Coast packages.** The module
+  now recognises **only the 11 premium packages published by WotC on Foundry
+  VTT** (see [Foundry VTT creator page](https://foundryvtt.com/creators/wizards-of-the-coast/)).
+  Auto-discovery is no longer prefix-based.
+  - Whitelisted package IDs:
+    `dnd5e`, `dnd-monster-manual`, `dnd-players-handbook`,
+    `dnd-dungeon-masters-guide`, `dnd-forge-artificer`, `dnd-tashas-cauldron`,
+    `dnd-phandelver-below`, `dnd-tomb-annihilation`, `dnd-adventures-faerun`,
+    `dnd-heroes-faerun`, `dnd-heroes-borderlands`.
+  - Removed non-WotC legacy books (Volo's Guide, Mordenkainen's Tome of Foes,
+    Monsters of the Multiverse, Fizban's, Mythic Odysseys of Theros, Eberron:
+    Rising from the Last War, Explorer's Guide to Wildemount, Van Richten's,
+    Spelljammer: Light of Xaryxis) — these are **not** published by WotC on
+    Foundry.
+  - Removed non-WotC adventures (Curse of Strahd, Descent into Avernus,
+    Icewind Dale, Ghosts of Saltmarsh, Candlekeep Mysteries, Wild Beyond the
+    Witchlight, Strixhaven, Golden Vault, Netherdeep, Spelljammer: Adventures
+    in Space, Radiant Citadel, Dragonlance, Planescape, Vecna, Infinite
+    Staircase, Book of Many Things).
+  - Removed `ddb-` (DDB-Importer) prefix — DDB-Importer is a third-party
+    community module, not a WotC package.
+- **`CompendiumManager.detectWOTCCompendiums()`** now uses
+  `OFFICIAL_WOTC_PACKAGES.includes(packageName)` instead of prefix matching.
+  Non-whitelisted `dnd-*` or `ddb-*` compendiums are no longer auto-detected.
+- **`CompendiumManager.getCompendiumPriority()`** fall-through changed: unknown
+  `dnd-*` packages now return priority 1 (fallback) instead of 4 (adventure).
+
+### Added
+
+- **`CompendiumManager.OFFICIAL_WOTC_PACKAGES`** — new frozen static getter
+  exposing the authoritative 11-package whitelist.
+
+### Deprecated
+
+- **`CompendiumManager.WOTC_MODULE_PREFIXES`** — kept for backward compatibility
+  but no longer used by detection logic. Will be removed in a future major
+  release. Consumers should migrate to `OFFICIAL_WOTC_PACKAGES`.
+
+### Migration notes
+
+If your world relied on auto-detection of non-WotC `dnd-*` or `ddb-*`
+compendiums, you will need to either (a) enable those compendiums via an
+explicit pack-ID setting, or (b) fork the module and extend
+`OFFICIAL_WOTC_PACKAGES` locally.
+
 ## [1.5.1] - 2026-04-24
 
 ### Fixed
