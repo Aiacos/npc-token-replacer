@@ -269,7 +269,7 @@ describe("CompendiumManager", () => {
   describe("static getters", () => {
 
     it("WOTC_MODULE_PREFIXES returns expected prefixes", () => {
-      expect(CompendiumManager.WOTC_MODULE_PREFIXES).toEqual(["dnd-", "dnd5e"]);
+      expect(CompendiumManager.WOTC_MODULE_PREFIXES).toEqual(["dnd-", "dnd5e", "ddb-"]);
     });
 
     it("COMPENDIUM_PRIORITIES includes all known packages", () => {
