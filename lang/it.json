@@ -1,0 +1,70 @@
+{
+  "NPC_REPLACER": {
+    "Title": "NPC Token Replacer",
+    "Button": "Sostituisci Token NPC",
+    "Processing": "Elaborazione di {count} token...",
+    "ProgressStart": "Sostituzione di {count} token...",
+    "ProgressUpdate": "({current}/{total}) {name}",
+    "Complete": "{count} token sostituiti con successo",
+    "NoTokens": "Nessun token NPC trovato nella scena corrente",
+    "NoSelectedNPCs": "Nessun token NPC nella selezione (seleziona token NPC oppure deseleziona tutto per elaborare l'intera scena)",
+    "NotFound": "Non trovato nei compendi: {name}",
+    "NotFoundCount": "{count} creature non trovate nei compendi",
+    "Error": "Errore nella sostituzione del token: {name}",
+    "ErrorCount": "Si sono verificati {count} errori durante la sostituzione",
+    "SummaryPartialFailure": "Sostituzione completata con problemi: {replaced} sostituiti, {noMatch} non trovati, {importFailed} errori di importazione, {creationFailed} errori di creazione",
+    "ErrorSettingsRetrieve": "Impossibile leggere le impostazioni del compendio. Utilizzo dei compendi predefiniti.",
+    "ErrorSettingsParse": "Le impostazioni del compendio sono danneggiate. Utilizzo dei compendi predefiniti.",
+    "ErrorCompendiumLoad": "Impossibile caricare il compendio: {name}",
+    "ErrorFolderCreate": "Impossibile creare la cartella di importazione. Gli attori saranno importati nella radice.",
+    "NoScene": "Nessuna scena attiva trovata",
+    "NoModule": "Nessun compendio D&D ufficiale trovato. Installa contenuti D&D ufficiali (Manuale dei Mostri, Avventure, ecc.)",
+    "NoCompendium": "Nessun compendio disponibile per la sostituzione dei token",
+    "GMOnly": "Solo il GM può sostituire i token",
+    "PreviewScanning": "Scansione token...",
+    "PreviewTitle": "Anteprima Sostituzione Token",
+    "PreviewSummary": "{matched} di {total} token abbinati",
+    "PreviewColToken": "Nome Token",
+    "PreviewColMatch": "Sarà abbinato come",
+    "PreviewColSource": "Compendio Sorgente",
+    "PreviewNoMatch": "Nessuna corrispondenza trovata",
+    "ConfirmTitle": "Conferma Sostituzione Token",
+    "ConfirmContent": "I seguenti {count} token NPC saranno sostituiti con versioni ufficiali D&D:",
+    "ConfirmProceed": "Vuoi procedere?",
+    "ConfirmYes": "Sostituisci Token",
+    "ConfirmNo": "Annulla",
+    "Settings": {
+      "VariationMode": {
+        "Name": "Modalità Variazione Token",
+        "Hint": "Come selezionare l'immagine del token quando sono disponibili più variazioni per una creatura.",
+        "None": "Nessuna (sempre il primo)",
+        "Sequential": "Sequenziale",
+        "Random": "Casuale"
+      },
+      "EnabledCompendiums": {
+        "Name": "Compendi Abilitati",
+        "Hint": "Quali compendi utilizzare per trovare i token delle creature."
+      },
+      "CompendiumSelector": {
+        "Name": "Seleziona Compendi",
+        "Label": "Configura Compendi",
+        "Hint": "Scegli quali compendi D&D ufficiali usare per cercare i token delle creature.",
+        "Title": "Selezione Compendi",
+        "ModeLabel": "Modalità Selezione Compendi",
+        "ModeDefault": "Solo Core + Fallback (Consigliato)",
+        "ModeDefaultHint": "Usa solo SRD, Tasha's Cauldron, Manuale dei Mostri, GdG e GMG. Ideale per partite standard.",
+        "ModeAll": "Tutti i Compendi",
+        "ModeAllHint": "Usa tutti i compendi D&D ufficiali installati, incluse avventure ed espansioni.",
+        "ModeCustom": "Selezione Personalizzata",
+        "ModeCustomHint": "Seleziona manualmente quali compendi usare dall'elenco sottostante.",
+        "SelectCompendiums": "Compendi Disponibili:",
+        "Saved": "Impostazioni compendio salvate. L'indice sarà ricaricato al prossimo utilizzo.",
+        "SaveError": "Impossibile salvare le impostazioni del compendio. Riprova."
+      },
+      "HttpTimeout": {
+        "Name": "Timeout HTTP (secondi)",
+        "Hint": "Timeout per le richieste di rete durante la risoluzione dei percorsi token con wildcard. Aumenta per connessioni lente."
+      }
+    }
+  }
+}

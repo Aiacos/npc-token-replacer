@@ -18,39 +18,84 @@ A Foundry VTT module that automatically replaces NPC tokens in your scene with o
 
 ## Supported Official D&D Content
 
-The module automatically detects and supports all official Wizards of the Coast content for Foundry VTT:
+The module explicitly recognises **37 official WotC module IDs** across four priority tiers,
+and auto-discovers any additional `dnd-*` or `ddb-*` compendiums at runtime.
 
-| Module ID | Content | Priority |
-|-----------|---------|----------|
-| `dnd-phandelver-below` | Phandelver and Below: The Shattered Obelisk | 4-ADVENTURE |
-| `dnd-tomb-annihilation` | Tomb of Annihilation | 4-ADVENTURE |
-| `dnd-adventures-faerun` | Forgotten Realms: Adventures in Faerun | 4-ADVENTURE |
-| `dnd-heroes-faerun` | Forgotten Realms: Heroes of Faerun | 4-ADVENTURE |
-| `dnd-heroes-borderlands` | Heroes of the Borderlands | 4-ADVENTURE |
-| `dnd-forge-artificer` | Eberron: Forge of the Artificer | 3-EXPANSION |
-| `dnd-monster-manual` | Monster Manual (2024) | 2-CORE |
-| `dnd-players-handbook` | Player's Handbook (2024) | 2-CORE |
-| `dnd-dungeon-masters-guide` | Dungeon Master's Guide (2024) | 2-CORE |
-| `dnd-tashas-cauldron` | Tasha's Cauldron of Everything | 1-FALLBACK |
-| `dnd5e` | D&D 5e System SRD Monsters | 1-FALLBACK |
+### Priority 4 — ADVENTURE (highest — adventure-specific tokens preferred)
+
+| Module ID | Content |
+|-----------|---------|
+| `dnd-vecna-eve-of-ruin` | Vecna: Eve of Ruin |
+| `dnd-quests-from-the-infinite-staircase` | Quests from the Infinite Staircase |
+| `dnd-book-of-many-things` | The Book of Many Things |
+| `dnd-phandelver-below` | Phandelver and Below: The Shattered Obelisk |
+| `dnd-tomb-annihilation` | Tomb of Annihilation |
+| `dnd-adventures-faerun` | Forgotten Realms: Adventures in Faerûn |
+| `dnd-heroes-faerun` | Forgotten Realms: Heroes of Faerûn |
+| `dnd-heroes-borderlands` | Heroes of the Borderlands |
+| `dnd-curse-of-strahd-revamped` | Curse of Strahd: Revamped |
+| `dnd-descent-into-avernus` | Baldur's Gate: Descent into Avernus |
+| `dnd-icewind-dale` | Icewind Dale: Rime of the Frostmaiden |
+| `dnd-ghosts-of-saltmarsh` | Ghosts of Saltmarsh |
+| `dnd-candlekeep-mysteries` | Candlekeep Mysteries |
+| `dnd-wild-beyond-witchlight` | The Wild Beyond the Witchlight |
+| `dnd-strixhaven-curriculum-chaos` | Strixhaven: A Curriculum of Chaos |
+| `dnd-keys-from-the-golden-vault` | Keys from the Golden Vault |
+| `dnd-call-of-the-netherdeep` | Critical Role: Call of the Netherdeep |
+| `dnd-spelljammer-adventures-in-space` | Spelljammer: Adventures in Space |
+| `dnd-journeys-radiant-citadel` | Journeys through the Radiant Citadel |
+| `dnd-dragonlance-shadow-dragon-queen` | Dragonlance: Shadow of the Dragon Queen |
+| `dnd-planescape-adventures-multiverse` | Planescape: Adventures in the Multiverse |
+
+### Priority 3 — EXPANSION
+
+| Module ID | Content |
+|-----------|---------|
+| `dnd-forge-artificer` | Eberron: Forge of the Artificer |
+
+### Priority 2 — CORE (2024 editions)
+
+| Module ID | Content |
+|-----------|---------|
+| `dnd-monster-manual` | Monster Manual (2024) |
+| `dnd-players-handbook` | Player's Handbook (2024) |
+| `dnd-dungeon-masters-guide` | Dungeon Master's Guide (2024) |
+
+### Priority 1 — FALLBACK (legacy books & SRD)
+
+| Module ID | Content |
+|-----------|---------|
+| `dnd-volos-guide-to-monsters` | Volo's Guide to Monsters |
+| `dnd-mordenkainens-tome-of-foes` | Mordenkainen's Tome of Foes |
+| `dnd-monsters-of-the-multiverse` | Monsters of the Multiverse |
+| `dnd-mordenkainen-monsters-multiverse` | Mordenkainen Presents: Monsters of the Multiverse *(alias)* |
+| `dnd-fizbans-treasury-of-dragons` | Fizban's Treasury of Dragons |
+| `dnd-mythic-odysseys-of-theros` | Mythic Odysseys of Theros |
+| `dnd-eberron-rising-last-war` | Eberron: Rising from the Last War |
+| `dnd-explorers-guide-wildemount` | Explorer's Guide to Wildemount |
+| `dnd-van-richtens-guide-ravenloft` | Van Richten's Guide to Ravenloft |
+| `dnd-spelljammer-light-of-xaryxis` | Spelljammer: Light of Xaryxis |
+| `dnd-tashas-cauldron` | Tasha's Cauldron of Everything |
+| `dnd5e` | D&D 5e System SRD Monsters |
 
 ### Compendium Priority System
 
-When the same creature exists in multiple compendiums, the module uses a 4-tier priority system to select the best match:
+When the same creature exists in multiple compendiums, the module uses a 4-tier priority
+system to select the best match:
 
-1. **Priority 4 - ADVENTURE**: Creatures from adventure modules (Phandelver, Tomb of Annihilation, etc.) are preferred as they have adventure-specific versions
-2. **Priority 3 - EXPANSION**: Expansion books (Forge of Artificer) provide updated or variant creatures
-3. **Priority 2 - CORE**: Core rulebooks (Monster Manual, PHB, DMG) provide the standard creature stats
-4. **Priority 1 - FALLBACK**: SRD and Tasha's Cauldron content as fallback options
+1. **Priority 4 – ADVENTURE**: Creatures from adventure modules are preferred — they carry
+   adventure-specific art and stat blocks.
+2. **Priority 3 – EXPANSION**: Expansion books with new or variant creatures.
+3. **Priority 2 – CORE**: 2024 core rulebooks (Monster Manual, PHB, DMG).
+4. **Priority 1 – FALLBACK**: Legacy 2014-era books and the SRD, used as last resort.
 
-This ensures you always get the best available token art and creature data!
-
-New official content is automatically detected - no module updates required!
+Any `dnd-*` or `ddb-*` compendium **not** in the explicit list is automatically assigned
+priority 4 (ADVENTURE) — so newly released content works without a module update.
 
 ## Requirements
 
-- **Foundry VTT**: Version 12 or higher (verified on v13)
-- **System**: D&D 5th Edition (dnd5e)
+- **Foundry VTT**: Version 13 or higher (verified on v14)
+- **System**: D&D 5th Edition (dnd5e) v4.0.0+
 - **Official D&D Content**: At least one official D&D module with Actor compendiums (e.g., Monster Manual 2024)
 
 ## Installation

@@ -5,6 +5,45 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.5.0] - 2025-05-XX
+
+### Added
+- **Expanded official D&D 5e manual support**: `CompendiumManager.#COMPENDIUM_PRIORITIES` now
+  explicitly covers 37 official WotC module IDs across four priority tiers:
+  - *Priority 1 – FALLBACK*: SRD (`dnd5e`), Tasha's Cauldron, Volo's Guide to Monsters,
+    Mordenkainen's Tome of Foes, Monsters of the Multiverse (+ alias), Fizban's Treasury of
+    Dragons, Mythic Odysseys of Theros, Eberron: Rising from the Last War, Explorer's Guide
+    to Wildemount, Van Richten's Guide to Ravenloft, Spelljammer: Light of Xaryxis
+  - *Priority 2 – CORE*: Monster Manual 2024, Player's Handbook 2024, Dungeon Master's Guide 2024
+  - *Priority 3 – EXPANSION*: Forge of the Artificer; placeholder comments for future 2024/2025
+    sourcebooks (Planescape, Spelljammer rework, Greyhawk)
+  - *Priority 4 – ADVENTURE*: 19 adventure modules from Tomb of Annihilation to Planescape:
+    Adventures in the Multiverse
+- **`KNOWN_MODULE_LABELS`** static map — human-readable names for all known module IDs, used
+  in logs and future UI improvements.
+- **`ddb-` prefix** added to `WOTC_MODULE_PREFIXES` for DDB-Importer compendium auto-discovery.
+- **Italian localization** (`lang/it.json`) — full translation of all UI strings.
+- **CI/CD workflows** (`.github/workflows/ci.yml` and `release.yml`):
+  - `ci.yml`: runs on push/PR to main & develop; `npm ci` → `npm test` → optional lint
+  - `release.yml`: stable releases from `main`, pre-release RC from `develop`; auto-bumps
+    patch if tag exists; builds ZIP; creates GitHub Release with ZIP + module.json as assets
+    (The Forge compatible via `manifest` URL)
+- **`MIGRATION_V13.md`**: checklist of deprecated Foundry APIs with fix status.
+
+### Changed
+- **Compatibility**: `minimum` bumped from `12` → `13`; `verified` bumped to `14`;
+  `maximum` removed for forward-compatibility.
+- **dnd5e system relationship**: added `compatibility.minimum: "4.0.0"`.
+- **`Dialog.confirm`** now feature-detects `foundry.applications.api.DialogV2` (Foundry v13+)
+  and falls back to legacy `Dialog.confirm` — no behaviour change on v13/v14.
+- **`package.json`**: version aligned to `1.5.0`; added `foundry` section
+  (`minimum: "13"`, `verified: "14"`).
+
+## [1.4.1] - 2025-04-XX
+
+### Fixed
+- Minor stability improvements.
+
 ## [1.4.0] - 2025-01-XX
 
 ### Changed
