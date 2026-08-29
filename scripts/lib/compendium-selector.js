@@ -62,7 +62,7 @@ class CompendiumSelectorModel {
         return {
           id: pack.collection,
           name: pack.metadata.label,
-          module: pack.metadata.packageName,
+          module: SourceDetector.KNOWN_MODULE_LABELS[pack.metadata.packageName] ?? pack.metadata.packageName,
           priority,
           priorityLabel: SourceDetector.PRIORITY_LABELS[priority] || "UNKNOWN",
           tier,

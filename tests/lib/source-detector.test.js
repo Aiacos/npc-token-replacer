@@ -4,9 +4,10 @@ import { SourceDetector, PRIORITY, TIER } from "../../scripts/lib/source-detecto
 /**
  * SourceDetector Unit Tests
  *
- * The detector must recognise official D&D content from package *signals*
- * rather than a maintained list, so these tests cover packages that are not in
- * the known-priority table at all.
+ * Detection has two deliberate layers: an exact whitelist of the Wizards of the
+ * Coast packages (trusted by default) and forward-looking signals that surface
+ * content released after this version without trusting it silently. These tests
+ * pin both, and pin that package-id prefixes are NOT a signal.
  */
 
 const pack = (packageName, { packageType = "", collection } = {}) => ({
@@ -29,7 +30,7 @@ afterEach(() => {
 
 describe("SourceDetector.classify", () => {
 
-  describe("tier recognition", () => {
+  describe("trusted tiers", () => {
 
     it("treats the active game system as the SRD baseline", () => {
       const result = SourceDetector.classify(pack("dnd5e", { packageType: "system" }));
@@ -38,23 +39,51 @@ describe("SourceDetector.classify", () => {
       expect(result.priority).toBe(PRIORITY.FALLBACK);
     });
 
-    it("recognises the official dnd- package prefix", () => {
-      const result = SourceDetector.classify(pack("dnd-monster-manual"));
-      expect(result.tier).toBe(TIER.OFFICIAL);
-      expect(result.official).toBe(true);
+    it("trusts every whitelisted Wizards of the Coast package", () => {
+      for (const packageName of SourceDetector.OFFICIAL_WOTC_PACKAGES) {
+        const result = SourceDetector.classify(pack(packageName));
+        expect(result.official, `${packageName} should be official`).toBe(true);
+      }
     });
 
-    it("recognises a WotC-authored module that does NOT use the prefix", () => {
-      modules.set("greyhawk-gazetteer", {
+    it("exposes a human-readable book name for whitelisted packages", () => {
+      expect(SourceDetector.classify(pack("dnd-monster-manual")).label).toBe("Monster Manual (2024)");
+    });
+
+  });
+
+  describe("package-id prefixes are not a signal", () => {
+
+    it("does NOT trust an unknown dnd- package", () => {
+      const result = SourceDetector.classify(pack("dnd-homebrew-adventure"));
+      expect(result.tier).toBe(TIER.NONE);
+      expect(result.official).toBe(false);
+    });
+
+    it("does NOT trust a ddb- importer package", () => {
+      expect(SourceDetector.classify(pack("ddb-importer")).tier).toBe(TIER.NONE);
+    });
+
+    it("grants no implicit priority to an unrecognised package", () => {
+      expect(SourceDetector.classify(pack("dnd-homebrew-adventure")).priority).toBe(PRIORITY.FALLBACK);
+    });
+
+  });
+
+  describe("forward-looking signals", () => {
+
+    it("flags a WotC-authored package outside the whitelist as PUBLISHER, not official", () => {
+      modules.set("dnd-brand-new-book", {
         authors: [{ name: "Wizards of the Coast" }],
         packs: [{ type: "Actor" }]
       });
-      const result = SourceDetector.classify(pack("greyhawk-gazetteer"));
-      expect(result.tier).toBe(TIER.OFFICIAL);
-      expect(result.official).toBe(true);
+      const result = SourceDetector.classify(pack("dnd-brand-new-book"));
+      expect(result.tier).toBe(TIER.PUBLISHER);
+      // Detected and surfaced to the GM, but not trusted without opting in
+      expect(result.official).toBe(false);
     });
 
-    it("recognises premium content built for the active system as a non-official tier", () => {
+    it("flags premium content built for the active system as PREMIUM", () => {
       modules.set("third-party-bestiary", {
         protected: true,
         relationships: { systems: [{ id: "dnd5e" }] },
@@ -79,50 +108,44 @@ describe("SourceDetector.classify", () => {
       expect(SourceDetector.classify(pack("homebrew-monsters"), manual).tier).toBe(TIER.MANUAL);
     });
 
-    it("rejects unrelated community packages", () => {
-      expect(SourceDetector.classify(pack("homebrew-monsters")).tier).toBe(TIER.NONE);
+    it("accepts a manual override given as a pack collection id", () => {
+      const manual = new Set(["homebrew-monsters.beasts"]);
+      const result = SourceDetector.classify(pack("homebrew-monsters", { collection: "homebrew-monsters.beasts" }), manual);
+      expect(result.tier).toBe(TIER.MANUAL);
     });
 
   });
 
-  describe("dynamic priority classification", () => {
+  describe("dynamic priority for packages outside the whitelist", () => {
+
+    const publisherModule = packs => ({ authors: [{ name: "Wizards of the Coast" }], packs });
 
     it("classifies a module shipping an Adventure pack as adventure content", () => {
-      modules.set("dnd-brand-new-adventure", {
-        packs: [{ type: "Actor" }, { type: "Adventure" }, { type: "Scene" }]
-      });
-      expect(SourceDetector.classify(pack("dnd-brand-new-adventure")).priority).toBe(PRIORITY.ADVENTURE);
+      modules.set("dnd-new-adventure", publisherModule([{ type: "Actor" }, { type: "Adventure" }, { type: "Scene" }]));
+      expect(SourceDetector.classify(pack("dnd-new-adventure")).priority).toBe(PRIORITY.ADVENTURE);
     });
 
     it("classifies a module shipping Scenes but no Adventure as an expansion", () => {
-      modules.set("dnd-brand-new-setting", {
-        packs: [{ type: "Actor" }, { type: "Scene" }]
-      });
-      expect(SourceDetector.classify(pack("dnd-brand-new-setting")).priority).toBe(PRIORITY.EXPANSION);
+      modules.set("dnd-new-setting", publisherModule([{ type: "Actor" }, { type: "Scene" }]));
+      expect(SourceDetector.classify(pack("dnd-new-setting")).priority).toBe(PRIORITY.EXPANSION);
     });
 
-    it("classifies an official module with neither as a core rulebook", () => {
-      modules.set("dnd-brand-new-rulebook", {
-        packs: [{ type: "Actor" }, { type: "Item" }, { type: "JournalEntry" }]
-      });
-      expect(SourceDetector.classify(pack("dnd-brand-new-rulebook")).priority).toBe(PRIORITY.CORE);
+    it("classifies a module with neither as a rulebook", () => {
+      modules.set("dnd-new-rulebook", publisherModule([{ type: "Actor" }, { type: "Item" }]));
+      expect(SourceDetector.classify(pack("dnd-new-rulebook")).priority).toBe(PRIORITY.CORE);
     });
 
-    it("keeps the known-priority table authoritative over the dynamic guess", () => {
+    it("keeps the whitelist priorities authoritative over the dynamic guess", () => {
       // Monster Manual ships Scenes in some releases; it must still rank as CORE
       modules.set("dnd-monster-manual", { packs: [{ type: "Actor" }, { type: "Scene" }] });
       expect(SourceDetector.classify(pack("dnd-monster-manual")).priority).toBe(PRIORITY.CORE);
     });
 
-    it("falls back to adventure priority for an unknown dnd- package with no manifest data", () => {
-      expect(SourceDetector.classify(pack("dnd-unknown")).priority).toBe(PRIORITY.ADVENTURE);
-    });
+  });
 
-    it("never crashes when the module registry is unavailable", () => {
-      globalThis.game.modules = undefined;
-      expect(() => SourceDetector.classify(pack("dnd-monster-manual"))).not.toThrow();
-    });
-
+  it("never crashes when the module registry is unavailable", () => {
+    globalThis.game.modules = undefined;
+    expect(() => SourceDetector.classify(pack("dnd-monster-manual"))).not.toThrow();
   });
 
 });

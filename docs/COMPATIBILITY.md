@@ -72,8 +72,10 @@ Attaching *both* callbacks makes v13 run the action twice, so
 - **Actor types use a blocklist.** `CompendiumManager.isCreatureEntry` skips
   `character`, `group` and `vehicle`; any type a future system version adds is
   still indexed rather than silently dropped.
-- **Source detection uses signals, not ids.** See
-  [`scripts/lib/source-detector.js`](../scripts/lib/source-detector.js).
+- **Source detection is layered.** An exact whitelist of the Wizards of the
+  Coast packages is trusted by default; authorship and premium signals surface
+  books released after this version as opt-in. Package-id prefixes are never a
+  signal. See [`scripts/lib/source-detector.js`](../scripts/lib/source-detector.js).
 - **`compatibility.maximum` is never set.** The manifest validator fails the
   build if it is, because it would lock the module out of future generations.
 

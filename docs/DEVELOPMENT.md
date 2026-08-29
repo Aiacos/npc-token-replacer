@@ -13,7 +13,7 @@ The module has **no build step** — it is plain ES modules loaded by Foundry.
 `module.json` declares `flags.hotReload`, so edits to `styles/`, `templates/`
 and `lang/` are applied live without a refresh.
 
-Node 20 or 22 is required for the tooling (dev-only; the shipped module has no
+Foundry v13 or newer is required to run the module. Node 20 or 22 is required for the tooling (dev-only; the shipped module has no
 runtime dependencies).
 
 ```bash
@@ -41,6 +41,11 @@ npm run check      # all three, in order — run before pushing
 - a language file is not valid JSON
 - an i18n key is used in source but missing from `lang/en.json`
 - a template path referenced from source does not exist
+- a Handlebars partial referenced from a template does not exist
+
+Translation drift (a non-English file missing or over-declaring keys) is
+reported as a warning, so translations can lag behind the code without blocking
+a release.
 
 Unused i18n keys are reported as warnings rather than errors, so translations
 can stay ahead of the code.
@@ -117,7 +122,8 @@ validated without being published.
 | Task | Where |
 |------|-------|
 | A Foundry API that moved between generations | add an accessor to `scripts/lib/foundry-compat.js`, plus tests for both paths |
-| A new signal for recognising official content | `scripts/lib/source-detector.js` |
+| A newly published official WotC package | add its id to `OFFICIAL_WOTC_PACKAGES` and a label to `KNOWN_MODULE_LABELS` in `scripts/lib/source-detector.js` |
+| A new signal for recognising content | `scripts/lib/source-detector.js` |
 | A new module setting | `registerSettings()` in `scripts/main.js`, plus keys in `lang/en.json` |
 | A new field in the settings form | `templates/compendium-selector-body.hbs` (shared by both shells) and `CompendiumSelectorModel` |
 | A token property to preserve or adopt | `TokenReplacer.PRESERVED_PROPERTIES` / `#COMPENDIUM_TOKEN_FIELDS` |

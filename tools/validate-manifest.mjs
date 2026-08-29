@@ -121,6 +121,20 @@ if (englishKeys) {
   }
 }
 
+// ── translation parity ──────────────────────────────────────────────────────
+// Missing translations degrade gracefully in Foundry (the key falls back to
+// English), so this warns rather than fails — but silent drift is what let
+// lang/it.json fall 19 keys behind before it was noticed.
+if (englishKeys) {
+  for (const [lang, keys] of languageKeys) {
+    if (lang === "en") continue;
+    const missing = [...englishKeys].filter(key => !keys.has(key));
+    const extra = [...keys].filter(key => !englishKeys.has(key));
+    if (missing.length > 0) warn(`lang/${lang}.json is missing ${missing.length} key(s): ${missing.slice(0, 5).join(", ")}${missing.length > 5 ? ", ..." : ""}`);
+    if (extra.length > 0) warn(`lang/${lang}.json defines ${extra.length} key(s) that no longer exist in English: ${extra.slice(0, 5).join(", ")}`);
+  }
+}
+
 // ── templates referenced from source exist ──────────────────────────────────
 const TEMPLATE_PATTERN = /modules\/[^"'`\s]+\.(?:hbs|html)/g;
 for (const file of await collectFiles("scripts", [".js"])) {

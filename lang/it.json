@@ -1,0 +1,88 @@
+{
+  "NPC_REPLACER": {
+    "Button": "Sostituisci Token NPC",
+    "ProgressStart": "Sostituzione di {count} token...",
+    "ProgressUpdate": "({current}/{total}) {name}",
+    "Complete": "{count} token sostituiti con successo",
+    "NoTokens": "Nessun token NPC trovato nella scena corrente",
+    "NoSelectedNPCs": "Nessun token NPC nella selezione (seleziona token NPC oppure deseleziona tutto per elaborare l'intera scena)",
+    "NotFoundCount": "{count} creature non trovate nei compendi",
+    "SummaryPartialFailure": "Sostituzione completata con problemi: {replaced} sostituiti, {noMatch} non trovati, {importFailed} errori di importazione, {creationFailed} errori di creazione",
+    "ErrorSettingsRetrieve": "Impossibile leggere le impostazioni del compendio. Utilizzo dei compendi predefiniti.",
+    "ErrorSettingsParse": "Le impostazioni del compendio sono danneggiate. Utilizzo dei compendi predefiniti.",
+    "ErrorCompendiumLoad": "Impossibile caricare il compendio: {name}",
+    "ErrorFolderCreate": "Impossibile creare la cartella di importazione. Gli attori saranno importati nella radice.",
+    "NoScene": "Nessuna scena attiva trovata",
+    "NoModule": "Nessun compendio D&D ufficiale trovato. Installa contenuti D&D ufficiali (Manuale dei Mostri, Avventure, ecc.)",
+    "NoCompendium": "Nessun compendio disponibile per la sostituzione dei token",
+    "GMOnly": "Solo il GM può sostituire i token",
+    "PreviewScanning": "Scansione token...",
+    "PreviewTitle": "Anteprima Sostituzione Token",
+    "PreviewSummary": "{matched} di {total} token abbinati",
+    "PreviewColToken": "Nome Token",
+    "PreviewColMatch": "Sarà abbinato come",
+    "PreviewColSource": "Compendio Sorgente",
+    "PreviewNoMatch": "Nessuna corrispondenza trovata",
+    "ConfirmYes": "Sostituisci Token",
+    "ConfirmNo": "Annulla",
+    "Settings": {
+      "VariationMode": {
+        "Name": "Modalità Variazione Token",
+        "Hint": "Come selezionare l'immagine del token quando sono disponibili più variazioni per una creatura.",
+        "None": "Nessuna (sempre il primo)",
+        "Sequential": "Sequenziale",
+        "Random": "Casuale"
+      },
+      "EnabledCompendiums": {
+        "Name": "Compendi Abilitati",
+        "Hint": "Quali compendi utilizzare per trovare i token delle creature."
+      },
+      "CompendiumSelector": {
+        "Name": "Seleziona Compendi",
+        "Label": "Configura Compendi",
+        "Hint": "Scegli quali compendi D&D ufficiali usare per cercare i token delle creature.",
+        "Title": "Selezione Compendi",
+        "ModeLabel": "Modalità Selezione Compendi",
+        "ModeDefault": "Tutto il contenuto D&D ufficiale (consigliato)",
+        "ModeDefaultHint": "Usa ogni sorgente ufficiale installata nel mondo: l'SRD di sistema e i moduli pubblicati da Wizards of the Coast su Foundry.",
+        "ModeAll": "Tutto ciò che viene rilevato",
+        "ModeAllHint": "Include anche i pacchetti che sembrano ufficiali ma non sono nell'elenco noto, i contenuti D&D premium di altri editori e le sorgenti aggiunte manualmente qui sotto.",
+        "ModeCustom": "Selezione personalizzata",
+        "ModeCustomHint": "Scegli manualmente quali compendi usare dall'elenco qui sotto.",
+        "SelectCompendiums": "Compendi Disponibili:",
+        "Saved": "Impostazioni compendio salvate. L'indice sarà ricaricato al prossimo utilizzo.",
+        "SaveError": "Impossibile salvare le impostazioni del compendio. Riprova.",
+        "ModeCore": "Solo manuali base + SRD",
+        "ModeCoreHint": "Limita la ricerca all'SRD e ai manuali base (Monster Manual, Manuale del Giocatore, Guida del Dungeon Master). Avventure ed espansioni vengono ignorate.",
+        "Save": "Salva selezione"
+      },
+      "HttpTimeout": {
+        "Name": "Timeout HTTP (secondi)",
+        "Hint": "Timeout per le richieste di rete durante la risoluzione dei percorsi token con wildcard. Aumenta per connessioni lente."
+      },
+      "DialogTimeout": {
+        "Name": "Timeout finestra di anteprima (minuti)",
+        "Hint": "Per quanto tempo la finestra di anteprima resta aperta prima di chiudersi da sola."
+      },
+      "AdditionalSources": {
+        "Name": "Sorgenti compendio aggiuntive",
+        "Hint": "Id di pacchetti o compendi da trattare come sorgenti ufficiali di creature, separati da virgola. Serve solo per contenuti che il modulo non riesce a riconoscere da solo."
+      }
+    },
+    "AlreadyProcessing": "Sostituzione già in corso. Attendi il completamento.",
+    "DeleteFailedCount": "{count} token creati ma non è stato possibile rimuovere gli originali: potrebbero esserci duplicati.",
+    "DialogTimeout": "Finestra di anteprima chiusa automaticamente per inattività.",
+    "ErrorIndexLoad": "Impossibile precaricare l'indice dei mostri. Verrà ricaricato al primo utilizzo.",
+    "ErrorInitFailed": "Inizializzazione di NPC Token Replacer non riuscita. Controlla la console.",
+    "IndexEmpty": "Nessuna creatura trovata nei compendi abilitati.",
+    "WildcardFallback": "Nessuna variante di token trovata per \"{name}\": uso l'immagine segnaposto.",
+    "Tier": {
+      "system": "SRD",
+      "official": "Ufficiale",
+      "publisher": "Sembra ufficiale",
+      "premium": "Premium",
+      "manual": "Manuale",
+      "none": ""
+    }
+  }
+}

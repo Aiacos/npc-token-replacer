@@ -4,9 +4,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## ✨ Project Overview
 
-NPC Token Replacer is a Foundry VTT module (v12 through v14+) for D&D 5e that replaces scene NPC tokens with official WotC compendium versions while preserving position, elevation, dimensions, and other token properties.
+NPC Token Replacer is a Foundry VTT module (v13 through v14+) for D&D 5e that replaces scene NPC tokens with official WotC compendium versions while preserving position, elevation, dimensions, and other token properties.
 
-Official content is **discovered from package signals, not from a hardcoded list**, so newly released D&D modules are picked up without a module update. Every Foundry API that moved between generations is reached through `FoundryCompat`, which feature-detects instead of checking `game.version`.
+Official content is recognised in two layers: an **exact whitelist** of the packages Wizards of the Coast publishes on Foundry (trusted by default) plus **forward-looking signals** that surface books released after this version without trusting them silently. Every Foundry API that moved between generations is reached through `FoundryCompat`, which feature-detects instead of checking `game.version`.
 
 ---
 
@@ -41,7 +41,7 @@ principle, say so, propose the compliant alternative, and only then proceed.
    canned data that bypasses the logic under test.
 3. **Both compatibility paths are tested.** Anything routed through
    `FoundryCompat` needs a test with the modern API present *and* absent.
-4. **Coverage never regresses.** Currently 202 tests; a PR that lowers the
+4. **Coverage never regresses.** Currently 208 tests; a PR that lowers the
    count needs an explicit justification in the CHANGELOG.
 5. **Cache-clearing in `beforeEach`.** Static caches leak between tests; clear
    every cache the test touches.
@@ -306,7 +306,10 @@ graph TD
 
 ### Key Features by Component
 
-**Compendium Detection** (`CompendiumManager` + `SourceDetector`): Auto-discovers official Actor compendiums from five signals — the active game system, the official `dnd-` package prefix, Wizards of the Coast authorship, premium content declared for this system, and package ids the GM added to the `additionalSources` setting. No maintained list of module ids.
+**Compendium Detection** (`CompendiumManager` + `SourceDetector`): two deliberate layers.
+
+1. **Whitelist** — `OFFICIAL_WOTC_PACKAGES`, the 11 packages Wizards of the Coast publishes on Foundry VTT. Exact, no false positives, trusted by default. Package-id prefixes (`dnd-`, `ddb-`) are **not** a signal: they also match third-party importers, homebrew and community adventures.
+2. **Forward-looking signals** — WotC/Foundry Gaming authorship (`publisher` tier) or premium content declaring the active system (`premium` tier), plus package ids the GM lists in `additionalSources` (`manual` tier). These catch books released after this version. They are detected, logged and listed in the picker, but only used when the GM selects "Everything Detected" — never trusted silently.
 
 **Priority System** (`SourceDetector.classify`): 4 tiers (Adventure > Expansion > Core > Fallback). Known packages keep their curated priority; unknown packages are classified from what their module actually ships — an Adventure pack means adventure content, Scene packs mean a setting book, neither means a rulebook.
 
@@ -378,13 +381,15 @@ In addition to classes, three standalone utility functions remain:
 ## ⚙️ Configuration Constants
 
 ```javascript
-const MODULE_ID = "npc-token-replacer";          // Module identifier
+const MODULE_ID = "npc-token-replacer";           // Module identifier
 const DEFAULT_HTTP_TIMEOUT_MS = 5000;             // HTTP timeout for HEAD requests
-const OFFICIAL_PREFIXES = ["dnd-", "dnd5e"];      // One detection signal among five
+const OFFICIAL_WOTC_PACKAGES = [ /* 11 ids */ ];  // Authoritative whitelist
+const KNOWN_MODULE_LABELS = {...};                // Human-readable book names
 const OFFICIAL_AUTHOR_PATTERN = /wizards of the coast|foundry gaming/i;
 const PRIORITY = { FALLBACK: 1, CORE: 2, EXPANSION: 3, ADVENTURE: 4 };
-const TIER = { SYSTEM, OFFICIAL, PREMIUM, MANUAL, NONE }; // How a source was recognised
-const KNOWN_PRIORITIES = {...};                   // Optional refinements, not the mechanism
+const TIER = { SYSTEM, OFFICIAL, PUBLISHER, PREMIUM, MANUAL, NONE };
+const KNOWN_PRIORITIES = {...};                   // Priorities for the whitelist
+const WOTC_MODULE_PREFIXES = ["dnd-", "dnd5e"];   // DEPRECATED since 1.6.0, unused
 ```
 
 ## 🧪 Quality Gate

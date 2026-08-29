@@ -53,7 +53,7 @@
         "ModeDefault": "All Official D&D Content (Recommended)",
         "ModeDefaultHint": "Automatically read every official D&D source installed in this world - the system SRD plus every Wizards of the Coast module. Newly installed books are picked up on their own.",
         "ModeAll": "Everything Detected",
-        "ModeAllHint": "Also include premium D&D content from other publishers and any source you added manually below.",
+        "ModeAllHint": "Also include packages that look official but are not in the known list, premium D&D content from other publishers, and any source you added manually below.",
         "ModeCustom": "Custom Selection",
         "ModeCustomHint": "Manually select which compendiums to use from the list below.",
         "SelectCompendiums": "Available Compendiums:",
@@ -79,6 +79,7 @@
     "Tier": {
       "system": "SRD",
       "official": "Official",
+      "publisher": "Looks official",
       "premium": "Premium",
       "manual": "Manual",
       "none": ""

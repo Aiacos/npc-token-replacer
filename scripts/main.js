@@ -157,8 +157,17 @@ class CompendiumManager {
   /** packCollection -> classification returned by SourceDetector */
   static #classifications = new Map();
 
-  /** Package-id prefixes used by the official WotC line. One signal among several. */
-  static get WOTC_MODULE_PREFIXES() { return SourceDetector.OFFICIAL_PREFIXES; }
+  /** The 11 packages Wizards of the Coast publishes on Foundry VTT. */
+  static get OFFICIAL_WOTC_PACKAGES() { return SourceDetector.OFFICIAL_WOTC_PACKAGES; }
+
+  /** Human-readable book names for the official packages. */
+  static get KNOWN_MODULE_LABELS() { return SourceDetector.KNOWN_MODULE_LABELS; }
+
+  /**
+   * @deprecated since 1.6.0 — prefix matching was removed because it captured
+   * third-party modules. Use {@link OFFICIAL_WOTC_PACKAGES}.
+   */
+  static get WOTC_MODULE_PREFIXES() { return SourceDetector.WOTC_MODULE_PREFIXES; }
 
   /**
    * Optional priority refinements for packages we already know about.
@@ -196,12 +205,14 @@ class CompendiumManager {
   }
 
   /**
-   * Detect every Actor compendium carrying official D&D creatures.
+   * Detect every Actor compendium that can supply D&D creatures.
    *
-   * Recognition is signal-based (active system, official `dnd-` prefix, WotC
-   * authorship, premium content declared for this system, manual override)
-   * instead of a maintained list of module ids, so official modules released
-   * after this version are still picked up. Cached.
+   * Two layers: the authoritative whitelist of Wizards of the Coast packages
+   * (trusted by default), plus forward-looking signals — WotC authorship,
+   * premium content declaring this system, or a package id the GM added by
+   * hand — which are detected and listed but only used when the GM opts in.
+   * That way a book released after this version is never silently ignored,
+   * and a third-party module is never silently trusted. Cached.
    *
    * @returns {readonly CompendiumCollection[]}
    */
@@ -225,7 +236,16 @@ class CompendiumManager {
 
     CompendiumManager.#classifications = classifications;
 
-    Logger.log(`Found ${detected.length} official D&D Actor compendium(s):`);
+    const beyondWhitelist = detected.filter(pack => classifications.get(pack.collection).tier === SourceDetector.TIER.PUBLISHER);
+    if (beyondWhitelist.length > 0) {
+      Logger.warn(
+        `${beyondWhitelist.length} package(s) look like official D&D content but are not in the known list: ` +
+        `${beyondWhitelist.map(pack => pack.metadata.packageName).join(", ")}. ` +
+        "Switch the compendium mode to \"Everything Detected\" to use them."
+      );
+    }
+
+    Logger.log(`Found ${detected.length} D&D Actor compendium(s):`);
     detected.forEach(pack => {
       const info = classifications.get(pack.collection);
       const priorityLabel = CompendiumManager.PRIORITY_LABELS[info.priority] || "UNKNOWN";

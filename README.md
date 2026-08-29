@@ -19,35 +19,65 @@ A Foundry VTT module that automatically replaces NPC tokens in your scene with o
 
 ## 📚 Supported Official D&D Content
 
-The module does **not** ship a list of supported modules. It recognises official
-content from the package itself, so anything Wizards of the Coast releases in the
-future is detected the moment you install it.
+By default the module trusts **exactly the 11 official Wizards of the Coast
+packages published on Foundry VTT** (see the
+[Foundry VTT creator page](https://foundryvtt.com/creators/wizards-of-the-coast/)).
+A package id prefix is never enough on its own — `dnd-` and `ddb-` are also used
+by importers, homebrew and community adventures.
 
-**How a source is recognised** (any one signal is enough):
+On top of that whitelist the module watches for **content it has never heard of**
+and tells you about it, instead of silently ignoring it:
 
-| Signal | Example | Tier |
-|--------|---------|------|
-| The active game system's own compendiums | `dnd5e` SRD monsters | SRD |
-| Official package prefix | `dnd-monster-manual`, `dnd-phandelver-below` | Official |
-| Authored by Wizards of the Coast / Foundry Gaming | any future official release | Official |
-| Premium content declaring the dnd5e system | paid third-party bestiaries | Premium |
-| Package id you added under **Additional Compendium Sources** | anything else | Manual |
+| How a source is recognised | Example | Tier | Used by default |
+|----------------------------|---------|------|-----------------|
+| The active game system's own compendiums | `dnd5e` SRD monsters | SRD | ✅ |
+| In the official WotC package list | `dnd-monster-manual` | Official | ✅ |
+| Authored by Wizards of the Coast / Foundry Gaming | a book released after this version | Looks official | ⚙️ opt-in |
+| Premium content declaring the dnd5e system | paid third-party bestiaries | Premium | ⚙️ opt-in |
+| Package id you added under **Additional Compendium Sources** | anything else | Manual | ⚙️ opt-in |
 
-Currently published official modules, and the priority they resolve to:
+When a new official book is installed, it is detected as **"Looks official"**,
+logged with a warning naming the package, and listed in the compendium picker —
+switch to **Everything Detected** to start using it immediately, without waiting
+for a module update.
 
-| Module ID | Content | Priority |
-|-----------|---------|----------|
-| `dnd-phandelver-below` | Phandelver and Below: The Shattered Obelisk | 4-ADVENTURE |
-| `dnd-tomb-annihilation` | Tomb of Annihilation | 4-ADVENTURE |
-| `dnd-adventures-faerun` | Forgotten Realms: Adventures in Faerun | 4-ADVENTURE |
-| `dnd-heroes-faerun` | Forgotten Realms: Heroes of Faerun | 4-ADVENTURE |
-| `dnd-heroes-borderlands` | Heroes of the Borderlands | 4-ADVENTURE |
-| `dnd-forge-artificer` | Eberron: Forge of the Artificer | 3-EXPANSION |
-| `dnd-monster-manual` | Monster Manual (2024) | 2-CORE |
-| `dnd-players-handbook` | Player's Handbook (2024) | 2-CORE |
-| `dnd-dungeon-masters-guide` | Dungeon Master's Guide (2024) | 2-CORE |
-| `dnd-tashas-cauldron` | Tasha's Cauldron of Everything | 1-FALLBACK |
-| `dnd5e` | D&D 5e System SRD Monsters | 1-FALLBACK |
+The 11 trusted packages and the priority they resolve to:
+
+Third-party content — DDB-Importer (`ddb-*`), community homebrew modules, and
+legacy books that have never been ported to Foundry by WotC (Volo's, MToF,
+MPMM, Fizban's, Curse of Strahd, Icewind Dale, Descent into Avernus, etc.) —
+are deliberately excluded from the whitelist.
+
+### Priority 4 — ADVENTURE (highest — adventure-specific tokens preferred)
+
+| Module ID | Content |
+|-----------|---------|
+| `dnd-phandelver-below` | Phandelver and Below: The Shattered Obelisk |
+| `dnd-tomb-annihilation` | Tomb of Annihilation |
+| `dnd-adventures-faerun` | Forgotten Realms: Adventures in Faerûn |
+| `dnd-heroes-faerun` | Forgotten Realms: Heroes of Faerûn |
+| `dnd-heroes-borderlands` | Heroes of the Borderlands |
+
+### Priority 3 — EXPANSION
+
+| Module ID | Content |
+|-----------|---------|
+| `dnd-forge-artificer` | Eberron: Forge of the Artificer |
+
+### Priority 2 — CORE (2024 editions)
+
+| Module ID | Content |
+|-----------|---------|
+| `dnd-monster-manual` | Monster Manual (2024) |
+| `dnd-players-handbook` | Player's Handbook (2024) |
+| `dnd-dungeon-masters-guide` | Dungeon Master's Guide (2024) |
+
+### Priority 1 — FALLBACK (SRD & options)
+
+| Module ID | Content |
+|-----------|---------|
+| `dnd5e` | D&D 5e System SRD Monsters (free) |
+| `dnd-tashas-cauldron` | Tasha's Cauldron of Everything |
 
 A module that is not in that table is classified from what it actually ships:
 an Adventure compendium means adventure content (priority 4), Scene compendiums
@@ -55,22 +85,29 @@ mean a setting book (priority 3), and neither means a rulebook (priority 2).
 
 ### 📚 Compendium Priority System
 
-When the same creature exists in multiple compendiums, the module uses a 4-tier priority system to select the best match:
+When the same creature exists in multiple compendiums, the module uses a 4-tier priority
+system to select the best match:
 
-1. **Priority 4 - ADVENTURE**: Creatures from adventure modules (Phandelver, Tomb of Annihilation, etc.) are preferred as they have adventure-specific versions
-2. **Priority 3 - EXPANSION**: Expansion books (Forge of Artificer) provide updated or variant creatures
-3. **Priority 2 - CORE**: Core rulebooks (Monster Manual, PHB, DMG) provide the standard creature stats
-4. **Priority 1 - FALLBACK**: SRD and Tasha's Cauldron content as fallback options
+1. **Priority 4 – ADVENTURE**: Creatures from adventure modules are preferred — they carry
+   adventure-specific art and stat blocks.
+2. **Priority 3 – EXPANSION**: Expansion books with new or variant creatures.
+3. **Priority 2 – CORE**: 2024 core rulebooks (Monster Manual, PHB, DMG).
+4. **Priority 1 – FALLBACK**: SRD and options (Tasha's), used as last resort.
 
 This ensures you always get the best available token art and creature data.
 
-Only Actor entries that can stand in for an NPC are indexed - player characters,
+A package outside the whitelist never receives an implicit priority. If it is
+picked up by one of the opt-in signals, it is classified from what its module
+actually ships — an Adventure compendium means adventure content (4), Scene
+compendiums mean a setting book (3), neither means a rulebook (2).
+
+Only Actor entries that can stand in for an NPC are indexed: player characters,
 groups and vehicles in those compendiums are skipped.
 
 ## 🛡️ Requirements
 
-- **Foundry VTT**: Version 12 or higher (verified on v14)
-- **System**: D&D 5th Edition (dnd5e)
+- **Foundry VTT**: Version 13 or higher (verified on v14)
+- **System**: D&D 5th Edition (dnd5e) v4.0.0+
 - **Official D&D Content**: At least one official D&D module with Actor compendiums (e.g., Monster Manual 2024)
 
 ## 📦 Installation
@@ -241,8 +278,8 @@ If specific tokens fail to replace, check the console for error details. Common 
 
 | Foundry | Status | Notes |
 |---------|--------|-------|
-| v12 | Supported (minimum) | Array-based scene controls, `Dialog`, `FormApplication`, `SceneNavigation` progress bar |
-| v13 | Supported | Object-based scene controls, notification progress bar |
+| v12 | Not supported since 1.6.0 | The compatibility layer still carries the AppV1 fallbacks, but the manifest requires 13 |
+| v13 | Supported (minimum) | Object-based scene controls, notification progress bar |
 | v14 | Verified | Current stable; AppV1 classes still present but deprecated |
 | v15+ | Expected to work | No `compatibility.maximum` is declared and every moved API is feature-detected, so newer generations are not blocked |
 
@@ -329,7 +366,7 @@ A global debug API is exposed via `window.NPCTokenReplacer` for console access.
 
 | Command | Purpose |
 |---------|---------|
-| `npm test` | Run the unit suite (202 tests) |
+| `npm test` | Run the unit suite (208 tests) |
 | `npm run lint` | ESLint over `scripts/`, `tools/` and `tests/` |
 | `npm run validate` | Verify `module.json`, referenced files, i18n keys and template paths |
 | `npm run check` | All three, in order |
