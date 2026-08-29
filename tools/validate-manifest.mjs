@@ -135,6 +135,18 @@ for (const file of await collectFiles("scripts", [".js"])) {
   }
 }
 
+// ── handlebars partials referenced from templates exist ────────────────────
+const PARTIAL_PATTERN = /\{\{>\s*"?(modules\/[^"\s}]+)"?\s*\}\}/g;
+for (const file of await collectFiles("templates", [".html", ".hbs"])) {
+  const source = readFileSync(file, "utf8");
+  for (const match of source.matchAll(PARTIAL_PATTERN)) {
+    const relative = match[1].replace(`modules/${manifest.id}/`, "");
+    if (!existsSync(path.join(ROOT, relative))) {
+      fail(`${path.relative(ROOT, file)} references a missing partial: ${match[1]}`);
+    }
+  }
+}
+
 // ── report ──────────────────────────────────────────────────────────────────
 for (const message of warnings) console.warn(`::warning::${message}`);
 for (const message of errors) console.error(`::error::${message}`);
