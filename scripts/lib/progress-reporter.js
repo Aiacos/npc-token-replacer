@@ -1,9 +1,11 @@
 import { Logger } from "./logger.js";
+import { FoundryCompat } from "./foundry-compat.js";
 
 /**
  * Unified progress bar for Foundry VTT v12/v13.
- * v13: ui.notifications.info({ progress: true }), v12: SceneNavigation.displayProgressBar().
- * Uses duck-typing for version detection per project convention.
+ * v13+: ui.notifications.info({ progress: true }); v12: SceneNavigation.displayProgressBar().
+ * Uses duck-typing for version detection per project convention, so a future
+ * generation keeps whichever API it still exposes.
  */
 class ProgressReporter {
   #notification = null;
@@ -13,6 +15,13 @@ class ProgressReporter {
     return typeof ui.notifications?.update === "function";
   }
 
+  /** Bound v12 progress bar function, or null when the API is gone. */
+  static #legacyBar() {
+    const nav = FoundryCompat.SceneNavigation;
+    if (typeof nav?.displayProgressBar !== "function") return null;
+    return nav.displayProgressBar.bind(nav);
+  }
+
   start(total, label) {
     this.#total = total;
     if (total <= 0) return;
@@ -20,8 +29,8 @@ class ProgressReporter {
     try {
       if (ProgressReporter.#isV13ProgressAvailable()) {
         this.#notification = ui.notifications.info(label, { progress: true });
-      } else if (typeof SceneNavigation?.displayProgressBar === "function") {
-        SceneNavigation.displayProgressBar({ label, pct: 0 });
+      } else {
+        ProgressReporter.#legacyBar()?.({ label, pct: 0 });
       }
     } catch (error) {
       Logger.debug(`Progress bar start failed: ${error.message}`);
@@ -35,8 +44,8 @@ class ProgressReporter {
     try {
       if (this.#notification) {
         this.#notification.update({ pct, message: label });
-      } else if (typeof SceneNavigation?.displayProgressBar === "function") {
-        SceneNavigation.displayProgressBar({ label, pct: Math.round(pct * 100) });
+      } else {
+        ProgressReporter.#legacyBar()?.({ label, pct: Math.round(pct * 100) });
       }
     } catch (error) {
       Logger.debug(`Progress bar update failed: ${error.message}`);
@@ -48,8 +57,8 @@ class ProgressReporter {
       if (this.#notification) {
         this.#notification.update({ pct: 1.0 });
         this.#notification = null;
-      } else if (typeof SceneNavigation?.displayProgressBar === "function") {
-        SceneNavigation.displayProgressBar({ label: "", pct: 100 });
+      } else {
+        ProgressReporter.#legacyBar()?.({ label: "", pct: 100 });
       }
     } catch (error) {
       Logger.debug(`Progress bar finish failed: ${error.message}`);

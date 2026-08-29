@@ -2,13 +2,14 @@
 
 A Foundry VTT module that automatically replaces NPC tokens in your scene with official D&D compendium versions, preserving their position, elevation, dimensions, and visibility.
 
-## Features
+## ✨ Features
 
 - **One-Click Replacement**: Adds a button to the Token Controls toolbar for easy access
-- **Automatic Compendium Detection**: Automatically detects all installed official D&D content (Monster Manual, Adventures, etc.)
+- **Automatic Compendium Detection**: Finds every installed official D&D source from package signals - the system SRD, any `dnd-` module, anything authored by Wizards of the Coast, and premium D&D content. There is no list to maintain, so books released after this module still work.
 - **Multi-Compendium Support**: Search across multiple official D&D compendiums simultaneously
 - **Smart Priority System**: Prefers adventure/expansion creatures over Monster Manual over SRD
-- **Configurable Compendium Selection**: Choose which compendiums to use via settings
+- **Configurable Compendium Selection**: Read every official source (default), restrict to core rulebooks, include premium third-party content, or pick compendiums one by one
+- **Future-Proof by Design**: Foundry APIs are feature-detected, never version-checked, so the module keeps working across Foundry generations - verified on v12, v13 and v14
 - **Preserves Token Properties**: Maintains position, elevation, dimensions, visibility, rotation, and disposition
 - **Confirmation Dialog**: Shows a list of tokens to be replaced before proceeding
 - **Detailed Logging**: Provides console logs for debugging and tracking
@@ -16,9 +17,23 @@ A Foundry VTT module that automatically replaces NPC tokens in your scene with o
 - **Token Variation Mode**: Choose how to handle multiple token art variations (None/Sequential/Random)
 - **Folder Organization**: Automatically organizes imported monsters into folders
 
-## Supported Official D&D Content
+## 📚 Supported Official D&D Content
 
-The module automatically detects and supports all official Wizards of the Coast content for Foundry VTT:
+The module does **not** ship a list of supported modules. It recognises official
+content from the package itself, so anything Wizards of the Coast releases in the
+future is detected the moment you install it.
+
+**How a source is recognised** (any one signal is enough):
+
+| Signal | Example | Tier |
+|--------|---------|------|
+| The active game system's own compendiums | `dnd5e` SRD monsters | SRD |
+| Official package prefix | `dnd-monster-manual`, `dnd-phandelver-below` | Official |
+| Authored by Wizards of the Coast / Foundry Gaming | any future official release | Official |
+| Premium content declaring the dnd5e system | paid third-party bestiaries | Premium |
+| Package id you added under **Additional Compendium Sources** | anything else | Manual |
+
+Currently published official modules, and the priority they resolve to:
 
 | Module ID | Content | Priority |
 |-----------|---------|----------|
@@ -34,7 +49,11 @@ The module automatically detects and supports all official Wizards of the Coast 
 | `dnd-tashas-cauldron` | Tasha's Cauldron of Everything | 1-FALLBACK |
 | `dnd5e` | D&D 5e System SRD Monsters | 1-FALLBACK |
 
-### Compendium Priority System
+A module that is not in that table is classified from what it actually ships:
+an Adventure compendium means adventure content (priority 4), Scene compendiums
+mean a setting book (priority 3), and neither means a rulebook (priority 2).
+
+### 📚 Compendium Priority System
 
 When the same creature exists in multiple compendiums, the module uses a 4-tier priority system to select the best match:
 
@@ -43,19 +62,20 @@ When the same creature exists in multiple compendiums, the module uses a 4-tier 
 3. **Priority 2 - CORE**: Core rulebooks (Monster Manual, PHB, DMG) provide the standard creature stats
 4. **Priority 1 - FALLBACK**: SRD and Tasha's Cauldron content as fallback options
 
-This ensures you always get the best available token art and creature data!
+This ensures you always get the best available token art and creature data.
 
-New official content is automatically detected - no module updates required!
+Only Actor entries that can stand in for an NPC are indexed - player characters,
+groups and vehicles in those compendiums are skipped.
 
-## Requirements
+## 🛡️ Requirements
 
-- **Foundry VTT**: Version 12 or higher (verified on v13)
+- **Foundry VTT**: Version 12 or higher (verified on v14)
 - **System**: D&D 5th Edition (dnd5e)
 - **Official D&D Content**: At least one official D&D module with Actor compendiums (e.g., Monster Manual 2024)
 
-## Installation
+## 📦 Installation
 
-### Method 1: Manual Installation
+### 📦 Method 1: Manual Installation
 
 1. Download the latest release from this repository
 2. Extract the contents to your Foundry VTT modules folder:
@@ -66,7 +86,7 @@ New official content is automatically detected - no module updates required!
 4. Restart Foundry VTT
 5. Enable the module in your world's module settings
 
-### Method 2: Manifest URL
+### 📦 Method 2: Manifest URL
 
 1. In Foundry VTT, go to **Add-on Modules** tab
 2. Click **Install Module**
@@ -77,7 +97,7 @@ New official content is automatically detected - no module updates required!
 4. Click **Install**
 5. Enable the module in your world's module settings
 
-## Usage
+## 🎯 Usage
 
 1. Open a scene with NPC tokens placed on it
 2. Select the **Token Controls** layer (the person icon in the left toolbar)
@@ -91,12 +111,12 @@ New official content is automatically detected - no module updates required!
    - Create new tokens from the compendium with the original position, elevation, size, and visibility
 8. A notification will show the results
 
-### Selection Mode
+### 🎯 Selection Mode
 
 - **With selected tokens**: Only the selected NPC tokens will be replaced
 - **Without selection**: All NPC tokens in the scene will be replaced
 
-## Token Properties Preserved
+## 🎯 Token Properties Preserved
 
 When replacing tokens, the following properties are preserved from the original token:
 
@@ -111,7 +131,7 @@ When replacing tokens, the following properties are preserved from the original 
 | Locked | Whether the token is locked |
 | Alpha | Token opacity |
 
-## Module Settings
+## ⚙️ Module Settings
 
 Access the module settings via **Game Settings** > **Configure Settings** > **Module Settings** > **NPC Token Replacer**.
 
@@ -120,9 +140,10 @@ Access the module settings via **Game Settings** > **Configure Settings** > **Mo
 | Token Variation Mode | None, Sequential, Random | How to select token art when multiple variations are available |
 | Preview Dialog Timeout | 1-30 minutes (default: 5) | How long to wait before auto-closing the preview dialog |
 | HTTP Timeout | 1-30 seconds (default: 5) | Timeout for network requests when resolving wildcard token paths |
+| Additional Compendium Sources | Comma-separated ids | Package or compendium ids to treat as official creature sources. Only needed for content the module cannot recognise on its own. |
 | Configure Compendiums | Button | Opens dialog to select which compendiums to use |
 
-### Token Variation Mode
+### ⚙️ Token Variation Mode
 
 Some creatures have multiple token art variations. This setting controls how the module selects which variation to use:
 
@@ -130,15 +151,20 @@ Some creatures have multiple token art variations. This setting controls how the
 - **Sequential** (default): Cycle through variations in order. If you have 5 Goblins in a scene, they'll get variations 1, 2, 3, 4, 5 (or wrap around if fewer variations exist)
 - **Random**: Randomly select a variation for each token
 
-### Compendium Selection
+### ⚙️ Compendium Selection
 
-The module offers three compendium selection modes:
+The module offers four compendium selection modes:
 
 | Mode | Description |
 |------|-------------|
-| **Core + Fallback Only** (Default) | Uses only SRD, Tasha's, Monster Manual, PHB, and DMG. Best for standard games. |
-| **All Compendiums** | Uses all installed official D&D compendiums including adventures and expansions. |
+| **All Official D&D Content** (Default) | Reads every official source detected in this world - the system SRD plus every Wizards of the Coast module. Newly installed books are picked up on their own. |
+| **Core Rulebooks + SRD Only** | Restricts matching to the SRD and the core rulebooks (Monster Manual, PHB, DMG). Adventures and expansions are ignored. |
+| **Everything Detected** | Also includes premium D&D content from other publishers and anything added under **Additional Compendium Sources**. |
 | **Custom Selection** | Manually select which compendiums to use. |
+
+> Upgrading from 1.4.x? The default changed: worlds that never touched this
+> setting now read **all** official content instead of just the core rulebooks.
+> Pick **Core Rulebooks + SRD Only** to restore the old behaviour.
 
 To configure:
 1. Open Module Settings
@@ -147,7 +173,7 @@ To configure:
 4. If using Custom Selection, check the specific compendiums you want
 5. Click Save
 
-## Name Matching
+## 🔍 Name Matching
 
 The module uses intelligent name matching to find creatures in the compendiums:
 
@@ -157,7 +183,7 @@ The module uses intelligent name matching to find creatures in the compendiums:
    - Suffixes: "Warrior", "Guard", "Scout", "Champion", "Leader", "Chief", "Captain", "Shaman", "Berserker"
 3. **Partial Match**: Checks if names share significant words (4+ characters)
 
-### Examples
+### 🔍 Examples
 
 | Scene Token | Compendium Match |
 |-------------|------------------|
@@ -166,7 +192,7 @@ The module uses intelligent name matching to find creatures in the compendiums:
 | "Young Red Dragon" | "Red Dragon" |
 | "Orc War Chief" | "Orc" |
 
-## Console Commands
+## 🐛 Console Commands
 
 For debugging or manual control, you can use these commands in the browser console (F12):
 
@@ -187,94 +213,84 @@ NPCTokenReplacer.getNPCTokensFromScene();
 NPCTokenReplacer.clearCache();
 ```
 
-## Troubleshooting
+## 🐛 Troubleshooting
 
-### "No official D&D compendiums found"
+### 🐛 "No official D&D compendiums found"
 
 Make sure you have installed and enabled at least one official D&D module with Actor compendiums (e.g., Monster Manual 2024, Phandelver and Below, etc.).
 
-### "No compendiums available for token replacement"
+### 🐛 "No compendiums available for token replacement"
 
 The module couldn't find any enabled compendiums. Check:
 1. You have official D&D content installed
 2. The compendiums are enabled in the module settings
 3. Check the console (F12) for detected compendiums
 
-### Tokens not being matched
+### 🐛 Tokens not being matched
 
 Check the console log for details on which creatures weren't found. The matching algorithm tries to be flexible, but some custom or homebrew creatures may not have equivalents in the official compendiums.
 
-### Some tokens show errors
+### 🐛 Some tokens show errors
 
 If specific tokens fail to replace, check the console for error details. Common causes:
 - Corrupted token data
 - Missing actor references
 - Permission issues
 
-## Compatibility
+## 🛡️ Compatibility
 
-- **Foundry VTT v12**: Supported (array-based controls)
-- **Foundry VTT v13**: Verified (object-based controls)
-- **D&D 5e System**: Required
+| Foundry | Status | Notes |
+|---------|--------|-------|
+| v12 | Supported (minimum) | Array-based scene controls, `Dialog`, `FormApplication`, `SceneNavigation` progress bar |
+| v13 | Supported | Object-based scene controls, notification progress bar |
+| v14 | Verified | Current stable; AppV1 classes still present but deprecated |
+| v15+ | Expected to work | No `compatibility.maximum` is declared and every moved API is feature-detected, so newer generations are not blocked |
 
-## Known Limitations
+The module resolves Foundry APIs by checking what exists, never by comparing
+version numbers: `DialogV2` and `ApplicationV2` are used when present, with the
+AppV1 classes as the fallback. A weekly CI job watches for new Foundry releases
+and opens a pull request bumping the verified generation.
 
-- Only works with NPC-type actors (not characters or vehicles)
+**D&D 5e system**: required. No maximum system version is declared either.
+
+## 🛡️ Known Limitations
+
+- Only works with NPC-type actors (character, group and vehicle entries are skipped)
 - Requires at least one official D&D module with Actor compendiums
 - Custom/homebrew creatures without official compendium equivalents will be skipped
 - Token art from the compendium will replace any custom token art
 
-## Architecture
+## 🧩 Architecture
 
 The module follows an object-oriented design with well-defined classes, each with a single responsibility. Core orchestration lives in `scripts/main.js` with supporting classes extracted to `scripts/lib/` — all plain JavaScript ES modules (no build system required).
 
-### Class Hierarchy
+### 🧩 Class Hierarchy
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                      NPCTokenReplacerController                 │
-│              (Main Facade - orchestrates all operations)        │
-└─────────────────────────────────────────────────────────────────┘
-                               │
-                               │ uses
-                               ▼
-    ┌──────────────────────────┼───────────────────────────┐
-    │                          │                           │
-    ▼                          ▼                           ▼
-┌────────────────┐   ┌─────────────────┐   ┌────────────────────┐
-│ CompendiumManager │ │  TokenReplacer   │ │   NameMatcher       │
-│ (compendiums)     │ │ (token ops)      │ │ (name matching)     │
-└────────────────┘   └─────────────────┘   └────────────────────┘
-    │                          │
-    │                          │ uses
-    │                          ▼
-    │                 ┌─────────────────┐
-    │                 │ WildcardResolver │
-    │                 │ (path resolution)│
-    │                 └─────────────────┘
-    │                          │
-    │                          │ uses
-    │                          ▼
-    │                 ┌─────────────────┐
-    │                 │  FolderManager   │
-    │                 │ (import folders) │
-    │                 └─────────────────┘
-    │                          │
-    └──────────────────────────┼───────────────────────────┐
-                               │                           │
-                               ▼                           ▼
-                        ┌────────────┐           ┌─────────────────────┐
-                        │   Logger   │           │ CompendiumSelectorForm│
-                        │ (logging)  │           │ (settings UI)        │
-                        └────────────┘           └─────────────────────┘
+```mermaid
+graph TD
+    Controller["NPCTokenReplacerController<br/>facade: validate → scan → preview → replace → report"]
 
-                        ┌──────────────────┐
-                        │ ProgressReporter │
-                        │ (v12/v13 bars)   │
-                        └──────────────────┘
+    Controller --> CM["CompendiumManager<br/>detect sources + build index"]
+    Controller --> TR["TokenReplacer<br/>token operations"]
+    Controller --> NM["NameMatcher<br/>multi-stage name matching"]
+    Controller --> PR["ProgressReporter<br/>progress bars"]
+    Controller --> FC
+
+    CM --> SD["SourceDetector<br/>official-content signals + priority"]
+    NM --> CM
+    TR --> WR["WildcardResolver<br/>token art path resolution"]
+    TR --> FM["FolderManager<br/>import folders"]
+    PR --> FC
+
+    CS["compendium-selector.js<br/>shared model + AppV2 / AppV1 shells"] --> FC
+    CS --> CM
+
+    FC["FoundryCompat<br/>feature-detected Foundry API access"] --> API(["Foundry VTT client API"])
+
+    Logger["Logger<br/>prefixed, level-gated logging"] -.-> Controller
 ```
 
-### Class Responsibilities
+### 🧩 Class Responsibilities
 
 | Class | Purpose |
 |-------|---------|
@@ -284,36 +300,57 @@ The module follows an object-oriented design with well-defined classes, each wit
 | **NameMatcher** | Normalizes creature names and matches them to compendium entries using multi-stage matching algorithms |
 | **WildcardResolver** | Resolves Monster Manual 2024 wildcard token paths (e.g., `specter-*.webp`) to actual image files |
 | **FolderManager** | Manages Actor folders for organizing compendium imports |
-| **ProgressReporter** | Unified progress bar abstraction handling v12 (SceneNavigation) and v13 (notification) APIs |
+| **ProgressReporter** | Unified progress bar abstraction handling v12 (SceneNavigation) and v13+ (notification) APIs |
 | **Logger** | Provides centralized logging with consistent module prefix formatting |
-| **CompendiumSelectorForm** | Foundry FormApplication subclass for the compendium selection settings UI |
+| **FoundryCompat** | Feature-detected access to Foundry APIs that moved between generations (dialogs, applications, navigation, template loading) |
+| **SourceDetector** | Recognizes official D&D packages from signals and derives their priority from what each module ships |
+| **CompendiumSelectorModel** | Framework-agnostic logic behind the compendium selection UI, shared by the ApplicationV2 and legacy FormApplication shells |
 
-### Design Patterns
+### 🧩 Design Patterns
 
 - **Facade Pattern**: `NPCTokenReplacerController` provides a simplified interface to the complex subsystem of classes
 - **Static Methods**: Most classes use static methods since they don't require instance state
 - **Private Fields**: ES6 private static fields (`#field`) ensure encapsulation and prevent external access to internal state
-- **Caching**: Multiple classes implement caching for performance (compendium indexes, folder references, wildcard paths)
+- **Caching**: Multiple classes implement caching for performance (compendium indexes, folder references, wildcard paths), each with an explicit bound
+- **Feature Detection over Version Checks**: `FoundryCompat` resolves each API by asking whether it exists, so a new Foundry generation needs no code change
+- **Signal-Based Detection**: `SourceDetector` classifies content from package metadata instead of a hardcoded module list
 
-### Foundry Integration
+### 🧩 Foundry Integration
 
 The module integrates with Foundry VTT through these hooks:
 
 - `Hooks.once("init")`: Registers module settings
 - `Hooks.once("ready")`: Initializes the controller and pre-caches monster indexes
-- `Hooks.on("getSceneControlButtons")`: Adds the toolbar button (handles both v12 and v13 API formats)
+- `Hooks.on("getSceneControlButtons")`: Adds the toolbar button (v12 array format uses `onClick`, v13+ object format uses `onChange`)
 
 A global debug API is exposed via `window.NPCTokenReplacer` for console access.
 
-## Contributing
+## 🔄 Development & Releases
+
+| Command | Purpose |
+|---------|---------|
+| `npm test` | Run the unit suite (202 tests) |
+| `npm run lint` | ESLint over `scripts/`, `tools/` and `tests/` |
+| `npm run validate` | Verify `module.json`, referenced files, i18n keys and template paths |
+| `npm run check` | All three, in order |
+| `bash build.sh` | Build the distributable ZIP into `releases/` |
+
+Releases are produced by the **Release** GitHub Actions workflow from a single
+trigger: it bumps the version, tags, builds, verifies the package, publishes the
+GitHub release and announces it to the Foundry package registry.
+
+See [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md) and
+[`docs/COMPATIBILITY.md`](docs/COMPATIBILITY.md) for the technical details.
+
+## 🧪 Contributing
 
 Contributions are welcome! Please feel free to submit issues or pull requests.
 
-## License
+## 📜 License
 
 This module is released under the MIT License.
 
-## Credits
+## 📜 Credits
 
 - Developed for use with Foundry Virtual Tabletop
 - Official D&D content is owned by Wizards of the Coast

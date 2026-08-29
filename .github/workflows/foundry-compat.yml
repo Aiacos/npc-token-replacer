@@ -1,0 +1,85 @@
+name: Foundry compatibility watch
+
+# Keeps `compatibility.verified` current on its own: when Foundry ships a new
+# generation, this opens a PR that bumps the manifest and re-runs the suite
+# against it, so the module never silently falls behind.
+on:
+  schedule:
+    - cron: "17 6 * * 1" # Mondays, 06:17 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: Look up the newest Foundry generation
+        id: check
+        run: node tools/check-foundry-version.mjs
+
+      - name: Open a compatibility bump PR
+        if: steps.check.outputs.needs_bump == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          LATEST: ${{ steps.check.outputs.latest }}
+          VERIFIED: ${{ steps.check.outputs.verified }}
+          BASE: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          BRANCH="chore/foundry-v${LATEST}-compatibility"
+
+          OPEN=$(gh pr list --head "$BRANCH" --state open --json number --jq 'length')
+          if [ "$OPEN" != "0" ]; then
+            echo "A PR for $BRANCH is already open — nothing to do"
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -b "$BRANCH"
+
+          jq --arg verified "$LATEST" '.compatibility.verified = $verified' module.json > module.tmp
+          mv module.tmp module.json
+
+          npm run validate
+          npm test
+
+          git add module.json
+          git commit -m "chore: verify compatibility with Foundry v${LATEST}"
+          git push origin "$BRANCH"
+
+          cat > pr-body.md <<BODY
+          Foundry VTT **v${LATEST}** is now the newest published generation, while this module declares \`compatibility.verified: "${VERIFIED}"\`.
+
+          This PR bumps the manifest and re-runs lint, manifest validation and the unit suite against it.
+
+          Before merging, smoke-test the module in a v${LATEST} world:
+
+          - the toolbar button appears and runs
+          - the compendium selector opens and saves
+          - the preview dialog confirms, cancels and times out
+          - the progress bar renders during a replacement
+
+          _Opened automatically by the Foundry compatibility watch._
+          BODY
+          # The heredoc sits inside a YAML block scalar; strip its indentation
+          # so the PR body is not rendered as one big code block.
+          sed -i 's/^          //' pr-body.md
+
+          gh pr create \
+            --base "$BASE" \
+            --head "$BRANCH" \
+            --title "chore: verify compatibility with Foundry v${LATEST}" \
+            --body-file pr-body.md

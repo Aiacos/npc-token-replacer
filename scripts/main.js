@@ -7,6 +7,9 @@ import { Logger, MODULE_ID } from "./lib/logger.js";
 import { WildcardResolver } from "./lib/wildcard-resolver.js";
 import { NameMatcher } from "./lib/name-matcher.js";
 import { ProgressReporter } from "./lib/progress-reporter.js";
+import { FoundryCompat } from "./lib/foundry-compat.js";
+import { SourceDetector } from "./lib/source-detector.js";
+import { buildCompendiumSelectorForm, preloadSelectorTemplates } from "./lib/compendium-selector.js";
 
 /** Error with phase indicator ("import_failed", "creation_failed", "delete_failed"). */
 class TokenReplacerError extends Error {
@@ -151,60 +154,57 @@ class CompendiumManager {
   static #enabledPacksCache = null;
   static #wotcCompendiumsCache = null;
   static #lastLoadErrors = [];
+  /** packCollection -> classification returned by SourceDetector */
+  static #classifications = new Map();
 
-  static #WOTC_MODULE_PREFIXES = Object.freeze(["dnd-", "dnd5e"]);
-  static get WOTC_MODULE_PREFIXES() { return CompendiumManager.#WOTC_MODULE_PREFIXES; }
+  /** Package-id prefixes used by the official WotC line. One signal among several. */
+  static get WOTC_MODULE_PREFIXES() { return SourceDetector.OFFICIAL_PREFIXES; }
 
   /**
-   * Priority levels (higher = preferred):
-   * 1=SRD/Tasha's, 2=Core Rulebooks, 3=Expansions, 4=Adventures
+   * Optional priority refinements for packages we already know about.
+   * Classification is otherwise fully dynamic, so a newly released official
+   * book never needs an entry here.
    */
-  static #COMPENDIUM_PRIORITIES = Object.freeze({
-    // SRD and Tasha's - lowest priority (fallback/options)
-    "dnd5e": 1,
-    "dnd-tashas-cauldron": 1,
+  static get COMPENDIUM_PRIORITIES() { return SourceDetector.KNOWN_PRIORITIES; }
 
-    // Core Rulebooks - base priority
-    "dnd-monster-manual": 2,
-    "dnd-players-handbook": 2,
-    "dnd-dungeon-masters-guide": 2,
+  static get PRIORITY_LABELS() { return SourceDetector.PRIORITY_LABELS; }
 
-    // Expansions - medium priority
-    "dnd-forge-artificer": 3,
+  /** Highest priority still considered "core" content (SRD + rulebooks). */
+  static get CORE_MAX_PRIORITY() { return SourceDetector.PRIORITY.CORE; }
 
-    // Adventures - highest priority (these get priority 4 by default if not listed)
-    "dnd-phandelver-below": 4,
-    "dnd-tomb-annihilation": 4,
-    "dnd-adventures-faerun": 4,
-    "dnd-heroes-faerun": 4,
-    "dnd-heroes-borderlands": 4
-  });
-  static get COMPENDIUM_PRIORITIES() { return CompendiumManager.#COMPENDIUM_PRIORITIES; }
-
-  static #PRIORITY_LABELS = Object.freeze({
-    1: "FALLBACK",
-    2: "CORE",
-    3: "EXPANSION",
-    4: "ADVENTURE"
-  });
-  static get PRIORITY_LABELS() { return CompendiumManager.#PRIORITY_LABELS; }
-
-  /** Get priority for a pack (higher = preferred). Unknown dnd- packs default to 4. */
+  /** Get priority for a pack (higher = preferred). */
   static getCompendiumPriority(pack) {
-    const packageName = pack.metadata.packageName || "";
-
-    if (packageName in CompendiumManager.COMPENDIUM_PRIORITIES) {
-      return CompendiumManager.COMPENDIUM_PRIORITIES[packageName];
-    }
-
-    if (packageName.startsWith("dnd-")) {
-      return 4;
-    }
-
-    return 1; // non-WOTC fallback
+    return SourceDetector.classify(pack).priority;
   }
 
-  /** Detect all WotC Actor compendiums by package prefix. Cached. */
+  /**
+   * Extra package ids or pack collections the GM added by hand — the escape
+   * hatch for content the automatic signals cannot recognise.
+   * @returns {Set<string>|null}
+   */
+  static #getManualSourceIds() {
+    let raw;
+    try {
+      raw = game.settings.get(MODULE_ID, "additionalSources");
+    } catch (error) {
+      Logger.debug(`additionalSources setting unavailable: ${error.message}`);
+      return null;
+    }
+    if (typeof raw !== "string" || raw.trim() === "") return null;
+    const ids = raw.split(/[\s,;]+/).map(id => id.trim()).filter(Boolean);
+    return ids.length > 0 ? new Set(ids) : null;
+  }
+
+  /**
+   * Detect every Actor compendium carrying official D&D creatures.
+   *
+   * Recognition is signal-based (active system, official `dnd-` prefix, WotC
+   * authorship, premium content declared for this system, manual override)
+   * instead of a maintained list of module ids, so official modules released
+   * after this version are still picked up. Cached.
+   *
+   * @returns {readonly CompendiumCollection[]}
+   */
   static detectWOTCCompendiums() {
     if (CompendiumManager.#wotcCompendiumsCache) {
       return CompendiumManager.#wotcCompendiumsCache;
@@ -212,26 +212,49 @@ class CompendiumManager {
 
     Logger.log("Detecting official D&D compendiums...");
 
-    const wotcPacks = game.packs.filter(pack => {
+    const manualIds = CompendiumManager.#getManualSourceIds();
+    const classifications = new Map();
+
+    const detected = game.packs.filter(pack => {
       if (pack.documentName !== "Actor") return false;
-      const packageName = pack.metadata.packageName || "";
-      return CompendiumManager.WOTC_MODULE_PREFIXES.some(prefix => packageName.startsWith(prefix));
+      const info = SourceDetector.classify(pack, manualIds);
+      if (info.tier === SourceDetector.TIER.NONE) return false;
+      classifications.set(pack.collection, info);
+      return true;
     });
 
-    Logger.log(`Found ${wotcPacks.length} official D&D Actor compendiums:`);
-    wotcPacks.forEach(pack => {
-      const priority = CompendiumManager.getCompendiumPriority(pack);
-      const priorityLabel = CompendiumManager.PRIORITY_LABELS[priority] || "UNKNOWN";
-      Logger.log(`  - ${pack.collection} (${pack.metadata.label}) [package: ${pack.metadata.packageName}, priority: ${priority}-${priorityLabel}]`);
+    CompendiumManager.#classifications = classifications;
+
+    Logger.log(`Found ${detected.length} official D&D Actor compendium(s):`);
+    detected.forEach(pack => {
+      const info = classifications.get(pack.collection);
+      const priorityLabel = CompendiumManager.PRIORITY_LABELS[info.priority] || "UNKNOWN";
+      Logger.log(`  - ${pack.collection} (${pack.metadata.label}) [package: ${info.packageName}, tier: ${info.tier}, priority: ${info.priority}-${priorityLabel}]`);
     });
 
-    CompendiumManager.#wotcCompendiumsCache = Object.freeze(wotcPacks);
+    CompendiumManager.#wotcCompendiumsCache = Object.freeze(detected);
     return CompendiumManager.#wotcCompendiumsCache;
   }
 
+  /** How a detected pack was recognised: "system", "official", "premium" or "manual". */
+  static getSourceTier(pack) {
+    return CompendiumManager.#classifications.get(pack?.collection)?.tier
+      ?? SourceDetector.classify(pack).tier;
+  }
+
+  /** True when the pack comes from first-party D&D content (system SRD or WotC module). */
+  static isOfficialSource(pack) {
+    const tier = CompendiumManager.getSourceTier(pack);
+    return tier === SourceDetector.TIER.SYSTEM || tier === SourceDetector.TIER.OFFICIAL;
+  }
+
   /**
-   * Get enabled compendiums per settings: ["default"] (Core+Fallback), ["all"], or specific IDs.
-   * @returns {CompendiumCollection[]}
+   * Resolve the compendiums to read, from the `enabledCompendiums` setting:
+   *   ["default"] every auto-detected OFFICIAL source (system SRD + WotC modules)
+   *   ["core"]    only SRD + core rulebooks (priority 1-2)
+   *   ["all"]     everything detected, including premium and manually added packs
+   *   [ids...]    the listed pack collections
+   * @returns {readonly CompendiumCollection[]}
    */
   static getEnabledCompendiums() {
     if (CompendiumManager.#enabledPacksCache) return CompendiumManager.#enabledPacksCache;
@@ -244,7 +267,8 @@ class CompendiumManager {
     } catch (e) {
       Logger.warn(`Failed to retrieve enabledCompendiums setting (${e.name}: ${e.message})`);
       ui.notifications.error(game.i18n.localize("NPC_REPLACER.ErrorSettingsRetrieve"));
-      const result = allPacks.filter(pack => CompendiumManager.getCompendiumPriority(pack) <= 2);
+      // Reading the setting failed: stay conservative rather than silently widening scope
+      const result = allPacks.filter(pack => CompendiumManager.getCompendiumPriority(pack) <= CompendiumManager.CORE_MAX_PRIORITY);
       CompendiumManager.#enabledPacksCache = Object.freeze(result);
       return CompendiumManager.#enabledPacksCache;
     }
@@ -255,7 +279,7 @@ class CompendiumManager {
     } catch (e) {
       Logger.warn(`Failed to parse enabledCompendiums JSON (${e.name}: ${e.message})`);
       ui.notifications.error(game.i18n.localize("NPC_REPLACER.ErrorSettingsParse"));
-      enabledPackIds = ["default"];
+      enabledPackIds = ["core"];
     }
 
     if (!enabledPackIds || !Array.isArray(enabledPackIds) || enabledPackIds.length === 0) {
@@ -264,11 +288,14 @@ class CompendiumManager {
 
     let result;
     if (enabledPackIds.includes("all")) {
-      Logger.log("Using all available compendiums");
+      Logger.log("Using all detected compendiums");
       result = allPacks;
+    } else if (enabledPackIds.includes("core")) {
+      result = allPacks.filter(pack => CompendiumManager.getCompendiumPriority(pack) <= CompendiumManager.CORE_MAX_PRIORITY);
+      Logger.log(`Using core compendiums (SRD + rulebooks): ${result.map(p => p.metadata.label).join(", ")}`);
     } else if (enabledPackIds.includes("default")) {
-      result = allPacks.filter(pack => CompendiumManager.getCompendiumPriority(pack) <= 2);
-      Logger.log(`Using default compendiums (Core + Fallback): ${result.map(p => p.metadata.label).join(", ")}`);
+      result = allPacks.filter(pack => CompendiumManager.isOfficialSource(pack));
+      Logger.log(`Using every official D&D compendium: ${result.map(p => p.metadata.label).join(", ")}`);
     } else {
       const enabledSet = new Set(enabledPackIds);
       result = allPacks.filter(pack => enabledSet.has(pack.collection));
@@ -277,6 +304,20 @@ class CompendiumManager {
 
     CompendiumManager.#enabledPacksCache = Object.freeze(result);
     return CompendiumManager.#enabledPacksCache;
+  }
+
+  /**
+   * Actor types that are never scene creatures. A blocklist (rather than an
+   * allowlist) keeps actor types introduced by future system versions indexed
+   * instead of silently dropping them.
+   */
+  static #NON_CREATURE_TYPES = Object.freeze(new Set(["character", "group", "vehicle"]));
+
+  /** True when a compendium index entry can stand in for an NPC token. */
+  static isCreatureEntry(entry) {
+    const type = entry?.type;
+    if (!type) return true; // no type information — keep it and let name matching decide
+    return !CompendiumManager.#NON_CREATURE_TYPES.has(type);
   }
 
   /** Load combined monster index from all enabled compendiums. Cached unless forceReload. */
@@ -326,7 +367,10 @@ class CompendiumManager {
 
       const priority = CompendiumManager.getCompendiumPriority(pack);
       const priorityLabel = CompendiumManager.PRIORITY_LABELS[priority] || "UNKNOWN";
+      let indexed = 0;
       for (const entry of pack.index.contents) {
+        if (!CompendiumManager.isCreatureEntry(entry)) continue;
+        indexed++;
         const normalizedName = NameMatcher.normalizeName(entry.name);
         const significantWords = normalizedName.split(" ").filter(w => w.length >= NameMatcher.MIN_PARTIAL_LENGTH);
         combinedIndex.push({
@@ -337,7 +381,7 @@ class CompendiumManager {
           priority
         });
       }
-      Logger.log(`  [${priority}-${priorityLabel}] Loaded ${pack.index.size} entries from ${pack.metadata.label}`);
+      Logger.log(`  [${priority}-${priorityLabel}] Loaded ${indexed}/${pack.index.size} creature entries from ${pack.metadata.label}`);
     }
 
     Logger.log(`Total: ${combinedIndex.length} entries from all compendiums`);
@@ -372,6 +416,7 @@ class CompendiumManager {
     CompendiumManager.#wotcCompendiumsCache = null;
     CompendiumManager.#enabledPacksCache = null;
     CompendiumManager.#lastLoadErrors = [];
+    CompendiumManager.#classifications = new Map();
     Logger.debug("CompendiumManager caches cleared");
   }
 
@@ -743,25 +788,6 @@ class NPCTokenReplacerController {
       </div>
     `;
 
-    const dialogOpts = {
-      title: game.i18n.localize("NPC_REPLACER.PreviewTitle"),
-      content,
-      yes: null,
-      no: null,
-      defaultYes: false,
-      close: null
-    };
-
-    // When all tokens are unmatched, disable the Replace/yes button
-    if (matched.length === 0) {
-      dialogOpts.render = (html) => {
-        // v12 passes jQuery object, v13+ passes HTMLElement
-        const el = html instanceof HTMLElement ? html : html[0] ?? html;
-        el.querySelectorAll('.yes, [data-button="yes"], [data-action="yes"]')
-          .forEach(btn => { btn.disabled = true; });
-      };
-    }
-
     let dialogTimeoutMinutes = 5;
     try {
       const value = game.settings.get(MODULE_ID, "dialogTimeout");
@@ -771,33 +797,26 @@ class NPCTokenReplacerController {
     }
     const DIALOG_TIMEOUT_MS = dialogTimeoutMinutes * 60 * 1000;
 
-    let dialogInstance;
     let timeoutId;
-    try {
-      const dialogPromise = new Promise(resolve => {
-        dialogInstance = new Dialog({
-          title: dialogOpts.title,
-          content: dialogOpts.content,
-          buttons: {
-            yes: { icon: '<i class="fas fa-check"></i>', label: game.i18n.localize("NPC_REPLACER.ConfirmYes"), callback: () => resolve(true) },
-            no: { icon: '<i class="fas fa-times"></i>', label: game.i18n.localize("NPC_REPLACER.ConfirmNo"), callback: () => resolve(false) }
-          },
-          default: "no",
-          render: dialogOpts.render ?? undefined,
-          close: () => resolve(false)
-        });
-        dialogInstance.render(true);
-      });
+    const { answer, close } = FoundryCompat.confirmDialog({
+      title: game.i18n.localize("NPC_REPLACER.PreviewTitle"),
+      content,
+      yesLabel: game.i18n.localize("NPC_REPLACER.ConfirmYes"),
+      noLabel: game.i18n.localize("NPC_REPLACER.ConfirmNo"),
+      // Nothing to replace: the confirm button stays unusable
+      yesDisabled: matched.length === 0
+    });
 
+    try {
       const timeoutPromise = new Promise(resolve => {
         timeoutId = setTimeout(() => {
           ui.notifications.warn(game.i18n.localize("NPC_REPLACER.DialogTimeout"));
-          try { dialogInstance?.close(); } catch (_) { /* dialog may already be closed */ }
+          close();
           resolve(false);
         }, DIALOG_TIMEOUT_MS);
       });
 
-      return await Promise.race([dialogPromise, timeoutPromise]);
+      return await Promise.race([answer, timeoutPromise]);
     } finally {
       clearTimeout(timeoutId);
     }
@@ -1075,134 +1094,31 @@ function registerSettings() {
     default: 5
   });
 
-  game.settings.registerMenu(MODULE_ID, "compendiumSelector", {
-    name: game.i18n.localize("NPC_REPLACER.Settings.CompendiumSelector.Name"),
-    label: game.i18n.localize("NPC_REPLACER.Settings.CompendiumSelector.Label"),
-    hint: game.i18n.localize("NPC_REPLACER.Settings.CompendiumSelector.Hint"),
-    icon: "fas fa-book",
-    type: CompendiumSelectorForm,
-    restricted: true
+  // Escape hatch: content the automatic signals cannot recognise (e.g. a future
+  // official release under an unexpected package id) can be added by hand.
+  game.settings.register(MODULE_ID, "additionalSources", {
+    name: game.i18n.localize("NPC_REPLACER.Settings.AdditionalSources.Name"),
+    hint: game.i18n.localize("NPC_REPLACER.Settings.AdditionalSources.Hint"),
+    scope: "world",
+    config: true,
+    type: String,
+    default: ""
   });
-}
 
-// TODO [HIGH] Compatibility: CompendiumSelectorForm uses v12 FormApplication only.
-// Foundry v14 will likely remove FormApplication. Add an ApplicationV2 branch with
-// feature detection (same pattern as registerControlButton's v12/v13 handling).
-// Without this, users cannot configure compendiums when v14 ships.
-class CompendiumSelectorForm extends FormApplication {
-  static get defaultOptions() {
-    return foundry.utils.mergeObject(super.defaultOptions, {
-      id: "npc-replacer-compendium-selector",
-      title: game.i18n.localize("NPC_REPLACER.Settings.CompendiumSelector.Title"),
-      template: `modules/${MODULE_ID}/templates/compendium-selector.html`,
-      width: 500,
-      height: "auto",
-      closeOnSubmit: true
+  const SelectorForm = buildCompendiumSelectorForm({
+    compendiumManager: CompendiumManager,
+    onSaved: () => NPCTokenReplacerController.clearCache()
+  });
+
+  if (SelectorForm) {
+    game.settings.registerMenu(MODULE_ID, "compendiumSelector", {
+      name: game.i18n.localize("NPC_REPLACER.Settings.CompendiumSelector.Name"),
+      label: game.i18n.localize("NPC_REPLACER.Settings.CompendiumSelector.Label"),
+      hint: game.i18n.localize("NPC_REPLACER.Settings.CompendiumSelector.Hint"),
+      icon: "fas fa-book",
+      type: SelectorForm,
+      restricted: true
     });
-  }
-
-  getData() {
-    const allPacks = CompendiumManager.detectWOTCCompendiums();
-
-    let enabledPackIds;
-    try {
-      const settingValue = game.settings.get(MODULE_ID, "enabledCompendiums");
-      enabledPackIds = typeof settingValue === "string" ? JSON.parse(settingValue) : settingValue;
-    } catch (e) {
-      Logger.warn(`Error parsing enabledCompendiums in form (${e.name}: ${e.message}), displaying default selection`);
-      enabledPackIds = ["default"];
-    }
-
-    let mode = "custom";
-    if (!enabledPackIds || !Array.isArray(enabledPackIds) || enabledPackIds.length === 0 || enabledPackIds.includes("default")) {
-      mode = "default";
-    } else if (enabledPackIds.includes("all")) {
-      mode = "all";
-    }
-
-    Logger.log("CompendiumSelectorForm getData:", { enabledPackIds, mode });
-
-    const enabledSet = mode === "custom" ? new Set(enabledPackIds) : null;
-
-    return {
-      mode,
-      compendiums: allPacks.map((pack, index) => {
-        const priority = CompendiumManager.getCompendiumPriority(pack);
-        return {
-          index,
-          id: pack.collection,
-          name: pack.metadata.label,
-          module: pack.metadata.packageName,
-          priority,
-          priorityLabel: CompendiumManager.PRIORITY_LABELS[priority] || "UNKNOWN",
-          enabled: mode === "all" || mode === "default" || (enabledSet !== null && enabledSet.has(pack.collection)),
-          isCoreFallback: priority <= 2
-        };
-      })
-    };
-  }
-
-  activateListeners(html) {
-    super.activateListeners(html);
-    // v12 passes jQuery, v13+ may pass HTMLElement
-    const el = html instanceof HTMLElement ? html : html[0] ?? html;
-    const list = el.querySelector('#compendium-list');
-    el.querySelectorAll('input[name="mode"]').forEach(radio => {
-      radio.addEventListener('change', (e) => {
-        if (e.target.value === 'custom') {
-          list.classList.remove('disabled');
-        } else {
-          list.classList.add('disabled');
-        }
-      });
-    });
-    const selectedMode = el.querySelector('input[name="mode"]:checked');
-    if (selectedMode && selectedMode.value !== 'custom') {
-      list.classList.add('disabled');
-    }
-  }
-
-  async _updateObject(event, formData) {
-    Logger.log("CompendiumSelectorForm formData:", formData);
-
-    const mode = formData.mode;
-    const allPacks = CompendiumManager.detectWOTCCompendiums();
-
-    let enabledArray;
-    if (mode === "default") {
-      enabledArray = ["default"];
-    } else if (mode === "all") {
-      enabledArray = ["all"];
-    } else {
-      enabledArray = [];
-      const prefix = "compendium-";
-      for (const [key, value] of Object.entries(formData)) {
-        if (key.startsWith(prefix) && value) {
-          const index = parseInt(key.substring(prefix.length), 10);
-          if (!isNaN(index) && allPacks[index]) {
-            enabledArray.push(allPacks[index].collection);
-          }
-        }
-      }
-      if (enabledArray.length === 0) {
-        ui.notifications.warn(game.i18n.localize("NPC_REPLACER.NoCompendium"));
-        enabledArray = ["default"];
-      }
-    }
-
-    const jsonValue = JSON.stringify(enabledArray);
-    Logger.log("Saving enabledCompendiums:", jsonValue);
-
-    try {
-      await game.settings.set(MODULE_ID, "enabledCompendiums", jsonValue);
-
-      NPCTokenReplacerController.clearCache();
-
-      ui.notifications.info(game.i18n.localize("NPC_REPLACER.Settings.CompendiumSelector.Saved"));
-    } catch (e) {
-      Logger.error(`Failed to save compendium settings (${e.name}: ${e.message})`);
-      ui.notifications.error(game.i18n.localize("NPC_REPLACER.Settings.CompendiumSelector.SaveError"));
-    }
   }
 }
 
@@ -1220,39 +1136,51 @@ function escapeHtml(str) {
   return String(str).replace(HTML_ESCAPE_PATTERN, char => HTML_ESCAPES[char]);
 }
 
-/** Add replace button to token controls (handles v12 array and v13+ object formats). */
+/**
+ * Add the replace button to the token controls.
+ *
+ * v13+ passes an object keyed by control name whose tools fire `onChange`;
+ * v12 passes an array of control groups whose tools fire `onClick`. Only the
+ * callback the running version actually uses is attached — supplying both makes
+ * v13 run the action twice.
+ */
 function registerControlButton(controls) {
-  const toolConfig = {
+  const run = () => NPCTokenReplacerController.replaceNPCTokens();
+  const tool = {
     name: "npcReplacer",
     title: game.i18n.localize("NPC_REPLACER.Button"),
     icon: "fas fa-sync-alt",
     button: true,
-    visible: game.user.isGM,
-    onClick: () => NPCTokenReplacerController.replaceNPCTokens()
-    // Note: Do NOT add onChange - it causes double execution with onClick
+    visible: game.user.isGM
   };
 
-  if (controls.tokens && typeof controls.tokens === "object" && !Array.isArray(controls.tokens)) {
-    if (!controls.tokens.tools) {
+  const tokenGroup = controls?.tokens;
+  if (tokenGroup && typeof tokenGroup === "object" && !Array.isArray(tokenGroup)) {
+    if (!tokenGroup.tools) {
       Logger.error("Token controls found but 'tools' property is missing — toolbar button not registered");
       return;
     }
-    controls.tokens.tools.npcReplacer = toolConfig;
-  } else if (Array.isArray(controls)) {
+    tokenGroup.tools.npcReplacer = { ...tool, order: Object.keys(tokenGroup.tools).length, onChange: run };
+    return;
+  }
+
+  if (Array.isArray(controls)) {
     const tokenControls = controls.find(c => c.name === "token");
     if (tokenControls && Array.isArray(tokenControls.tools)) {
-      tokenControls.tools.push(toolConfig);
+      tokenControls.tools.push({ ...tool, onClick: run });
     } else {
       Logger.error("Could not find token controls group — toolbar button not registered");
     }
-  } else {
-    Logger.error("Unrecognized scene controls format — toolbar button not registered. This may indicate an incompatible Foundry version.");
+    return;
   }
+
+  Logger.error("Unrecognized scene controls format — toolbar button not registered. This may indicate an incompatible Foundry version.");
 }
 
 Hooks.once("init", () => {
-  Logger.log("Initializing NPC Token Replacer");
+  Logger.log(`Initializing NPC Token Replacer (Foundry generation ${FoundryCompat.generation || "unknown"})`);
   registerSettings();
+  preloadSelectorTemplates();
 });
 
 Hooks.once("ready", async () => {

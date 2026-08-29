@@ -146,8 +146,16 @@ describe("CompendiumManager", () => {
       game.packs.filter = vi.fn(pred => mockPacks.filter(pred));
     });
 
-    it('"default" mode includes only priority 1-2 (SRD + Core)', () => {
+    it('"default" mode includes every official source, adventures included', () => {
       game.settings.get = vi.fn().mockReturnValue('["default"]');
+      const result = CompendiumManager.getEnabledCompendiums();
+      expect(result).toContain(corePack);
+      expect(result).toContain(srdPack);
+      expect(result).toContain(adventurePack);
+    });
+
+    it('"core" mode restricts to priority 1-2 (SRD + rulebooks)', () => {
+      game.settings.get = vi.fn().mockReturnValue('["core"]');
       const result = CompendiumManager.getEnabledCompendiums();
       expect(result).toContain(corePack);
       expect(result).toContain(srdPack);
@@ -192,20 +200,20 @@ describe("CompendiumManager", () => {
       expect(ui.notifications.error).toHaveBeenCalled();
     });
 
-    it("undefined setting falls back to default behavior", () => {
+    it("undefined setting falls back to the module default (all official)", () => {
       game.settings.get = vi.fn().mockReturnValue(undefined);
       const result = CompendiumManager.getEnabledCompendiums();
       expect(result).toContain(corePack);
       expect(result).toContain(srdPack);
-      expect(result).not.toContain(adventurePack);
+      expect(result).toContain(adventurePack);
     });
 
-    it("empty array setting falls back to default behavior", () => {
+    it("empty array setting falls back to the module default (all official)", () => {
       game.settings.get = vi.fn().mockReturnValue("[]");
       const result = CompendiumManager.getEnabledCompendiums();
       expect(result).toContain(corePack);
       expect(result).toContain(srdPack);
-      expect(result).not.toContain(adventurePack);
+      expect(result).toContain(adventurePack);
     });
 
     it("multiple specific pack IDs filter correctly", () => {
@@ -255,9 +263,9 @@ describe("CompendiumManager", () => {
 
       // Clear cache and change to default mode
       CompendiumManager.clearCache();
-      game.settings.get = vi.fn().mockReturnValue('["default"]');
+      game.settings.get = vi.fn().mockReturnValue('["core"]');
       const second = CompendiumManager.getEnabledCompendiums();
-      // Default only includes priority <= 2 (Monster Manual = 2, but not Phandelver = 4)
+      // Core mode only includes priority <= 2 (Monster Manual = 2, but not Phandelver = 4)
       expect(second).toHaveLength(1);
       expect(second[0].metadata.label).toBe("Monster Manual");
     });

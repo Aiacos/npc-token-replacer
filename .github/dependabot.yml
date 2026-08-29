@@ -1,0 +1,22 @@
+version: 2
+updates:
+  # Keep the CI actions current so workflows never run on a deprecated runner.
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: "chore"
+    labels: [dependencies, ci]
+
+  # Dev-only dependencies (the shipped module has no runtime dependencies).
+  - package-ecosystem: npm
+    directory: "/"
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: "chore"
+    labels: [dependencies]
+    groups:
+      dev-dependencies:
+        patterns: ["*"]

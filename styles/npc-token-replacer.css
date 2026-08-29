@@ -105,6 +105,25 @@
   opacity: var(--npc-replacer-expansion-opacity);
 }
 
+/* How a source was recognised: SRD / Official / Premium / Manual */
+.source-tier {
+  font-size: 0.7em;
+  padding: 0.1rem 0.4rem;
+  border-radius: 3px;
+  border: 1px solid currentColor;
+  opacity: 0.75;
+}
+
+.source-tier.tier-none {
+  display: none;
+}
+
+/* Submit row shared by the ApplicationV2 and legacy FormApplication shells */
+.compendium-selector .form-footer {
+  margin-top: 0.75rem;
+  justify-content: flex-end;
+}
+
 /* ------------------------------------------------------------------
    Preview Dialog (replaces inline styles in main.js)
    ------------------------------------------------------------------ */

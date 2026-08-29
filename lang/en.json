@@ -1,8 +1,6 @@
 {
   "NPC_REPLACER": {
-    "Title": "NPC Token Replacer",
     "Button": "Replace NPC Tokens",
-    "Processing": "Processing {count} tokens...",
     "ProgressStart": "Replacing {count} tokens...",
     "ProgressUpdate": "({current}/{total}) {name}",
     "Complete": "Replaced {count} tokens successfully",
@@ -10,11 +8,8 @@
     "AlreadyProcessing": "Token replacement is already in progress, please wait.",
     "NoTokens": "No NPC tokens found in the current scene",
     "NoSelectedNPCs": "No NPC tokens in selection (select NPC tokens or deselect all to process entire scene)",
-    "NotFound": "Not found in compendiums: {name}",
     "NotFoundCount": "{count} creatures not found in compendiums",
     "DeleteFailedCount": "{count} token(s) replaced but old token could not be removed — duplicates may exist",
-    "Error": "Error replacing token: {name}",
-    "ErrorCount": "{count} errors occurred during replacement",
     "SummaryPartialFailure": "Replacement completed with issues: {replaced} replaced, {noMatch} not found, {importFailed} import failures, {creationFailed} creation failures",
     "ErrorSettingsRetrieve": "Failed to read compendium settings. Using default compendiums.",
     "ErrorSettingsParse": "Compendium settings are corrupted. Using default compendiums.",
@@ -34,14 +29,7 @@
     "PreviewColToken": "Token Name",
     "PreviewColMatch": "Will Match As",
     "PreviewColSource": "Source Compendium",
-    "PriorityFallback": "Fallback",
-    "PriorityCore": "Core",
-    "PriorityExpansion": "Expansion",
-    "PriorityAdventure": "Adventure",
     "PreviewNoMatch": "No match found",
-    "ConfirmTitle": "Confirm Token Replacement",
-    "ConfirmContent": "The following {count} NPC tokens will be replaced with official D&D versions:",
-    "ConfirmProceed": "Do you want to proceed?",
     "ConfirmYes": "Replace Tokens",
     "ConfirmNo": "Cancel",
     "Settings": {
@@ -62,15 +50,18 @@
         "Hint": "Choose which official D&D compendiums to search for creature tokens.",
         "Title": "Compendium Selection",
         "ModeLabel": "Compendium Selection Mode",
-        "ModeDefault": "Core + Fallback Only (Recommended)",
-        "ModeDefaultHint": "Use only SRD, Tasha's Cauldron, Monster Manual, PHB, and DMG. Best for standard games.",
-        "ModeAll": "All Compendiums",
-        "ModeAllHint": "Use all installed official D&D compendiums including adventures and expansions.",
+        "ModeDefault": "All Official D&D Content (Recommended)",
+        "ModeDefaultHint": "Automatically read every official D&D source installed in this world - the system SRD plus every Wizards of the Coast module. Newly installed books are picked up on their own.",
+        "ModeAll": "Everything Detected",
+        "ModeAllHint": "Also include premium D&D content from other publishers and any source you added manually below.",
         "ModeCustom": "Custom Selection",
         "ModeCustomHint": "Manually select which compendiums to use from the list below.",
         "SelectCompendiums": "Available Compendiums:",
         "Saved": "Compendium settings saved. The index will be reloaded on next use.",
-        "SaveError": "Failed to save compendium settings. Please try again."
+        "SaveError": "Failed to save compendium settings. Please try again.",
+        "ModeCore": "Core Rulebooks + SRD Only",
+        "ModeCoreHint": "Restrict matching to the SRD and the core rulebooks (Monster Manual, Player's Handbook, Dungeon Master's Guide). Adventures and expansions are ignored.",
+        "Save": "Save Selection"
       },
       "DialogTimeout": {
         "Name": "Preview Dialog Timeout (minutes)",
@@ -79,7 +70,18 @@
       "HttpTimeout": {
         "Name": "HTTP Timeout (seconds)",
         "Hint": "Timeout for network requests when resolving wildcard token paths. Increase for slow connections."
+      },
+      "AdditionalSources": {
+        "Name": "Additional Compendium Sources",
+        "Hint": "Package ids or compendium ids to treat as official creature sources, separated by commas. Only needed for content this module cannot recognise on its own."
       }
+    },
+    "Tier": {
+      "system": "SRD",
+      "official": "Official",
+      "premium": "Premium",
+      "manual": "Manual",
+      "none": ""
     }
   }
 }

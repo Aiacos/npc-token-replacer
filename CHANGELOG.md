@@ -7,6 +7,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.5.0] - 2026-08-30
+
+### Added
+- **Signal-based detection of official D&D content** (`scripts/lib/source-detector.js`): official sources are now recognised from the package itself — the active game system, the official `dnd-` prefix, Wizards of the Coast / Foundry Gaming authorship, premium content declaring the dnd5e system, or a package id the GM added by hand. Modules released after this version are detected without a module update.
+- **Dynamic priority classification**: a package that is not in the curated table is classified from what it ships — an Adventure compendium means adventure content (4), Scene compendiums mean a setting book (3), neither means a rulebook (2). The known-priority table is now an optional refinement, not the mechanism.
+- **`FoundryCompat` compatibility layer** (`scripts/lib/foundry-compat.js`): feature-detected access to every Foundry API that moved between generations — `DialogV2`/`Dialog`, `ApplicationV2`/`FormApplication`, `SceneNavigation`, the Handlebars template loader and `foundry.utils.mergeObject`. Namespaced APIs are resolved first so deprecated-global warnings are never triggered.
+- **ApplicationV2 settings form**: the compendium selector now renders as an `ApplicationV2` when the client provides one, falling back to `FormApplication` on v12. Both shells share one model (`CompendiumSelectorModel`), so behaviour cannot drift.
+- **`core` selection mode**: restricts matching to SRD + core rulebooks (the previous default behaviour).
+- **"Additional Compendium Sources" setting**: comma-separated package or compendium ids to treat as official creature sources — the escape hatch for content the automatic signals cannot recognise.
+- **Save button in the compendium selector**: the form previously had no submit control.
+- **Tooling**: `tools/validate-manifest.mjs` (manifest, referenced files, i18n keys, template paths), `tools/bump-version.mjs`, `tools/check-foundry-version.mjs`, `tools/publish-foundry.mjs`. New npm scripts `lint`, `lint:fix`, `validate`, `check`.
+- **CI/CD**: lint + validation + tests on a Node 20/22 matrix, a coverage artifact, and a package smoke test that asserts every manifest-referenced file is inside the ZIP. A one-trigger Release workflow (bump → validate → tag → build → verify → GitHub release → Foundry package registry). A weekly Foundry compatibility watch that opens a PR when a new generation ships. Dependabot for actions and dev dependencies.
+- **Documentation**: `docs/COMPATIBILITY.md` (version policy and compatibility layer) and `docs/DEVELOPMENT.md` (setup, quality gate, CI/CD, release process). A Constitution of non-negotiable principles in `CLAUDE.md`.
+- **51 new unit tests** covering source detection, the compatibility layer and the settings form (202 total).
+
+### Changed
+- **Default compendium mode now reads all official content.** A world that never touched the setting previously used only SRD + core rulebooks; it now reads every detected official source. Select **Core Rulebooks + SRD Only** to restore the old behaviour.
+- **Foundry v14 verified**: `compatibility.verified` raised from 13 to 14, minimum still 12. No `compatibility.maximum` is declared, and the manifest validator now fails the build if one is added.
+- **Only creature entries are indexed**: `character`, `group` and `vehicle` compendium entries are skipped. The filter is a blocklist, so actor types added by future system versions are still indexed.
+- **Scene control registration**: v13+ object-format controls now use `onChange` and v12 array-format controls use `onClick`, instead of `onClick` for both.
+- **Compendium checkboxes are keyed by pack id** rather than by list position, so a change in detection order can no longer shift a saved custom selection.
+- **Corrupt settings fall back conservatively** to the core-rulebook set instead of the (now broader) default.
+- **Progress bar** reaches `SceneNavigation` through `FoundryCompat` instead of the bare global.
+- **`module.json`** declares `flags.hotReload` for live reloading of styles, templates and language files during development.
+
+### Removed
+- `eslint.config.mjs` — a second, dead ESLint configuration shadowed by `eslint.config.js`.
+- 12 unused i18n keys.
+- `fix-todos/` session state is no longer tracked.
+
+### Fixed
+- **Module load could break on a future Foundry release**: `CompendiumSelectorForm` extended the `FormApplication` global at module-evaluation time, so removing that global (announced for v16) would have failed the entire module import, not just the settings dialog. The form class is now built by a factory at registration time.
+
 ### Fixed
 - **Lock release race condition**: Swapped `clearActorLookup()` before `#isProcessing = false` in the `finally` block to prevent re-entry with stale state
 - **Wildcard 404 cache miss**: Empty (404) results are now cached, preventing 45+ redundant HEAD requests per duplicate creature
