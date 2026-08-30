@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Dependabot auto-merge** (`.github/workflows/dependabot-auto-merge.yml`): a daily sweep merges patch and minor dependency updates whose checks are green, and labels everything else `needs-review`. Major updates are never merged automatically — `release.yml` and `foundry-compat.yml` are not exercised by pull-request CI, so a green PR does not prove that releasing still works. The classification lives in `tools/dependabot-triage.mjs` and is unit-tested (16 new tests).
+- **Step-by-step guide for obtaining `FOUNDRY_PACKAGE_TOKEN`** in `docs/DEVELOPMENT.md`, including the dry-run behaviour and what to do if the token leaks.
+
+### Fixed
+- **Dependabot grouped every dev dependency into one PR.** `patterns: ["*"]` with no `update-types` filter mixed three major bumps with one patch in a single PR, so the safe part could not be taken without the risky part. Minor and patch updates are now grouped; majors arrive as individual PRs.
+
+
 ### Fixed
 - **Foundry package registry announcement was skipped on every tag-triggered release.** The step was guarded by `inputs.publish_to_registry != false`, and on a `push` event `inputs` is empty — GitHub coerces `""` to `false`, so the condition evaluated false and the step never ran. Only the `workflow_dispatch` path may opt out now.
 - **`tools/bump-version.mjs` could break a release halfway through.** Passing a version equal to the current one produced a duplicate CHANGELOG heading and then failed on an empty commit, after `module.json` had already been rewritten. The bump now refuses a no-op version and an unknown bump type, and changelog promotion is idempotent.

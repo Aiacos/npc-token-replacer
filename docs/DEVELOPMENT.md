@@ -86,7 +86,8 @@ already baked into the packaged manifest.
 | `ci.yml` | push to `main`/`develop`, every PR, manual | Lint, validate and test on Node 20 and 22; coverage artifact; package smoke test that asserts every manifest-referenced file made it into the ZIP |
 | `release.yml` | manual dispatch, or a `v*` tag | The full release pipeline (below) |
 | `foundry-compat.yml` | weekly cron, manual | Compares the newest published Foundry generation with `compatibility.verified` and opens a bump PR when it is behind |
-| `dependabot.yml` | weekly | Updates workflow actions and dev dependencies |
+| `dependabot.yml` | weekly | Opens update PRs for workflow actions and dev dependencies |
+| `dependabot-auto-merge.yml` | daily cron, manual | Merges patch/minor Dependabot PRs whose checks are green; labels everything else `needs-review` |
 
 ### Releasing
 
@@ -107,12 +108,75 @@ explicit `x.y.z`. The workflow then:
 Pushing a `vX.Y.Z` tag by hand runs the same pipeline from step 5, after
 checking the tag matches `module.json`.
 
+### Dependency updates
+
+Dependabot groups **minor and patch** updates into a single low-risk PR per
+ecosystem. **Major** updates fall outside the group and arrive as individual PRs.
+
+`dependabot-auto-merge.yml` sweeps once a day and merges only what is safe:
+
+| Condition | Outcome |
+|-----------|---------|
+| patch or minor, mergeable, all checks green | merged automatically |
+| any major in the PR (including inside a group) | held, labelled `needs-review` |
+| checks not green, conflicts, or an unparseable title | held, labelled `needs-review` |
+
+Majors are deliberately not automated: a major action bump can change runtime
+defaults, and **`release.yml` and `foundry-compat.yml` are never exercised by
+pull-request CI** — a green PR is not proof that releasing still works.
+
+The classification lives in `tools/dependabot-triage.mjs` and is unit-tested;
+run it against the live queue at any time with:
+
+```bash
+gh pr list --author app/dependabot --state open \
+  --json number,title,body,mergeable,statusCheckRollup > prs.json
+node tools/dependabot-triage.mjs prs.json
+```
+
 ### Repository secrets
 
 | Secret | Required | Purpose |
 |--------|----------|---------|
 | `GITHUB_TOKEN` | provided automatically | Create releases, push tags, open compatibility PRs |
-| `FOUNDRY_PACKAGE_TOKEN` | optional | Announce releases on the Foundry package registry. Absent, the step logs a skip instead of failing. Get it from the package's admin page on foundryvtt.com. |
+| `FOUNDRY_PACKAGE_TOKEN` | optional | Announce releases on the Foundry package registry. Absent, the step logs a skip instead of failing. See below. |
+
+#### Getting `FOUNDRY_PACKAGE_TOKEN`
+
+The token proves to foundryvtt.com that you own the package. Without it a
+release still reaches GitHub and the manifest URL still serves it — but the
+module's entry in Foundry's package browser keeps showing the previous version.
+
+It is **per package**, not per account, and it is created for you: there is
+nothing to generate, only to copy.
+
+1. Sign in to [foundryvtt.com](https://foundryvtt.com/).
+2. Open the package edit page:
+   `https://foundryvtt.com/packages/npc-token-replacer/edit`
+   (also reachable from **Profile → Packages**, then **Edit** on the package —
+   or the **Edit** button on the package's own page).
+3. Scroll to the bottom. Just above the **Save Package** button is a field
+   labelled **Package Release Token**. Click the field to copy it.
+4. Store it as a repository secret — run this in your own terminal so the value
+   is never echoed into a shell history or a transcript:
+
+   ```bash
+   gh secret set FOUNDRY_PACKAGE_TOKEN
+   ```
+
+   Paste the token at the prompt.
+
+That is the whole setup. From the next release on, the pipeline announces itself.
+
+**Security**: this token can edit your package programmatically. Never commit it,
+never paste it into an issue, a PR or a chat. If it leaks, the same page has a
+**Refresh** button that revokes the current token and issues a new one — then
+re-run `gh secret set FOUNDRY_PACKAGE_TOKEN` with the new value.
+
+**Verifying without publishing**: the release workflow sends a `dry-run` request
+for pre-release versions (any version containing a hyphen, e.g. `1.8.0-rc.1`).
+The API validates the payload and answers *"Dry run completed successfully"*
+without saving anything.
 
 Pre-releases are sent to the registry as a **dry run**, so an `-rc` build is
 validated without being published.
