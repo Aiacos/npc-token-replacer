@@ -66,7 +66,11 @@ echo ""
 echo -e "${BLUE}[1/6]${NC} Checking project files..."
 
 REQUIRED_FILES=("module.json")
-OPTIONAL_FILES=("README.md" "LICENSE" "CHANGELOG.md")
+# README*.md picks up translations (README.it.md, ...) alongside the English one
+OPTIONAL_FILES=("LICENSE" "CHANGELOG.md")
+for readme in README*.md; do
+    [ -f "$readme" ] && OPTIONAL_FILES+=("$readme")
+done
 KNOWN_DIRS=("scripts" "lang" "styles" "templates" "assets" "packs" "icons" "images" "fonts")
 
 # Verify required files

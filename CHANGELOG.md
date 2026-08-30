@@ -8,29 +8,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
-- **Italian README** (`README.it.md`), a full translation of the user-facing documentation, cross-linked from the English one. The project previously had an Italian UI translation but no Italian documentation at all.
-- **README structure check** in `tools/validate-manifest.mjs`: chapter titles are translated and cannot be compared directly, so the validator compares the *icon* sequence of the level-2 headings instead — a language-independent way to catch a chapter added to one README only.
+- **Italian README** (`README.it.md`), a full translation of the user-facing documentation, cross-linked with the English one. The project previously shipped an Italian UI translation but no Italian documentation.
+- **Foundry submission process documented** in both READMEs (`Listing the module on foundryvtt.com`) and in `docs/DEVELOPMENT.md`: submit → manual review → copy the release token → store it as a repository secret, plus what the review checks.
+- **Installation chapter now states that the module is not in Foundry's package browser** and points at the manifest URL as the recommended route.
+- **Dependabot auto-merge** (`.github/workflows/dependabot-auto-merge.yml`): a daily sweep merges patch and minor dependency updates whose checks are green and labels everything else `needs-review`. Majors are never merged automatically — `release.yml` and `foundry-compat.yml` are not exercised by pull-request CI, so a green PR does not prove that releasing still works. The classification is a pure function in `tools/dependabot-triage.mjs` with 16 unit tests.
+- **Two new validator checks**: Handlebars partials referenced from templates must exist, and the translated README must keep the same chapter icon sequence as the English one (a language-independent way to catch a chapter added to one file only).
+
+### Changed
+- **GitHub Actions updated to v7** (`checkout`, `setup-node`, `upload-artifact`). Verified against the release notes of every intermediate major: the only real breaking change — checkout refusing to check out fork PRs under `pull_request_target` / `workflow_run` — does not apply, since neither trigger is used, and `persist-credentials` still defaults to `true`, which the release and compatibility workflows depend on for pushing.
+- **`build.sh` and `build.bat` package every `README*.md`**, so translations ship with the module instead of only the English README.
+- **Dependabot groups minor and patch updates only.** `patterns: ["*"]` with no `update-types` filter had mixed three majors with one patch into a single PR, so the safe part could not be taken without the risky part.
 
 ### Fixed
-- **README contradicted itself on the minimum Foundry version**, claiming "verified on v12, v13 and v14" in Features while Requirements said 13 or higher. A leftover from the develop/main merge.
+- **Foundry package registry announcement was skipped on every tag-triggered release.** The step was guarded by `inputs.publish_to_registry != false`, and on a `push` event `inputs` is empty — GitHub coerces `""` to `false`, so the condition evaluated false and the step never ran. Only the `workflow_dispatch` path may opt out now.
+- **`tools/bump-version.mjs` could break a release halfway through.** A version equal to the current one produced a duplicate CHANGELOG heading and then failed on an empty commit, after `module.json` had already been rewritten. It now refuses a no-op bump and an unknown bump type, and changelog promotion is idempotent.
+- **The `FOUNDRY_PACKAGE_TOKEN` guide skipped the step that matters.** It described copying the token from the package edit page, but that page only exists for an already-listed package — `https://foundryvtt.com/packages/npc-token-replacer` returns 404. The guide now starts from submission and approval.
+- **README contradicted itself on the minimum Foundry version**, claiming "verified on v12, v13 and v14" in Features while Requirements said 13 or higher.
 - **A paragraph about dynamic classification appeared twice** in the supported-content chapter, and the sentence introducing the priority tables was separated from them by an unrelated paragraph.
-
-
-### Added
-- **README documents the foundryvtt.com submission process** (`🔄 Listing the module on foundryvtt.com`): submit → manual review → copy the release token → store it as a repository secret, plus what the review checks and why this module ships no third-party content.
-- **Installation chapter states that the module is not in Foundry's package browser** and points at the manifest URL as the recommended route, so users stop searching for it in the Install Module dialog.
-
-
-### Fixed
-- **Corrected the `FOUNDRY_PACKAGE_TOKEN` guide in `docs/DEVELOPMENT.md`.** It described copying the token from the package edit page, but skipped the prerequisite: the package must first be submitted to foundryvtt.com and manually approved. `https://foundryvtt.com/packages/npc-token-replacer` currently returns 404 — the module has never been submitted — so no token exists yet. The guide now starts from submission and states what the review checks.
-
-
-### Added
-- **Dependabot auto-merge** (`.github/workflows/dependabot-auto-merge.yml`): a daily sweep merges patch and minor dependency updates whose checks are green, and labels everything else `needs-review`. Major updates are never merged automatically — `release.yml` and `foundry-compat.yml` are not exercised by pull-request CI, so a green PR does not prove that releasing still works. The classification lives in `tools/dependabot-triage.mjs` and is unit-tested (16 new tests).
-- **Step-by-step guide for obtaining `FOUNDRY_PACKAGE_TOKEN`** in `docs/DEVELOPMENT.md`, including the dry-run behaviour and what to do if the token leaks.
-
-### Fixed
-- **Dependabot grouped every dev dependency into one PR.** `patterns: ["*"]` with no `update-types` filter mixed three major bumps with one patch in a single PR, so the safe part could not be taken without the risky part. Minor and patch updates are now grouped; majors arrive as individual PRs.
 
 ## [1.7.1] - 2026-08-30
 
