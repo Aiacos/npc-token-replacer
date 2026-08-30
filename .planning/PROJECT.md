@@ -1,80 +1,101 @@
-# NPC Token Replacer — Stability & Reliability Milestone
+# NPC Token Replacer — Future-Proofing & Release Automation
 
 ## What This Is
 
-A Foundry VTT module (v12/v13) for D&D 5e that replaces scene NPC tokens with official WotC compendium versions while preserving position, elevation, dimensions, and other token properties. Production-grade with 136 automated tests, structured error handling, progress feedback, and dry-run preview.
+A Foundry VTT module (v13+, verified on v14) for D&D 5e that replaces scene NPC
+tokens with official WotC compendium versions while preserving position,
+elevation, dimensions, and other token properties. 232 automated tests,
+structured error handling, progress feedback, dry-run preview, and a release
+pipeline that runs from a single trigger.
 
 ## Core Value
 
-Token replacement must work correctly and predictably every time — no silent failures, no corrupted state, no confusing errors. Users trust the module to modify their scenes safely.
+Token replacement must work correctly and predictably every time — no silent
+failures, no corrupted state, no confusing errors. Users trust the module to
+modify their scenes safely.
+
+Since v1.7 a second value sits alongside it: **the module must keep working
+without maintenance**. Foundry ships a new generation every year and Wizards of
+the Coast keeps publishing books; neither should require a code change.
 
 ## Requirements
 
 ### Validated
 
-- ✓ Auto-detect WotC compendiums by module prefix — existing
-- ✓ 4-tier compendium priority system (Adventure > Expansion > Core > Fallback) — existing
 - ✓ Multi-stage name matching (exact → variant transforms → partial word) — existing
-- ✓ Wildcard token path resolution with variant selection modes (none/sequential/random) — existing
+- ✓ Wildcard token path resolution with variant selection modes — existing
 - ✓ Token replacement preserving position, elevation, dimensions, visual state — existing
-- ✓ Compendium selection UI with Default/All/Custom modes — existing
-- ✓ Foundry v12/v13 compatibility for toolbar controls — existing
-- ✓ GM-only access enforcement — existing
-- ✓ Debug API via window.NPCTokenReplacer — existing
-- ✓ Localization support via lang/en.json — existing
-- ✓ Multi-level caching (compendium index, wildcard paths, import folders) — existing
-- ✓ XSS prevention in dialog content via escapeHtml — existing
-- ✓ Automated test suite (136 tests, Vitest + Foundry mocks) — v1.4
+- ✓ GM-only access enforcement, debug API, multi-level caching — existing
+- ✓ Automated test suite (Vitest + Foundry mocks) — v1.4, now 232 tests
 - ✓ Error handling hardening with structured failure classification — v1.4
-- ✓ Bug fixes (stale actor cache, settings errors, cache propagation) — v1.4
-- ✓ Wildcard variant cache cleared on settings change — v1.4
-- ✓ Progress bar during multi-token replacements (v12/v13) — v1.4
+- ✓ Progress bar during multi-token replacements — v1.4
 - ✓ Dry-run preview dialog with match mapping before committing — v1.4
-- ✓ Per-compendium load error tracking for diagnostics — v1.4
 - ✓ Configurable HTTP timeout for wildcard probing — v1.4
+- ✓ CI pipeline running lint, validation and tests on push and PR — v1.5, extended in v1.7
+- ✓ Detection restricted to the 11 official WotC packages — v1.6
+- ✓ Signal-based detection of content released after this version — v1.7
+- ✓ Feature-detected Foundry API access, no version checks anywhere — v1.7
+- ✓ ApplicationV2 settings form with legacy fallback — v1.7
+- ✓ Manifest, i18n, template and translation validation in CI — v1.7
+- ✓ One-trigger release pipeline with Foundry registry announcement — v1.7
+- ✓ Weekly Foundry compatibility watch that opens a bump PR — v1.7
+- ✓ Dependabot with auto-merge for low-risk updates — v1.7
+- ✓ Italian localization and Italian README — v1.7
 
 ### Active
 
-- [ ] Performance optimization (batch token operations, wildcard probing)
-- [ ] CI pipeline with GitHub Actions running npm test on push
-- [ ] Quench in-engine integration tests for full replacement workflow
+- [ ] Runtime smoke test in a live Foundry world — nothing in this module has
+      ever been exercised against the real client; all evidence is from test
+      doubles. This is the single largest gap.
+- [ ] Submit the package to foundryvtt.com (manual, needs an active licence and
+      passes a review). Blocks `FOUNDRY_PACKAGE_TOKEN` and the package browser
+      listing.
+- [ ] Batch token mutations — the replacement loop is still 2N socket round-trips
+- [ ] Quench in-engine integration tests for the full replacement workflow
 
 ### Out of Scope
 
-- Rollback/undo after partial failures — high complexity, major architectural change, defer to future
-- Batch token mutations (single createEmbeddedDocuments call) — requires major refactor of replacement loop, defer
-- localStorage/IndexedDB index persistence — complex browser compatibility, defer
-- LRU eviction for wildcard cache — no practical scaling issue at current usage levels
-- Multi-language localization — English-only for now, structure already supports expansion
+- Rollback/undo after partial failures — high complexity, major architectural change
+- localStorage/IndexedDB index persistence — complex browser compatibility
+- Supporting Foundry v12 — dropped in v1.6; the compatibility layer keeps the
+  AppV1 fallbacks, but the manifest requires 13
 
 ## Context
 
-- Shipped v1.4 with 136 automated tests across 8 test files, 58%+ coverage
-- ESLint reports 0 errors and 0 warnings
-- Modular architecture: main.js (~2000 lines) + scripts/lib/ (name-matcher, wildcard-resolver, logger, progress-reporter)
+- Published: v1.7.3 (2026-08-30). Distributed by manifest URL only — the package
+  is not listed on foundryvtt.com
+- 2,851 lines of source across 8 module files and 5 CI tools; 232 tests in 16 files
 - Zero runtime dependencies — native browser APIs only
-- Vitest 3.x with jsdom + @rayners/foundry-test-utils for Foundry global mocks
-- Known future breaking change: Dialog.confirm v13 shim removed in v14
+- Vitest 3.x, pinned by `@rayners/foundry-test-utils@1.2.2`
+  (`peer vitest: ^3.1.0`, `peer jsdom: ^26.1.0 || ^27.0.0`)
+- `main` and `develop` are aligned; two branches diverged badly between March and
+  August and had to be reconciled by hand
 
 ## Constraints
 
-- **Runtime**: Must work in Foundry VTT v12+ browser environment (ES2020+ guaranteed)
-- **Architecture**: Single-file module — tests must work alongside this structure
-- **Dependencies**: Minimize new dependencies; prefer zero-dep test solutions compatible with Foundry's module ecosystem
-- **Compatibility**: Cannot break existing settings or behavior for current users
-- **No build step**: Module has no build system — test framework must not require transpilation for the module itself
+- **Runtime**: Foundry VTT v13+ browser environment
+- **Dependencies**: zero runtime dependencies; dev dependencies must stay
+  compatible with foundry-test-utils' peer ranges
+- **Compatibility**: cannot break existing settings or behaviour for current users
+- **No build step**: plain ES modules loaded directly by Foundry
+- **No `compatibility.maximum`**: enforced by the manifest validator, so a new
+  Foundry generation is never blocked by the manifest
+- **Governance**: the Constitution in `CLAUDE.md` applies to every change
 
 ## Key Decisions
 
 | Decision | Rationale | Outcome |
 |----------|-----------|---------|
-| Comprehensive scope over quick pass | Public release prep needs full confidence, not patches | ✓ Good |
-| Test suite as top priority | Enables safe future changes and catches regressions | ✓ Good — 136 tests |
-| Error handling as second priority | Users need clear feedback, not silent failures | ✓ Good |
-| Include progress bar and dry-run | Improves perceived reliability and user confidence | ✓ Good |
-| Vitest 3.x + foundry-test-utils | Works with Foundry module structure, no build step | ✓ Good |
-| Duck-typing for v12/v13 detection | typeof checks instead of version strings | ✓ Good |
-| Flat localization keys | Avoid conflicts with existing "Error" key | ✓ Good |
+| Test suite as top priority | Enables safe future changes and catches regressions | ✓ Good — 232 tests |
+| Vitest 3.x + foundry-test-utils | Works with Foundry module structure, no build step | ⚠️ Pins vitest and jsdom majors |
+| Duck-typing for version detection | typeof checks instead of version strings | ✓ Good — became `FoundryCompat` |
+| Whitelist of 11 WotC packages (v1.6) | Prefix matching captured DDB-Importer and homebrew | ✓ Good — kept as the default |
+| Signals layered on the whitelist (v1.7) | A book released after this version must not be silently ignored | ✓ Good — surfaced, not trusted |
+| Factory for the settings form class | `extends FormApplication` would break module import once the global is removed in v16 | ✓ Good |
+| Blocklist for non-creature actor types | New actor types stay indexed instead of being dropped | ✓ Good |
+| Conservative fallback on corrupt settings | An error must never widen the set of sources read | ✓ Good |
+| Daily sweep for Dependabot auto-merge | Needs no branch protection and cannot race CI | ✓ Good |
+| Majors never auto-merged | `release.yml` is not exercised by PR CI, so green ≠ releasable | ✓ Good |
 
 ---
-*Last updated: 2026-03-06 after v1.4 milestone*
+*Last updated: 2026-08-30 after the v1.7 milestone*

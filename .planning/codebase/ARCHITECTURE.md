@@ -1,187 +1,81 @@
 # Architecture
 
-**Analysis Date:** 2026-02-28
+**Analysis Date:** 2026-08-30
 
 ## Pattern Overview
 
-**Overall:** Single-file Object-Oriented Module with Layered Facade Pattern
-
-**Key Characteristics:**
-- Monolithic single-file design (`scripts/main.js`, ~2150 lines) with no external build system
-- All logic organized into well-defined ES6 classes with static methods and private fields
-- Facade pattern: `NPCTokenReplacerController` provides unified API, internally coordinates specialized classes
-- Private static fields (`#field`) for encapsulation and state management per class
-- Caching at multiple layers for performance (compendiums, monster index, folders, wildcard variants)
-- Foundry VTT ES module (v12/v13 compatible) using Hooks-based initialization
+A facade over static, namespace-like classes, with a compatibility layer between
+the module and the Foundry client API. Nothing is instantiated except
+`ProgressReporter` (which needs per-run state) and the settings-form model.
 
 ## Layers
 
-**Presentation Layer:**
-- Purpose: UI interactions and user-facing feedback
-- Location: `scripts/main.js` (Hooks, CompendiumSelectorForm, dialog handling)
-- Contains: Scene control button registration, confirmation dialogs, notifications
-- Depends on: Foundry APIs (ui.notifications, Dialog), Controller
-- Used by: Foundry VTT toolbar, user interactions
+```
+NPCTokenReplacerController          facade: validate → scan → preview → replace → report
+        │
+        ├── CompendiumManager       detect sources, build the creature index, priorities
+        │        └── SourceDetector whitelist + signals, dynamic priority classification
+        ├── TokenReplacer           import actors, create tokens, delete originals
+        │        ├── WildcardResolver   token art path resolution
+        │        └── FolderManager      import folder resolution
+        ├── NameMatcher             three-stage creature name matching
+        └── ProgressReporter        progress bars
+                 │
+        FoundryCompat               every relocated Foundry API, feature-detected
+                 │
+        Foundry VTT client API
+```
 
-**Controller/Orchestration Layer:**
-- Purpose: Main facade coordinating all replacement operations
-- Location: `scripts/main.js` (NPCTokenReplacerController class, lines 1508-1862)
-- Contains: `replaceNPCTokens()`, `validatePrerequisites()`, `showConfirmationDialog()`, `clearCache()`, `initialize()`
-- Depends on: CompendiumManager, TokenReplacer, NameMatcher
-- Used by: Presentation layer, Hooks, debug API
-
-**Data Management Layer:**
-- Purpose: Handle compendium detection, indexing, and configuration
-- Location: `scripts/main.js` (CompendiumManager class, lines 601-940)
-- Contains: Compendium detection, priority management, monster index loading and caching
-- Depends on: Foundry game.packs API
-- Used by: Controller, NameMatcher
-
-**Business Logic Layer:**
-- Purpose: Core token replacement and name matching operations
-- Location: `scripts/main.js` (TokenReplacer, NameMatcher, WildcardResolver classes)
-- Contains: Token property extraction, actor lookup, name matching algorithms, wildcard resolution
-- Depends on: CompendiumManager, Logger
-- Used by: Controller
-
-**Utility/Infrastructure Layer:**
-- Purpose: Reusable helper classes for cross-cutting concerns
-- Location: `scripts/main.js` (Logger, FolderManager classes)
-- Contains: Logging, folder management, escape utilities
-- Depends on: Foundry APIs (game.folders, console)
-- Used by: All other classes
+`compendium-selector.js` sits beside the controller: one model plus two shells
+(ApplicationV2 and legacy FormApplication) chosen at registration time.
 
 ## Data Flow
 
-**Token Replacement Workflow:**
-
-1. **Initiation**: User clicks toolbar button → calls `NPCTokenReplacerController.replaceNPCTokens()`
-2. **Validation**: Check GM status, active scene, available compendiums
-3. **Token Gathering**: Get selected tokens or all NPC tokens in scene via `TokenReplacer.getNPCTokensToProcess()`
-4. **Index Loading**: Load combined monster index from enabled compendiums via `CompendiumManager.loadMonsterIndex()`
-5. **Confirmation**: Show dialog with token list via `NPCTokenReplacerController.showConfirmationDialog()`
-6. **Processing** (per token):
-   - Find match in index via `NameMatcher.findMatch()` (3-stage matching: exact → variant → partial)
-   - If found, import actor from compendium
-   - Resolve token art path (handles wildcards via `WildcardResolver.resolve()`)
-   - Create new token with preserved properties via `TokenReplacer.replaceToken()`
-7. **Results**: Report replaced/not found/errors via notifications and logs
-
-**State Management:**
-- Session state: Cleared after each replacement (actor lookup, sequential counter, processing lock)
-- Persistent state: Stored in game.settings (variation mode, enabled compendiums)
-- Cached state: Monster index, compendium packs, import folder (cleared via `clearCache()`)
+1. `ready` hook → detect sources → pre-cache the creature index
+2. Toolbar button → `replaceNPCTokens()`
+3. Validate prerequisites (GM, active scene, at least one source)
+4. Collect NPC tokens: selection if any, otherwise the whole scene
+5. `computeMatches()` — match every token name against the index, yielding to the
+   UI every 10 iterations
+6. Preview dialog through `FoundryCompat.confirmDialog()`, with a timeout
+7. Per token: load the compendium document → import or reuse the world actor →
+   resolve wildcard art → create the new token → delete the old one
+8. Report: replaced, not found, import failures, creation failures, delete failures
 
 ## Key Abstractions
 
-**CompendiumManager:**
-- Purpose: Detect WotC compendiums and provide uniform access to creature data
-- Examples: `scripts/main.js` lines 601-940
-- Pattern: Static utility with multi-level caching (detection, enabled packs, combined index)
-- Key Methods: `detectWOTCCompendiums()`, `getEnabledCompendiums()`, `loadMonsterIndex()`
-- Caching Strategy: Cached results with explicit cache invalidation via `clearCache()`
-
-**NameMatcher:**
-- Purpose: Normalize creature names and match them across compendium variations
-- Examples: `scripts/main.js` lines 942-1147
-- Pattern: Static utility with multi-stage matching algorithm
-- Key Methods: `findMatch()` (3-stage), `normalizeName()`, `selectBestMatch()`
-- Matching Stages: (1) Exact match via O(1) Map lookup, (2) Variant transforms (remove prefixes/suffixes), (3) Partial word matching with bidirectional threshold
-
-**TokenReplacer:**
-- Purpose: Handle low-level token operations (extraction, replacement, import)
-- Examples: `scripts/main.js` lines 1155-1500
-- Pattern: Static utility with session-scoped state (sequential counter, actor lookup)
-- Key Methods: `replaceToken()`, `extractTokenProperties()`, `getNPCTokensToProcess()`, `buildActorLookup()`
-- Preserved Properties: Position (x, y, elevation), dimensions (width, height), visual state (hidden, rotation, disposition, locked, alpha)
-
-**WildcardResolver:**
-- Purpose: Resolve Monster Manual 2024 wildcard token paths to concrete files
-- Examples: `scripts/main.js` lines 317-593
-- Pattern: Static utility with variant caching and parallel probing
-- Key Methods: `resolve()`, `resolveWildcardVariants()`, `selectVariant()`, `isWildcardPath()`
-- Variant Selection: Three modes (none=first, sequential=cycling, random=randomized)
-
-**FolderManager:**
-- Purpose: Create and manage the Actor folder hierarchy for compendium imports
-- Examples: `scripts/main.js` lines 139-309
-- Pattern: Static utility with intelligent parent folder detection
-- Key Methods: `getOrCreateImportFolder()`, `getFolderPath()`, `clearCache()`
-- Folder Logic: Looks for monster/creature/NPC-related folders, creates subfolder with "MonsterManual" suffix
-
-**CompendiumSelectorForm:**
-- Purpose: Provide UI for compendium selection settings
-- Examples: `scripts/main.js` lines 1914-2005
-- Pattern: FormApplication subclass with mode-based UI
-- Modes: Default (Core + Fallback only), All (all installed), Custom (manual selection)
+| Abstraction | Why it exists |
+|-------------|---------------|
+| **`FoundryCompat`** | Foundry relocates APIs every generation. Resolving them by shape, namespace first, means a new generation needs no code change — and removing the AppV1 globals in v16 degrades to the V2 path instead of breaking module import. |
+| **`SourceDetector` two-layer model** | An exact whitelist gives zero false positives for known content; authorship and premium signals catch books released after this version. Whitelist is trusted, signals are surfaced and opt-in. |
+| **Priority tiers** | Adventure > Expansion > Core > Fallback decides which compendium wins when several ship the same creature. Packages outside the whitelist are classified from what their module actually ships. |
+| **`TokenReplacerError` with a `phase`** | Failure classification without matching message strings. |
+| **Settings-form factory** | Resolves the base class at registration, not at module evaluation. |
 
 ## Entry Points
 
-**Toolbar Button:**
-- Location: Scene control registration via `registerControlButton()` (lines 2070-2095)
-- Triggers: User click on token controls toolbar
-- Responsibilities: Invoke `NPCTokenReplacerController.replaceNPCTokens()`, handle v12/v13 control format differences
-
-**Init Hook:**
-- Location: `Hooks.once("init")` (lines 2102-2105)
-- Triggers: Foundry init phase (before game.ready)
-- Responsibilities: Register settings via `registerSettings()`
-
-**Ready Hook:**
-- Location: `Hooks.once("ready")` (lines 2124-2146)
-- Triggers: Foundry ready phase (all APIs available)
-- Responsibilities: Initialize controller, detect compendiums, pre-cache index, expose debug API
-
-**Scene Controls Hook:**
-- Location: `Hooks.on("getSceneControlButtons")` (lines 2148-2151)
-- Triggers: Scene control UI initialization
-- Responsibilities: Register toolbar button with proper formatting for Foundry version
-
-**Debug API:**
-- Location: `window.NPCTokenReplacer` (set in ready hook)
-- Triggers: Console access, external automation
-- Responsibilities: Expose OOP class methods for debugging and CLI use
+| Hook | Action |
+|------|--------|
+| `init` | Register settings, preload the picker templates |
+| `ready` | Initialize the controller, pre-cache the index, expose `window.NPCTokenReplacer` |
+| `getSceneControlButtons` | Add the toolbar button — `onChange` on v13+, `onClick` on the v12 array format |
 
 ## Error Handling
 
-**Strategy:** Defensive approach with graceful degradation
-
-**Patterns:**
-- **Prerequisite Validation**: Check GM status, active scene, compendiums before starting
-- **Result Tracking**: Collect replaced/not_found/error counts, report separately
-- **Try-Catch**: Wrap async operations (actor import, token creation, compendium loading) with error logging
-- **Fallback Paths**: Wildcard resolution → fallback path → mystery-man token; settings parse errors → default values
-- **Lock Mechanism**: `#isProcessing` flag prevents concurrent execution and double-processing
-- **Session Cleanup**: Always clean up temporary state (actor lookup, sequential counter) in finally blocks
+Fail loudly internally, degrade gracefully in the UI. Typed errors carry the
+phase; the user gets one localized summary notification rather than one per
+token. Reading configuration never widens scope on failure: a corrupt setting
+falls back to the conservative core set.
 
 ## Cross-Cutting Concerns
 
-**Logging:**
-- Framework: `Logger` class (lines 37-132)
-- Approach: Centralized static methods with module ID prefix
-- Debug gating: `Logger.debugEnabled` flag to avoid expensive debug calls in hot paths
-- Usage: All classes use `Logger.log()`, `Logger.warn()`, `Logger.error()`, `Logger.debug()` for tracing
-
-**Validation:**
-- Input validation: Name normalization, empty checks, type checks
-- State validation: Scene existence, GM status, token existence checks before mutation
-- Configuration validation: JSON parsing with fallbacks for settings
-
-**Authentication:**
-- Approach: GM-only check in `validatePrerequisites()`
-- Enforcement: `game.user.isGM` check before any token operations
-
-**Caching:**
-- Strategy: Multi-level with explicit invalidation
-- Cache locations:
-  - `CompendiumManager.#indexCache` - Combined monster index
-  - `CompendiumManager.#wotcCompendiumsCache` - Detected compendiums
-  - `FolderManager.#importFolderCache` - Import folder reference
-  - `WildcardResolver.#variantCache` - Resolved wildcard paths
-  - `TokenReplacer.#actorLookup` - Per-session actor UUID → Actor mapping
-- Invalidation: Call `NPCTokenReplacerController.clearCache()` after settings change
-
-**Settings Storage:**
-- Approach: Foundry game.settings API with JSON serialization
-- Settings: `tokenVariationMode` (string), `enabledCompendiums` (JSON string)
-- Form UI: `CompendiumSelectorForm` provides FormApplication-based configuration menu
+- **Caching** — compendium index, detected sources, classifications, wildcard
+  variants (FIFO, 200), compendium documents (LRU, 100), import folder, actor
+  lookup. All cleared through `clearCache()`.
+- **Logging** — `Logger` with a module prefix and a debug gate. Detection logs the
+  tier and priority behind every decision, so a misclassification is diagnosable
+  from the console alone.
+- **Localization** — every user-facing string goes through `game.i18n`; CI fails
+  on a key used in source but missing from `lang/en.json`.
+- **Forward compatibility** — feature detection over version checks, blocklists
+  over allowlists for data classification, no `compatibility.maximum`.

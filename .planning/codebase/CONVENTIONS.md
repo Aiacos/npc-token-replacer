@@ -1,6 +1,6 @@
 # Coding Conventions
 
-**Analysis Date:** 2026-02-28
+**Analysis Date:** 2026-08-30
 
 ## Naming Patterns
 
@@ -213,3 +213,19 @@
 ---
 
 *Convention analysis: 2026-02-28*
+
+## Forward-Compatibility Conventions
+
+Added in v1.7 and enforced by the Constitution in `CLAUDE.md`:
+
+- **Feature-detect, never version-check.** `game.version` may be logged; it must
+  never drive behaviour. Relocated Foundry APIs go through `FoundryCompat`,
+  namespaced path first so deprecated-global warnings stay quiet.
+- **Never extend a Foundry global at class-declaration time.** The superclass is
+  evaluated at module load; use a factory that resolves it lazily.
+- **Blocklists over allowlists when classifying external data**, so values
+  introduced by future versions are kept rather than silently dropped.
+- **Errors narrow scope, never widen it.** A failure to read configuration falls
+  back to the conservative option.
+- **Every new cache declares a maximum size.**
+- **Both compatibility paths are tested** — modern API present and absent.
