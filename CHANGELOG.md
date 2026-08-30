@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **README documents the foundryvtt.com submission process** (`🔄 Listing the module on foundryvtt.com`): submit → manual review → copy the release token → store it as a repository secret, plus what the review checks and why this module ships no third-party content.
+- **Installation chapter states that the module is not in Foundry's package browser** and points at the manifest URL as the recommended route, so users stop searching for it in the Install Module dialog.
+
+
 ### Fixed
 - **Corrected the `FOUNDRY_PACKAGE_TOKEN` guide in `docs/DEVELOPMENT.md`.** It described copying the token from the package edit page, but skipped the prerequisite: the package must first be submitted to foundryvtt.com and manually approved. `https://foundryvtt.com/packages/npc-token-replacer` currently returns 404 — the module has never been submitted — so no token exists yet. The guide now starts from submission and states what the review checks.
 
