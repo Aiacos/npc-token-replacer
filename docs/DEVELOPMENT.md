@@ -125,6 +125,27 @@ Majors are deliberately not automated: a major action bump can change runtime
 defaults, and **`release.yml` and `foundry-compat.yml` are never exercised by
 pull-request CI** — a green PR is not proof that releasing still works.
 
+#### Upgrades pinned by an upstream constraint
+
+`@rayners/foundry-test-utils` supplies every Foundry mock the suite is built on.
+Its latest published version (1.2.2) declares:
+
+```
+peerDependencies: { vitest: "^3.1.0", jsdom: "^26.1.0 || ^27.0.0" }
+```
+
+So three major upgrades are blocked in `dependabot.yml` rather than left to be
+re-proposed every week:
+
+| Dependency | Blocked at | Why |
+|------------|-----------|-----|
+| `vitest` | `>=4` | npm refuses the install outright (`ERESOLVE`, via `@rayners/foundry-dev-tools` requiring `@vitest/coverage-v8@^3.2.2`) |
+| `@vitest/coverage-v8` | `>=4` | must match vitest's major; upgrading one alone breaks the coverage job |
+| `jsdom` | `>=28` | outside the declared peer range, and jsdom 30 raises its Node floor to `^22.22.2`, which would drop Node 20 from the CI matrix |
+
+Minor and patch updates inside the allowed majors still flow normally. Remove
+the `ignore` entries once a foundry-test-utils release widens those ranges.
+
 The classification lives in `tools/dependabot-triage.mjs` and is unit-tested;
 run it against the live queue at any time with:
 

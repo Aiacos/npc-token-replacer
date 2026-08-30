@@ -31,3 +31,23 @@ updates:
       dev-dependencies-minor-patch:
         patterns: ["*"]
         update-types: [minor, patch]
+    # Upgrades blocked by @rayners/foundry-test-utils, which supplies every
+    # Foundry mock the suite is built on. Its latest published version (1.2.2)
+    # declares:
+    #
+    #   peerDependencies: { vitest: "^3.1.0", jsdom: "^26.1.0 || ^27.0.0" }
+    #
+    # npm refuses to install vitest 4 outright (ERESOLVE, through
+    # @rayners/foundry-dev-tools requiring @vitest/coverage-v8 ^3.2.2), and
+    # jsdom 30 additionally raises its Node floor to ^22.22.2, which would drop
+    # Node 20 from the CI matrix.
+    #
+    # Remove these entries once a foundry-test-utils release widens those peer
+    # ranges. Minor and patch updates inside the allowed majors still flow.
+    ignore:
+      - dependency-name: "vitest"
+        versions: [">=4"]
+      - dependency-name: "@vitest/coverage-v8"
+        versions: [">=4"]
+      - dependency-name: "jsdom"
+        versions: [">=28"]
