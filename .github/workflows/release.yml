@@ -146,7 +146,10 @@ jobs:
             $LATEST_FLAG
 
       - name: Announce the release on the Foundry package registry
-        if: ${{ inputs.publish_to_registry != false }}
+        # On a tag push `inputs` is empty, and GitHub coerces "" to false — so
+        # `inputs.publish_to_registry != false` silently skipped this step for
+        # every tag-triggered release. Only the dispatch path may opt out.
+        if: ${{ github.event_name != 'workflow_dispatch' || inputs.publish_to_registry }}
         env:
           FOUNDRY_PACKAGE_TOKEN: ${{ secrets.FOUNDRY_PACKAGE_TOKEN }}
           # Pre-releases are validated but never published to the registry.

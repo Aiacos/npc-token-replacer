@@ -41,7 +41,7 @@ principle, say so, propose the compliant alternative, and only then proceed.
    canned data that bypasses the logic under test.
 3. **Both compatibility paths are tested.** Anything routed through
    `FoundryCompat` needs a test with the modern API present *and* absent.
-4. **Coverage never regresses.** Currently 208 tests; a PR that lowers the
+4. **Coverage never regresses.** Currently 216 tests; a PR that lowers the
    count needs an explicit justification in the CHANGELOG.
 5. **Cache-clearing in `beforeEach`.** Static caches leak between tests; clear
    every cache the test touches.
