@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.7.1] - 2026-08-30
+
 ### Fixed
 - **Foundry package registry announcement was skipped on every tag-triggered release.** The step was guarded by `inputs.publish_to_registry != false`, and on a `push` event `inputs` is empty — GitHub coerces `""` to `false`, so the condition evaluated false and the step never ran. Only the `workflow_dispatch` path may opt out now.
 - **`tools/bump-version.mjs` could break a release halfway through.** Passing a version equal to the current one produced a duplicate CHANGELOG heading and then failed on an empty commit, after `module.json` had already been rewritten. The bump now refuses a no-op version and an unknown bump type, and changelog promotion is idempotent.
