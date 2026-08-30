@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.7.2] - 2026-08-30
+
 ### Added
 - **Italian README** (`README.it.md`), a full translation of the user-facing documentation, cross-linked with the English one. The project previously shipped an Italian UI translation but no Italian documentation.
 - **Foundry submission process documented** in both READMEs (`Listing the module on foundryvtt.com`) and in `docs/DEVELOPMENT.md`: submit → manual review → copy the release token → store it as a repository secret, plus what the review checks.
