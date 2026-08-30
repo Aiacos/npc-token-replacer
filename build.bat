@@ -51,7 +51,8 @@ REM Required files
 set "INCLUDE_FILES=module.json"
 
 REM Optional files
-for %%f in (README.md LICENSE CHANGELOG.md) do (
+REM README*.md picks up translations (README.it.md, ...) alongside the English one
+for %%f in (README*.md LICENSE CHANGELOG.md) do (
     if exist "%%f" (
         set "INCLUDE_FILES=!INCLUDE_FILES! %%f"
     )
