@@ -161,6 +161,30 @@ for (const file of await collectFiles("templates", [".html", ".hbs"])) {
   }
 }
 
+// ── translated README structure ─────────────────────────────────────────────
+// Chapter titles are translated so they cannot be compared directly, but the
+// project keeps one icon per concept — so the icon sequence is a
+// language-independent check that a chapter was not added to one README only.
+const chapterIcons = file => {
+  if (!existsSync(path.join(ROOT, file))) return null;
+  return readFileSync(path.join(ROOT, file), "utf8")
+    .split("\n")
+    .filter(line => line.startsWith("## "))
+    .map(line => line.replace(/^##\s+/, "").match(/^\S+/)?.[0] ?? "");
+};
+
+const englishChapters = chapterIcons("README.md");
+for (const translated of ["README.it.md"]) {
+  const chapters = chapterIcons(translated);
+  if (!chapters || !englishChapters) continue;
+  if (chapters.length !== englishChapters.length) {
+    warn(`${translated} has ${chapters.length} chapters, README.md has ${englishChapters.length} — a chapter was added to one only`);
+  } else {
+    const drifted = englishChapters.findIndex((icon, index) => icon !== chapters[index]);
+    if (drifted !== -1) warn(`${translated} chapter ${drifted + 1} uses ${chapters[drifted]} where README.md uses ${englishChapters[drifted]}`);
+  }
+}
+
 // ── report ──────────────────────────────────────────────────────────────────
 for (const message of warnings) console.warn(`::warning::${message}`);
 for (const message of errors) console.error(`::error::${message}`);
