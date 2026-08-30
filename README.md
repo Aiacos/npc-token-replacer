@@ -112,6 +112,12 @@ groups and vehicles in those compendiums are skipped.
 
 ## 📦 Installation
 
+> **Not yet in Foundry's package browser.** This module has not been submitted to
+> the official Foundry package registry, so searching for it inside Foundry's
+> **Install Module** dialog will not find it. Use the manifest URL below
+> (Method 2) — it is the recommended way, and Foundry will keep the module
+> updated from it automatically, exactly as it would for a listed package.
+
 ### 📦 Method 1: Manual Installation
 
 1. Download the latest release from this repository
@@ -123,7 +129,7 @@ groups and vehicles in those compendiums are skipped.
 4. Restart Foundry VTT
 5. Enable the module in your world's module settings
 
-### 📦 Method 2: Manifest URL
+### 📦 Method 2: Manifest URL (recommended)
 
 1. In Foundry VTT, go to **Add-on Modules** tab
 2. Click **Install Module**
@@ -376,8 +382,47 @@ Releases are produced by the **Release** GitHub Actions workflow from a single
 trigger: it bumps the version, tags, builds, verifies the package, publishes the
 GitHub release and announces it to the Foundry package registry.
 
-See [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md) and
-[`docs/COMPATIBILITY.md`](docs/COMPATIBILITY.md) for the technical details.
+### 🔄 Listing the module on foundryvtt.com
+
+The module is distributed by manifest URL and is **not** listed in Foundry's
+built-in package browser. Getting it listed is a one-time process, and it must
+happen before the release pipeline can announce new versions to Foundry: the
+`FOUNDRY_PACKAGE_TOKEN` used for that is issued per package and only exists once
+a package has been approved.
+
+**1. Submit the package** — requires an account holding an active Foundry VTT
+licence. Sign in to [foundryvtt.com](https://foundryvtt.com/) and open
+`https://foundryvtt.com/packages/submit`.
+
+**2. Wait for review** — submissions are reviewed manually. The review asks
+whether the author holds the rights to everything the package contains, whether
+it includes another company's content and meets that company's licensing terms,
+and whether it includes art the author did not create.
+
+This module ships **no D&D content**: no text, no stat blocks, no art. It only
+reads compendiums the user already owns, from modules they bought themselves.
+
+**3. Copy the release token** — after approval, open the package edit page from
+**Profile → Packages → Edit**. Just above the **Save Package** button is a field
+labelled **Package Release Token**; click it to copy. Nothing needs generating,
+the token already exists.
+
+**4. Store it as a repository secret** — run this in your own terminal so the
+value never reaches a shell history or a transcript:
+
+```bash
+gh secret set FOUNDRY_PACKAGE_TOKEN
+```
+
+Until that is done nothing breaks: the release workflow's registry step logs a
+skip and exits cleanly, releases still reach GitHub, and the manifest URL keeps
+serving updates to everyone who installed from it.
+
+Full details, including what to do if the token leaks and how to validate it
+with a dry run, are in [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md).
+
+See also [`docs/COMPATIBILITY.md`](docs/COMPATIBILITY.md) for the Foundry
+version-support policy.
 
 ## 🧪 Contributing
 
