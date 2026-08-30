@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **Corrected the `FOUNDRY_PACKAGE_TOKEN` guide in `docs/DEVELOPMENT.md`.** It described copying the token from the package edit page, but skipped the prerequisite: the package must first be submitted to foundryvtt.com and manually approved. `https://foundryvtt.com/packages/npc-token-replacer` currently returns 404 — the module has never been submitted — so no token exists yet. The guide now starts from submission and states what the review checks.
+
+
 ### Added
 - **Dependabot auto-merge** (`.github/workflows/dependabot-auto-merge.yml`): a daily sweep merges patch and minor dependency updates whose checks are green, and labels everything else `needs-review`. Major updates are never merged automatically — `release.yml` and `foundry-compat.yml` are not exercised by pull-request CI, so a green PR does not prove that releasing still works. The classification lives in `tools/dependabot-triage.mjs` and is unit-tested (16 new tests).
 - **Step-by-step guide for obtaining `FOUNDRY_PACKAGE_TOKEN`** in `docs/DEVELOPMENT.md`, including the dry-run behaviour and what to do if the token leaks.
