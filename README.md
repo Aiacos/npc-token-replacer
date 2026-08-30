@@ -1,5 +1,7 @@
 # NPC Token Replacer
 
+**English** · [Italiano](README.it.md)
+
 A Foundry VTT module that automatically replaces NPC tokens in your scene with official D&D compendium versions, preserving their position, elevation, dimensions, and visibility.
 
 ## ✨ Features
@@ -9,7 +11,7 @@ A Foundry VTT module that automatically replaces NPC tokens in your scene with o
 - **Multi-Compendium Support**: Search across multiple official D&D compendiums simultaneously
 - **Smart Priority System**: Prefers adventure/expansion creatures over Monster Manual over SRD
 - **Configurable Compendium Selection**: Read every official source (default), restrict to core rulebooks, include premium third-party content, or pick compendiums one by one
-- **Future-Proof by Design**: Foundry APIs are feature-detected, never version-checked, so the module keeps working across Foundry generations - verified on v12, v13 and v14
+- **Future-Proof by Design**: Foundry APIs are feature-detected, never version-checked, so the module keeps working across Foundry generations - minimum v13, verified on v14
 - **Preserves Token Properties**: Maintains position, elevation, dimensions, visibility, rotation, and disposition
 - **Confirmation Dialog**: Shows a list of tokens to be replaced before proceeding
 - **Detailed Logging**: Provides console logs for debugging and tracking
@@ -41,12 +43,12 @@ logged with a warning naming the package, and listed in the compendium picker �
 switch to **Everything Detected** to start using it immediately, without waiting
 for a module update.
 
-The 11 trusted packages and the priority they resolve to:
-
 Third-party content — DDB-Importer (`ddb-*`), community homebrew modules, and
 legacy books that have never been ported to Foundry by WotC (Volo's, MToF,
 MPMM, Fizban's, Curse of Strahd, Icewind Dale, Descent into Avernus, etc.) —
-are deliberately excluded from the whitelist.
+is deliberately excluded from the whitelist.
+
+The 11 trusted packages, and the priority each resolves to:
 
 ### Priority 4 — ADVENTURE (highest — adventure-specific tokens preferred)
 
@@ -78,10 +80,6 @@ are deliberately excluded from the whitelist.
 |-----------|---------|
 | `dnd5e` | D&D 5e System SRD Monsters (free) |
 | `dnd-tashas-cauldron` | Tasha's Cauldron of Everything |
-
-A module that is not in that table is classified from what it actually ships:
-an Adventure compendium means adventure content (priority 4), Scene compendiums
-mean a setting book (priority 3), and neither means a rulebook (priority 2).
 
 ### 📚 Compendium Priority System
 

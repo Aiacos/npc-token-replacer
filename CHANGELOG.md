@@ -8,6 +8,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Italian README** (`README.it.md`), a full translation of the user-facing documentation, cross-linked from the English one. The project previously had an Italian UI translation but no Italian documentation at all.
+- **README structure check** in `tools/validate-manifest.mjs`: chapter titles are translated and cannot be compared directly, so the validator compares the *icon* sequence of the level-2 headings instead — a language-independent way to catch a chapter added to one README only.
+
+### Fixed
+- **README contradicted itself on the minimum Foundry version**, claiming "verified on v12, v13 and v14" in Features while Requirements said 13 or higher. A leftover from the develop/main merge.
+- **A paragraph about dynamic classification appeared twice** in the supported-content chapter, and the sentence introducing the priority tables was separated from them by an unrelated paragraph.
+
+
+### Added
 - **README documents the foundryvtt.com submission process** (`🔄 Listing the module on foundryvtt.com`): submit → manual review → copy the release token → store it as a repository secret, plus what the review checks and why this module ships no third-party content.
 - **Installation chapter states that the module is not in Foundry's package browser** and points at the manifest URL as the recommended route, so users stop searching for it in the Install Module dialog.
 
