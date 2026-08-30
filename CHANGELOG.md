@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.7.3] - 2026-08-30
+
 ### Changed
 - **ESLint upgraded to 10.9.1.** Verified against all 22 breaking changes: none apply — the project already uses flat config, does not extend `eslint:recommended`, has no `eslint-env` comments, does not use the `radix` or `func-names` rules, and authors no custom rules. Installed and linted clean before merging.
 - **Dependabot now ignores three major upgrades that are blocked upstream**, with the reasoning recorded in `.github/dependabot.yml` and `docs/DEVELOPMENT.md`: `vitest >=4` and `@vitest/coverage-v8 >=4` (npm refuses the install — `@rayners/foundry-test-utils@1.2.2`, the latest release, declares `peer vitest: ^3.1.0`), and `jsdom >=28` (outside the declared peer range, and it would raise the Node floor above the Node 20 CI job). Minor and patch updates inside the allowed majors still flow.
