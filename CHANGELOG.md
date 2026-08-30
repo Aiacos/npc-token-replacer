@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Dependabot auto-merge** (`.github/workflows/dependabot-auto-merge.yml`): a daily sweep merges patch and minor dependency updates whose checks are green, and labels everything else `needs-review`. Major updates are never merged automatically — `release.yml` and `foundry-compat.yml` are not exercised by pull-request CI, so a green PR does not prove that releasing still works. The classification lives in `tools/dependabot-triage.mjs` and is unit-tested (16 new tests).
+- **Step-by-step guide for obtaining `FOUNDRY_PACKAGE_TOKEN`** in `docs/DEVELOPMENT.md`, including the dry-run behaviour and what to do if the token leaks.
+
+### Fixed
+- **Dependabot grouped every dev dependency into one PR.** `patterns: ["*"]` with no `update-types` filter mixed three major bumps with one patch in a single PR, so the safe part could not be taken without the risky part. Minor and patch updates are now grouped; majors arrive as individual PRs.
+
 ## [1.7.1] - 2026-08-30
 
 ### Fixed
