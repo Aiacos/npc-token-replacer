@@ -143,21 +143,43 @@ node tools/dependabot-triage.mjs prs.json
 
 #### Getting `FOUNDRY_PACKAGE_TOKEN`
 
-The token proves to foundryvtt.com that you own the package. Without it a
-release still reaches GitHub and the manifest URL still serves it — but the
-module's entry in Foundry's package browser keeps showing the previous version.
+The token proves to foundryvtt.com that you own the package, so the release
+workflow can announce a new version to Foundry's package registry.
 
-It is **per package**, not per account, and it is created for you: there is
-nothing to generate, only to copy.
+**Prerequisite, and it is the big one: the package must already be listed on
+foundryvtt.com.** The token is issued per package and only exists once a package
+has been submitted *and approved*. At the time of writing
+`https://foundryvtt.com/packages/npc-token-replacer` returns 404 — this module
+has never been submitted — so there is no token to fetch yet.
 
-1. Sign in to [foundryvtt.com](https://foundryvtt.com/).
-2. Open the package edit page:
-   `https://foundryvtt.com/packages/npc-token-replacer/edit`
-   (also reachable from **Profile → Packages**, then **Edit** on the package —
-   or the **Edit** button on the package's own page).
-3. Scroll to the bottom. Just above the **Save Package** button is a field
-   labelled **Package Release Token**. Click the field to copy it.
-4. Store it as a repository secret — run this in your own terminal so the value
+##### Step 0 — submit the package (one time, needs manual approval)
+
+1. You need an account owning an **active Foundry VTT license**; submissions are
+   restricted to licence holders.
+2. Sign in to [foundryvtt.com](https://foundryvtt.com/) and open the package
+   submission form at `https://foundryvtt.com/packages/submit`. (While signed
+   out that URL redirects to the package list, which is how you can tell it is a
+   login-gated route rather than a missing page.)
+3. Submission is **manually reviewed**. The review asks, in essence: does the
+   author have the rights to everything the package contains? Does it include
+   another company's content, and if so does it meet that company's licensing
+   terms? Does it include art the author did not create?
+
+   This module is in a good position on all three: it ships no D&D text, no
+   stat blocks and no art. It only reads compendiums the user already owns.
+4. Once approved you gain access to the package management pages
+   (`https://foundryvtt.com/me/packages`).
+
+##### Steps 1-3 — copy the token and store it
+
+Only possible after approval:
+
+1. Open the package edit page — from **Profile → Packages**, then **Edit** on the
+   package, or directly at `https://foundryvtt.com/packages/<slug>/edit`.
+2. Scroll to the bottom. Just above the **Save Package** button is a field
+   labelled **Package Release Token**. Click the field to copy it. There is
+   nothing to generate: the token already exists.
+3. Store it as a repository secret — run this in your own terminal so the value
    is never echoed into a shell history or a transcript:
 
    ```bash
@@ -166,7 +188,19 @@ nothing to generate, only to copy.
 
    Paste the token at the prompt.
 
-That is the whole setup. From the next release on, the pipeline announces itself.
+##### Until then
+
+The release pipeline is unaffected: the registry step runs, finds no token, logs
+a skip and exits cleanly. Releases still reach GitHub, and the manifest URL
+
+```
+https://github.com/Aiacos/npc-token-replacer/releases/latest/download/module.json
+```
+
+still serves them, so anyone who installed the module from that URL — including
+on hosting services that support "install from manifest URL" — keeps receiving
+updates. What is missing is only the entry in Foundry's built-in package
+browser, which lists approved packages.
 
 **Security**: this token can edit your package programmatically. Never commit it,
 never paste it into an issue, a PR or a chat. If it leaks, the same page has a
@@ -177,9 +211,6 @@ re-run `gh secret set FOUNDRY_PACKAGE_TOKEN` with the new value.
 for pre-release versions (any version containing a hyphen, e.g. `1.8.0-rc.1`).
 The API validates the payload and answers *"Dry run completed successfully"*
 without saving anything.
-
-Pre-releases are sent to the registry as a **dry run**, so an `-rc` build is
-validated without being published.
 
 ## 🧩 Adding a new capability
 
