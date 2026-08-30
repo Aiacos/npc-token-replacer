@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- **`.planning/` brought current.** The planning workspace was last updated on 2026-03-06 and still described milestone v1.4: two milestones had shipped since without touching it, and the `codebase/` analyses cited line numbers in a `main.js` that has since been refactored from ~2000 lines to 1220 across 8 files. `STATE.md`, `PROJECT.md` and `ROADMAP.md` now describe v1.7.3; the seven `codebase/` documents were rewritten against the current source; `MILESTONES.md` and `RETROSPECTIVE.md` gained entries for v1.5–v1.6 and v1.7 rather than having their historical v1.4 entries edited.
+
+
 ## [1.7.3] - 2026-08-30
 
 ### Changed

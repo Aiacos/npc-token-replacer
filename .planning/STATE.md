@@ -1,11 +1,11 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.4
-milestone_name: milestone
+milestone: v1.7
+milestone_name: Future-Proofing & Release Automation
 status: completed
-stopped_at: Completed 06-02-PLAN.md — All phases complete
-last_updated: "2026-03-06T07:10:54.342Z"
-last_activity: "2026-03-06 — Phase 6 Plan 2 executed: preview dialog and replacement flow refactor"
+stopped_at: v1.7.3 released and verified; .planning refreshed
+last_updated: "2026-08-30T07:45:00.000Z"
+last_activity: "2026-08-30 — v1.7.3 released; main and develop aligned; planning docs brought current"
 progress:
   total_phases: 6
   completed_phases: 6
@@ -18,100 +18,106 @@ progress:
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-02-28)
+See: .planning/PROJECT.md (updated 2026-08-30)
 
-**Core value:** Token replacement must work correctly and predictably every time — no silent failures, no corrupted state, no confusing errors.
-**Current focus:** All 6 phases complete. Milestone v1.4 delivered.
+**Core value:** Token replacement must work correctly and predictably every time.
+Since v1.7, equally: the module must keep working without maintenance as Foundry
+and Wizards of the Coast keep shipping.
+
+**Current focus:** No active milestone. v1.7.3 is published and verified.
 
 ## Current Position
 
-Phase: 6 of 6 (Dry-Run Preview)
-Plan: 2 of 2 in current phase
-Status: Phase 6 complete — preview dialog + replaceNPCTokens refactor, 136 tests passing
-Last activity: 2026-03-06 — Phase 6 Plan 2 executed: preview dialog and replacement flow refactor
+Milestone: v1.7 Future-Proofing & Release Automation — shipped 2026-08-30
+Published version: **1.7.3** (Foundry minimum 13, verified 14)
+Branches: `main` and `develop` aligned
+Open PRs: none
+Tests: 232 passing across 16 files; lint and manifest validation clean
 
 Progress: [██████████] 100%
 
-## Performance Metrics
+## What changed since the last update (2026-03-06)
 
-**Velocity:**
-- Total plans completed: 10
-- Average duration: 3.8 min
-- Total execution time: 0.63 hours
+The previous state file described milestone v1.4 and was six months stale. Two
+milestones shipped in between, one of them without touching `.planning/`.
 
-**By Phase:**
+**v1.5–v1.6 (2026-04-24), delivered directly on `main`:**
+- All official D&D manuals, v13+ compatibility, first CI/CD pipeline
+- v1.6.0 restricted detection to a whitelist of the 11 WotC packages, removing
+  prefix matching because it captured DDB-Importer, homebrew and community
+  adventures
+- `main` and `develop` diverged: the develop line's security fixes never reached
+  a published release
 
-| Phase | Plans | Total | Avg/Plan |
-|-------|-------|-------|----------|
-| 1. Test Infrastructure | 1 | 3 min | 3 min |
-| 2. Extract Pure Logic | 1 | 6 min | 6 min |
-| 3. Unit Tests | 2 | 5 min | 2.5 min |
-| 4. Error Handling | 2 | 13 min | 6.5 min |
-| 5. Progress Bar | 1 | 2 min | 2 min |
-| 6. Dry-Run Preview | 2 | 8 min | 4 min |
-
-**Recent Trend:**
-- Last 5 plans: 04-02 (5 min), 05-01 (2 min), 05-02 (2 min), 06-01 (3 min), 06-02 (5 min)
-- Trend: stable
-
-*Updated after each plan completion*
-| Phase 04 P01 | 8min | 2 tasks | 4 files |
-| Phase 04 P02 | 5min | 2 tasks | 3 files |
-| Phase 05 P01 | 2min | 2 tasks | 2 files |
-| Phase 05 P02 | 2min | 2 tasks | 3 files |
-| Phase 06 P01 | 3min | 2 tasks | 5 files |
-| Phase 06 P02 | 5min | 2 tasks | 4 files |
+**v1.7 (2026-08-30), this session:**
+- Reconciled the divergence. v1.6.0's whitelist stays the trusted default;
+  signal-based detection (WotC authorship, premium-for-dnd5e, manual override)
+  is layered on top as opt-in, so a book released after this version is surfaced
+  with a warning instead of silently ignored
+- `scripts/lib/foundry-compat.js` — every relocated Foundry API resolved by
+  feature detection, namespace first, deprecated global as fallback
+- Settings form built by a factory: ApplicationV2 when available, legacy
+  FormApplication otherwise. The old `extends FormApplication` declaration would
+  have failed the whole module import once Foundry removes that global in v16
+- Security fixes carried from `develop` reached a release for the first time:
+  path traversal in wildcard resolution, XSS in progress labels, token data
+  allowlist, jQuery removal
+- `tools/` — manifest/i18n/template/translation validation, version bumping,
+  Foundry generation watch, package registry publishing
+- CI/CD: Node 20+22 matrix, package smoke test, one-trigger release pipeline,
+  weekly Foundry compatibility watch, Dependabot with auto-merge for low-risk
+  updates
+- Documentation: English and Italian READMEs, `docs/COMPATIBILITY.md`,
+  `docs/DEVELOPMENT.md`, and a Constitution of non-negotiable principles in
+  `CLAUDE.md`
 
 ## Accumulated Context
 
 ### Decisions
 
-Decisions are logged in PROJECT.md Key Decisions table.
-Recent decisions affecting current work:
+Full table in PROJECT.md. Decisions from this milestone:
 
-- [Roadmap]: Comprehensive depth — 6 phases derived from natural requirement clusters and dependency order
-- [Roadmap]: Test infrastructure before bug fixes — fixes without tests risk introducing new bugs
-- [Roadmap]: UX-03 (configurable HTTP timeout) assigned to Phase 6 alongside dry-run — both are UX polish delivered last
-- [01-01]: Vitest 3.x (not 4.x) due to foundry-test-utils peer dependency constraint on vitest ^3.1.0
-- [01-01]: v8 coverage provider for native ESM support without transpilation
-- [01-01]: Guard project mocks with globalThis checks for forward compatibility
-- [02-01]: MODULE_ID exported from logger.js rather than separate constants.js
-- [02-01]: Static setter pattern for NameMatcher dependency injection (setCompendiumManager)
-- [02-01]: Named exports added to main.js for 4 remaining classes to fully satisfy TEST-02
-- [03-02]: game.packs.filter mock uses callback-execution pattern to validate actual filtering logic
-- [03-02]: loadMonsterIndex() skipped for Phase 3 - integration-level mocking deferred to Phase 4
-- [03-02]: No coverage thresholds set - Phase 3 establishes baseline only
-- [03-01]: normalizeName does not handle non-string truthy input (throws TypeError) - documented via falsy coercion tests
-- [03-01]: isWildcardPath returns falsy values (null/undefined) not strict false - tested with toBeFalsy()
-- [03-01]: Mock pack objects must include metadata.label for Logger.debug in selectBestMatch
-- [04-01]: Flat localization keys (ErrorSettingsRetrieve, not Error.SettingsRetrieve) to avoid conflicting with existing Error string key
-- [04-01]: No per-token ui.notifications in #processToken — errors surfaced via summary notification in #reportResults
-- [04-01]: BUG-02 retrieval error returns early with priority<=2 packs; parse error falls through to default path
-- [Phase 04]: Flat localization keys (ErrorSettingsRetrieve) to avoid conflicting with existing Error string key
-- [04-02]: Error message heuristic for import vs creation classification — defaults to creation_failed for unknown errors
-- [04-02]: Single SummaryPartialFailure notification replaces generic ErrorCount with classified counts
-- [05-01]: Instance-based ProgressReporter (not static) since it needs per-session state for notification ref and total
-- [05-01]: Guard update() with total===0 check to make post-finish calls safe no-ops
-- [05-01]: Duck-typing via typeof ui.notifications.update per project convention
-- [Phase 05]: SceneNavigation mock added to global test setup for v12 fallback coverage
-- [06-01]: WildcardResolver.DEFAULT_TIMEOUT uses try/catch around game.settings.get for safe fallback when settings not yet registered
-- [06-01]: computeMatches is public static (not private) to enable testing and Plan 02 preview flow access
-- [06-02]: showPreviewDialog uses Dialog.confirm pattern matching existing codebase conventions
-- [06-02]: Render callback disables yes button only when matched.length===0 (all unmatched)
-- [06-02]: Error classification logic inlined from removed #processToken into replacement loop
+- [v1.7]: Whitelist stays the default; signals are opt-in — a third-party module must never be silently trusted, and a new official book must never be silently ignored
+- [v1.7]: Package-id prefixes are not a detection signal (carried from v1.6)
+- [v1.7]: Never branch on `game.version`; every relocated API goes through `FoundryCompat`
+- [v1.7]: The settings form class is resolved at registration time, not at module evaluation
+- [v1.7]: Non-creature actor types use a blocklist, so future system types stay indexed
+- [v1.7]: `compatibility.maximum` must never be set — enforced by the validator
+- [v1.7]: Corrupt settings fall back to the conservative core set, never the broader default
+- [v1.7]: Dependabot auto-merge runs as a daily sweep — no branch protection needed, no race with CI
+- [v1.7]: Major dependency updates are never auto-merged — `release.yml` and `foundry-compat.yml` are not exercised by PR CI
+- [v1.7]: Compendium checkboxes keyed by pack id, not list position, so detection order cannot shift a saved selection
 
 ### Pending Todos
 
-None yet.
+- Runtime smoke test in a live Foundry world (see Blockers)
+- Submit the package to foundryvtt.com
+- Batch token mutations to remove the 2N socket round-trips
+- `VARIANT_SUFFIXES` is hardcoded; `FilePicker.browse()` was never investigated
 
 ### Blockers/Concerns
 
-- [Research]: foundry-test-utils v1.2.2 is young (created June 2025) — verify mock coverage for game.actors.has, canvas.scene.tokens, CompendiumCollection before committing to it as sole mock source
-- [Research]: v12 SceneNavigation.displayProgressBar() signature needs validation against actual v12 instance before Phase 5 ships
-- [Research]: Dialog.confirm v13 shim will be removed in v14 — document as known future breaking change during Phase 6
+- **Nothing has been exercised against a real Foundry client.** All evidence in
+  this milestone comes from test doubles. The ApplicationV2 form path, the
+  v13/v14 `onChange` toolbar registration and source detection against real
+  compendiums are unverified in practice. This is the largest open risk.
+- **The package is not listed on foundryvtt.com.**
+  `https://foundryvtt.com/packages/npc-token-replacer` returns 404 — it has never
+  been submitted. Until it is approved, `FOUNDRY_PACKAGE_TOKEN` cannot exist and
+  the release pipeline's registry step logs a skip. Submission needs an active
+  Foundry licence and passes a manual review.
+- **Three dev-dependency majors are pinned upstream.** `@rayners/foundry-test-utils@1.2.2`
+  (the latest release) declares `peer vitest: ^3.1.0` and
+  `peer jsdom: ^26.1.0 || ^27.0.0`. vitest 4 is refused by npm outright; jsdom 30
+  additionally raises its Node floor above the Node 20 CI job. Recorded as
+  `ignore` entries in `.github/dependabot.yml`. Note this constraint was already
+  documented in March under decision [01-01] and rediscovered empirically in August.
+- **Resolved since the last state file:** the v14 FormApplication deprecation,
+  the dialog timeout leaving its window open, the lock-release race condition,
+  the wildcard 404 cache miss, and the `disposition` dead write.
 
 ## Session Continuity
 
-Last session: 2026-03-06T06:59:17Z
-Stopped at: Completed 06-02-PLAN.md — All phases complete
-Resume file: .planning/phases/06-dry-run-preview/06-02-SUMMARY.md
+Last session: 2026-08-30
+Stopped at: v1.7.3 released and verified end to end; planning docs refreshed
+Resume file: none — no milestone in progress. Start from PROJECT.md "Active".
