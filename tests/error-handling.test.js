@@ -3,7 +3,8 @@ import {
   NPCTokenReplacerController,
   CompendiumManager,
   FolderManager,
-  TokenReplacer
+  TokenReplacer,
+  TokenReplacerError
 } from "../scripts/main.js";
 import { WildcardResolver } from "../scripts/lib/wildcard-resolver.js";
 
@@ -71,12 +72,8 @@ describe("BUG-01 — TokenReplacer.buildActorLookup", () => {
     };
     game.actors.has = vi.fn(() => true);
 
-    TokenReplacer.buildActorLookup();
-
-    // The lookup should have one entry
-    // We can't directly access the private #actorLookup, but we verify
-    // buildActorLookup completes without error when actors have compendiumSource
-    expect(true).toBe(true);
+    // Verify buildActorLookup completes without error when actors have compendiumSource
+    expect(() => TokenReplacer.buildActorLookup()).not.toThrow();
   });
 
   it("populates lookup map from game.actors with flags.core.sourceId fallback", () => {
@@ -91,9 +88,8 @@ describe("BUG-01 — TokenReplacer.buildActorLookup", () => {
       yield* actorsArray;
     };
 
-    TokenReplacer.buildActorLookup();
-    // No error means it handled the fallback path correctly
-    expect(true).toBe(true);
+    // Verify it handled the flags.core.sourceId fallback path correctly
+    expect(() => TokenReplacer.buildActorLookup()).not.toThrow();
   });
 
   it("skips actors without compendium source", () => {
@@ -108,9 +104,8 @@ describe("BUG-01 — TokenReplacer.buildActorLookup", () => {
       yield* actorsArray;
     };
 
-    TokenReplacer.buildActorLookup();
     // Should complete without error, actor is simply skipped
-    expect(true).toBe(true);
+    expect(() => TokenReplacer.buildActorLookup()).not.toThrow();
   });
 
 });
@@ -370,7 +365,7 @@ describe("ERR-02 — Failure classification via replaceNPCTokens", () => {
 
     // Mock TokenReplacer.replaceToken to throw an import error
     const replaceSpy = vi.spyOn(TokenReplacer, "replaceToken")
-      .mockRejectedValue(new Error("Failed to import actor from compendium"));
+      .mockRejectedValue(new TokenReplacerError("Failed to import actor from compendium", "import_failed"));
 
     // Run the full flow
     await NPCTokenReplacerController.replaceNPCTokens();
@@ -419,7 +414,7 @@ describe("ERR-02 — Failure classification via replaceNPCTokens", () => {
 
     // Mock TokenReplacer.replaceToken to throw a creation error (no "import" keyword)
     const replaceSpy = vi.spyOn(TokenReplacer, "replaceToken")
-      .mockRejectedValue(new Error("Failed to create new token for Dragon"));
+      .mockRejectedValue(new TokenReplacerError("Failed to create new token for Dragon", "creation_failed"));
 
     await NPCTokenReplacerController.replaceNPCTokens();
 
@@ -462,8 +457,8 @@ describe("ERR-02 — Failure classification via replaceNPCTokens", () => {
 
     // First token: import error; Second token: creation error
     const replaceSpy = vi.spyOn(TokenReplacer, "replaceToken")
-      .mockRejectedValueOnce(new Error("Failed to import actor"))
-      .mockRejectedValueOnce(new Error("Failed to create new token"));
+      .mockRejectedValueOnce(new TokenReplacerError("Failed to import actor", "import_failed"))
+      .mockRejectedValueOnce(new TokenReplacerError("Failed to create new token", "creation_failed"));
 
     await NPCTokenReplacerController.replaceNPCTokens();
 

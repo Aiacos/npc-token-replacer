@@ -42,9 +42,9 @@ describe("NPCTokenReplacerController.computeMatches", () => {
     });
   });
 
-  it("returns array with {tokenDoc, creatureName, match} for each token", () => {
+  it("returns array with {tokenDoc, creatureName, match} for each token", async () => {
     const progress = createMockProgress();
-    const results = NPCTokenReplacerController.computeMatches(mockTokens, mockIndex, progress);
+    const results = await NPCTokenReplacerController.computeMatches(mockTokens, mockIndex, progress);
 
     expect(results).toHaveLength(3);
     expect(results[0]).toEqual({ tokenDoc: mockTokens[0], creatureName: "Goblin", match: mockMatchGoblin });
@@ -52,9 +52,9 @@ describe("NPCTokenReplacerController.computeMatches", () => {
     expect(results[2]).toEqual({ tokenDoc: mockTokens[2], creatureName: "Unknown Beast", match: null });
   });
 
-  it("calls NameMatcher.findMatch once per token (no double-matching)", () => {
+  it("calls NameMatcher.findMatch once per token (no double-matching)", async () => {
     const progress = createMockProgress();
-    NPCTokenReplacerController.computeMatches(mockTokens, mockIndex, progress);
+    await NPCTokenReplacerController.computeMatches(mockTokens, mockIndex, progress);
 
     expect(findMatchSpy).toHaveBeenCalledTimes(3);
     expect(findMatchSpy).toHaveBeenCalledWith("Goblin", mockIndex);
@@ -62,27 +62,28 @@ describe("NPCTokenReplacerController.computeMatches", () => {
     expect(findMatchSpy).toHaveBeenCalledWith("Unknown Beast", mockIndex);
   });
 
-  it("matched tokens have match={entry, pack}, unmatched have match=null", () => {
+  it("matched tokens have match={entry, pack}, unmatched have match=null", async () => {
     const progress = createMockProgress();
-    const results = NPCTokenReplacerController.computeMatches(mockTokens, mockIndex, progress);
+    const results = await NPCTokenReplacerController.computeMatches(mockTokens, mockIndex, progress);
 
     expect(results[0].match).toBe(mockMatchGoblin);
     expect(results[2].match).toBeNull();
   });
 
-  it("calls progress.start, progress.update per token, and progress.finish", () => {
+  it("calls progress.start, progress.update per token, and progress.finish", async () => {
     const progress = createMockProgress();
-    NPCTokenReplacerController.computeMatches(mockTokens, mockIndex, progress);
+    await NPCTokenReplacerController.computeMatches(mockTokens, mockIndex, progress);
 
     expect(progress.start).toHaveBeenCalledTimes(1);
     expect(progress.start).toHaveBeenCalledWith(3, expect.any(String));
     expect(progress.update).toHaveBeenCalledTimes(3);
-    expect(progress.finish).toHaveBeenCalledTimes(1);
+    // progress.finish() is now called by the caller (replaceNPCTokens try/finally), not computeMatches
+    expect(progress.finish).toHaveBeenCalledTimes(0);
   });
 
-  it("creatureName uses tokenDoc.actor.name when available, falls back to tokenDoc.name", () => {
+  it("creatureName uses tokenDoc.actor.name when available, falls back to tokenDoc.name", async () => {
     const progress = createMockProgress();
-    const results = NPCTokenReplacerController.computeMatches(mockTokens, mockIndex, progress);
+    const results = await NPCTokenReplacerController.computeMatches(mockTokens, mockIndex, progress);
 
     // Token t1: actor.name = "Goblin"
     expect(results[0].creatureName).toBe("Goblin");
@@ -132,11 +133,17 @@ describe("NPCTokenReplacerController.showPreviewDialog", () => {
   beforeEach(() => {
     vi.restoreAllMocks();
     capturedOptions = null;
-    // Mock Dialog.confirm to capture options and trigger yes callback
-    globalThis.Dialog.confirm = vi.fn((opts) => {
+    // Mock Dialog constructor — capture opts and auto-trigger yes button callback
+    const OrigDialog = globalThis.Dialog;
+    globalThis.Dialog = function (opts) {
       capturedOptions = opts;
-      if (opts.yes) opts.yes();
-    });
+      this.render = vi.fn(() => {
+        // Auto-trigger yes callback by default
+        if (opts.buttons?.yes?.callback) opts.buttons.yes.callback();
+      });
+      this.close = vi.fn();
+    };
+    globalThis.Dialog.confirm = OrigDialog?.confirm;
   });
 
   it("renders a table with Token Name, Will Match As, Source Compendium columns", async () => {
@@ -213,15 +220,19 @@ describe("NPCTokenReplacerController.showPreviewDialog", () => {
     // When all unmatched, a render callback should be provided
     expect(capturedOptions.render).toBeDefined();
 
-    // Simulate the render callback with a mock jQuery html object
-    const mockButton = { prop: vi.fn() };
-    const mockHtml = {
-      find: vi.fn(() => mockButton)
-    };
-    capturedOptions.render(mockHtml);
+    // Simulate the render callback — vanilla DOM (no jQuery)
+    const container = document.createElement("div");
+    const yesBtn = document.createElement("button");
+    yesBtn.classList.add("yes");
+    container.appendChild(yesBtn);
+    const dataBtn = document.createElement("button");
+    dataBtn.setAttribute("data-button", "yes");
+    container.appendChild(dataBtn);
 
-    expect(mockHtml.find).toHaveBeenCalledWith(expect.stringContaining("yes"));
-    expect(mockButton.prop).toHaveBeenCalledWith("disabled", true);
+    capturedOptions.render(container);
+
+    expect(yesBtn.disabled).toBe(true);
+    expect(dataBtn.disabled).toBe(true);
   });
 
   it("does NOT provide render callback when some tokens are matched", async () => {
@@ -233,30 +244,33 @@ describe("NPCTokenReplacerController.showPreviewDialog", () => {
   });
 
   it("resolves true on yes callback", async () => {
-    globalThis.Dialog.confirm = vi.fn((opts) => {
+    globalThis.Dialog = function (opts) {
       capturedOptions = opts;
-      opts.yes();
-    });
+      this.render = vi.fn(() => { opts.buttons.yes.callback(); });
+      this.close = vi.fn();
+    };
 
     const result = await NPCTokenReplacerController.showPreviewDialog(createMatchResults());
     expect(result).toBe(true);
   });
 
   it("resolves false on no callback", async () => {
-    globalThis.Dialog.confirm = vi.fn((opts) => {
+    globalThis.Dialog = function (opts) {
       capturedOptions = opts;
-      opts.no();
-    });
+      this.render = vi.fn(() => { opts.buttons.no.callback(); });
+      this.close = vi.fn();
+    };
 
     const result = await NPCTokenReplacerController.showPreviewDialog(createMatchResults());
     expect(result).toBe(false);
   });
 
   it("resolves false on close callback", async () => {
-    globalThis.Dialog.confirm = vi.fn((opts) => {
+    globalThis.Dialog = function (opts) {
       capturedOptions = opts;
-      opts.close();
-    });
+      this.render = vi.fn(() => { opts.close(); });
+      this.close = vi.fn();
+    };
 
     const result = await NPCTokenReplacerController.showPreviewDialog(createMatchResults());
     expect(result).toBe(false);
@@ -347,7 +361,7 @@ describe("replaceNPCTokens integration with preview flow", () => {
         computeMatchesSpy.mockRestore();
         return NPCTokenReplacerController.computeMatches(...args);
       });
-    showPreviewSpy.mockImplementation((_matchResults) => {
+    showPreviewSpy.mockImplementation(() => {
       callOrder.push("showPreviewDialog");
       return Promise.resolve(true);
     });
@@ -425,7 +439,8 @@ describe("replaceNPCTokens integration with preview flow", () => {
     await NPCTokenReplacerController.replaceNPCTokens();
 
     // 2 replaced, 1 not found (Unknown)
-    expect(ui.notifications.info).toHaveBeenCalled();
+    // info is NOT called when there are unmatched tokens (notFound.length > 0)
+    expect(ui.notifications.info).not.toHaveBeenCalled();
     expect(ui.notifications.warn).toHaveBeenCalled();
     expect(game.i18n.format).toHaveBeenCalledWith(
       "NPC_REPLACER.NotFoundCount",

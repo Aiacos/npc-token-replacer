@@ -1,70 +1,68 @@
+import { Logger } from "./logger.js";
+import { FoundryCompat } from "./foundry-compat.js";
+
 /**
- * ProgressReporter - Unified progress bar abstraction for Foundry VTT v12/v13
- *
- * Handles the different progress APIs:
- * - v13: ui.notifications.info() with { progress: true } returning updatable notification
- * - v12: SceneNavigation.displayProgressBar() with integer 0-100 pct
- *
- * Uses duck-typing (typeof ui.notifications.update) for version detection,
- * not game.version checks, per project convention.
- *
- * @class
+ * Unified progress bar for Foundry VTT v12/v13.
+ * v13+: ui.notifications.info({ progress: true }); v12: SceneNavigation.displayProgressBar().
+ * Uses duck-typing for version detection per project convention, so a future
+ * generation keeps whichever API it still exposes.
  */
 class ProgressReporter {
-  /** @type {object|null} v13 notification object with .update() method */
   #notification = null;
-
-  /** @type {number} Total items to process */
   #total = 0;
 
-  /**
-   * Detect whether the v13 progress notification API is available
-   * @returns {boolean}
-   */
   static #isV13ProgressAvailable() {
     return typeof ui.notifications?.update === "function";
   }
 
-  /**
-   * Begin progress tracking
-   * @param {number} total - Total number of items to process
-   * @param {string} label - Label to display on the progress bar
-   */
+  /** Bound v12 progress bar function, or null when the API is gone. */
+  static #legacyBar() {
+    const nav = FoundryCompat.SceneNavigation;
+    if (typeof nav?.displayProgressBar !== "function") return null;
+    return nav.displayProgressBar.bind(nav);
+  }
+
   start(total, label) {
     this.#total = total;
+    if (total <= 0) return;
 
-    if (ProgressReporter.#isV13ProgressAvailable()) {
-      this.#notification = ui.notifications.info(label, { progress: true });
-    } else {
-      SceneNavigation.displayProgressBar({ label, pct: 0 });
+    try {
+      if (ProgressReporter.#isV13ProgressAvailable()) {
+        this.#notification = ui.notifications.info(label, { progress: true });
+      } else {
+        ProgressReporter.#legacyBar()?.({ label, pct: 0 });
+      }
+    } catch (error) {
+      Logger.debug(`Progress bar start failed: ${error.message}`);
     }
   }
 
-  /**
-   * Update progress
-   * @param {number} current - Current item number
-   * @param {string} label - Label to display on the progress bar
-   */
   update(current, label) {
-    if (this.#total === 0) return; // No active progress session
+    if (this.#total === 0) return;
     const pct = Math.min(current / this.#total, 1);
 
-    if (this.#notification) {
-      this.#notification.update({ pct, message: label });
-    } else {
-      SceneNavigation.displayProgressBar({ label, pct: Math.round(pct * 100) });
+    try {
+      if (this.#notification) {
+        this.#notification.update({ pct, message: label });
+      } else {
+        ProgressReporter.#legacyBar()?.({ label, pct: Math.round(pct * 100) });
+      }
+    } catch (error) {
+      Logger.debug(`Progress bar update failed: ${error.message}`);
     }
   }
 
-  /**
-   * Finish progress tracking, set to 100%
-   */
   finish() {
-    if (this.#notification) {
-      this.#notification.update({ pct: 1.0 });
+    try {
+      if (this.#notification) {
+        this.#notification.update({ pct: 1.0 });
+        this.#notification = null;
+      } else {
+        ProgressReporter.#legacyBar()?.({ label: "", pct: 100 });
+      }
+    } catch (error) {
+      Logger.debug(`Progress bar finish failed: ${error.message}`);
       this.#notification = null;
-    } else {
-      SceneNavigation.displayProgressBar({ label: "", pct: 100 });
     }
     this.#total = 0;
   }

@@ -7,59 +7,27 @@ import { Logger, MODULE_ID } from "./lib/logger.js";
 import { WildcardResolver } from "./lib/wildcard-resolver.js";
 import { NameMatcher } from "./lib/name-matcher.js";
 import { ProgressReporter } from "./lib/progress-reporter.js";
+import { FoundryCompat } from "./lib/foundry-compat.js";
+import { SourceDetector } from "./lib/source-detector.js";
+import { buildCompendiumSelectorForm, preloadSelectorTemplates } from "./lib/compendium-selector.js";
 
-// Note: WOTC_MODULE_PREFIXES and COMPENDIUM_PRIORITIES are defined as
-// static getters in CompendiumManager class for better encapsulation
+/** Error with phase indicator ("import_failed", "creation_failed", "delete_failed"). */
+class TokenReplacerError extends Error {
+  constructor(message, phase) {
+    super(message);
+    this.name = "TokenReplacerError";
+    this.phase = phase;
+  }
+}
 
-// Note: All caches are now managed by their respective classes:
-// - CompendiumManager.#indexCache (monster index)
-// - CompendiumManager.#wotcCompendiumsCache (detected compendiums)
-// - FolderManager.#importFolderCache (import folder)
-// - NPCTokenReplacerController.#isProcessing (execution lock)
-// - TokenReplacer.#sequentialCounter (variant counter)
-// - WildcardResolver.#variantCache (resolved wildcard paths)
-
-/**
- * FolderManager utility class for Actor folder handling
- * Provides methods for creating and managing the import folder for compendium actors
- * @class
- */
+/** Manages Actor folders for compendium imports. */
 class FolderManager {
-  /**
-   * Cache for the import folder to avoid repeated lookups
-   * @type {Folder|null}
-   * @static
-   * @private
-   */
   static #importFolderCache = null;
 
-  /**
-   * Default folder name for Monster Manual imports
-   * @type {string}
-   * @static
-   * @readonly
-   */
-  static get FOLDER_NAME() {
-    return "MonsterManual";
-  }
+  static get FOLDER_NAME() { return "MonsterManual"; }
+  static get FOLDER_COLOR() { return "#7a1010"; }
 
-  /**
-   * Default folder color for Monster Manual imports (dark red)
-   * @type {string}
-   * @static
-   * @readonly
-   */
-  static get FOLDER_COLOR() {
-    return "#7a1010";
-  }
-
-  /**
-   * Patterns for identifying monster-related folders
-   * Used to find appropriate parent folders for imports
-   * @type {Array<{pattern: RegExp, name: string}>}
-   * @static
-   * @readonly
-   */
+  /** Patterns for identifying monster-related Actor folders as import parents */
   static #MONSTER_FOLDER_PATTERNS = Object.freeze([
     Object.freeze({ pattern: /monster/i, name: "monster" }),
     Object.freeze({ pattern: /creature/i, name: "creature" }),
@@ -72,40 +40,26 @@ class FolderManager {
     return FolderManager.#MONSTER_FOLDER_PATTERNS;
   }
 
-  /**
-   * Get the full path of a folder (including parent folders)
-   * @param {Folder} folder - The folder to get the path for
-   * @returns {string} The full path in format "/Parent/Child/Folder"
-   * @static
-   * @example
-   * const folder = game.folders.find(f => f.name === "Goblins");
-   * const path = FolderManager.getFolderPath(folder);
-   * // Returns "/Monsters/Humanoids/Goblins"
-   */
+  /** Build full folder path string like "/Parent/Child/Folder" */
   static getFolderPath(folder) {
+    if (!folder) return "";
     const parts = [folder.name];
     let parent = folder.folder;
-    while (parent) {
+    let depth = 0;
+    while (parent && depth < 10) {
       parts.unshift(parent.name);
       parent = parent.folder;
+      depth++;
     }
     return `/${parts.join("/")}`;
   }
 
   /**
-   * Get or create the folder for Monster Manual imports
-   * Looks for existing monster folders and creates a subfolder with "MonsterManual" suffix.
-   * Results are cached to avoid repeated lookups/creation.
-   * @returns {Promise<Folder|null>} The folder to use for imports, or null if creation failed
-   * @static
-   * @example
-   * const folder = await FolderManager.getOrCreateImportFolder();
-   * if (folder) {
-   *   console.log(`Importing to: ${FolderManager.getFolderPath(folder)}`);
-   * }
+   * Get or create the Actor folder for Monster Manual imports.
+   * Looks for existing monster folders, creates a subfolder if needed. Cached.
+   * @returns {Promise<Folder|null>} The import folder, or null on failure
    */
   static async getOrCreateImportFolder() {
-    // Return cached folder if available and still exists
     if (FolderManager.#importFolderCache && game.folders.has(FolderManager.#importFolderCache.id)) {
       return FolderManager.#importFolderCache;
     }
@@ -182,15 +136,6 @@ class FolderManager {
     }
   }
 
-  /**
-   * Clear the folder cache
-   * Call this when settings change or when folder may have been deleted
-   * @returns {void}
-   * @static
-   * @example
-   * // After settings update
-   * FolderManager.clearCache();
-   */
   static clearCache() {
     FolderManager.#importFolderCache = null;
     Logger.debug("FolderManager cache cleared");
@@ -198,212 +143,78 @@ class FolderManager {
 }
 
 /**
- * CompendiumManager utility class for managing D&D compendium detection and indexing
- * Provides methods for detecting WOTC compendiums, managing enabled compendiums,
- * loading monster indexes, and handling compendium priorities
- * @class
+ * Detects WotC compendiums, manages enabled compendiums, loads and indexes monsters.
  */
 class CompendiumManager {
-  /**
-   * Cache for the combined monster index from all enabled compendiums
-   * @type {Array<{entry: Object, pack: CompendiumCollection}>|null}
-   * @static
-   * @private
-   */
   static #indexCache = null;
-
-  /**
-   * Map for O(1) exact-name lookups: normalizedName -> Array<{entry, pack, normalizedName}>
-   * @type {Map<string, Array>|null}
-   * @static
-   * @private
-   */
+  /** normalizedName -> Array<{entry, pack, normalizedName}> */
   static #indexMap = null;
-
-  /**
-   * Cache for enabled compendium packs (avoids re-parsing JSON settings)
-   * @type {CompendiumCollection[]|null}
-   * @static
-   * @private
-   */
+  /** significantWord -> Array<index entry refs> for Stage 3 partial matching */
+  static #wordIndex = null;
   static #enabledPacksCache = null;
-
-  /**
-   * Cache for detected WOTC compendiums
-   * @type {CompendiumCollection[]|null}
-   * @static
-   * @private
-   */
   static #wotcCompendiumsCache = null;
-
-  /**
-   * Errors from the most recent loadMonsterIndex() call
-   * @type {Array<{packId: string, packLabel: string, error: string}>}
-   * @static
-   * @private
-   */
   static #lastLoadErrors = [];
+  /** packCollection -> classification returned by SourceDetector */
+  static #classifications = new Map();
+
+  /** The 11 packages Wizards of the Coast publishes on Foundry VTT. */
+  static get OFFICIAL_WOTC_PACKAGES() { return SourceDetector.OFFICIAL_WOTC_PACKAGES; }
+
+  /** Human-readable book names for the official packages. */
+  static get KNOWN_MODULE_LABELS() { return SourceDetector.KNOWN_MODULE_LABELS; }
 
   /**
-   * Official Wizards of the Coast package IDs for Foundry VTT.
-   *
-   * Authoritative whitelist sourced from https://foundryvtt.com/creators/wizards-of-the-coast/
-   * as of April 2026 (11 packages: 1 free system + 10 premium modules).
-   *
-   * We do NOT auto-include modules by prefix (e.g. "dnd-") because many
-   * third-party packages and importers use the same prefix without being
-   * official WotC content (e.g. homebrew, community adventures, DDB-Importer).
-   *
-   * @type {string[]}
-   * @static
-   * @readonly
+   * @deprecated since 1.6.0 — prefix matching was removed because it captured
+   * third-party modules. Use {@link OFFICIAL_WOTC_PACKAGES}.
    */
-  static #OFFICIAL_WOTC_PACKAGES = Object.freeze([
-    "dnd5e",                         // D&D 5e system SRD (free)
-    "dnd-monster-manual",            // Monster Manual (2024)
-    "dnd-players-handbook",          // Player's Handbook (2024)
-    "dnd-dungeon-masters-guide",     // Dungeon Master's Guide (2024)
-    "dnd-forge-artificer",           // Eberron: Forge of the Artificer
-    "dnd-tashas-cauldron",           // Tasha's Cauldron of Everything
-    "dnd-phandelver-below",          // Phandelver and Below: The Shattered Obelisk
-    "dnd-tomb-annihilation",         // Tomb of Annihilation
-    "dnd-adventures-faerun",         // Forgotten Realms: Adventures in Faerûn
-    "dnd-heroes-faerun",             // Forgotten Realms: Heroes of Faerûn
-    "dnd-heroes-borderlands"         // Heroes of the Borderlands
-  ]);
-  static get OFFICIAL_WOTC_PACKAGES() {
-    return CompendiumManager.#OFFICIAL_WOTC_PACKAGES;
-  }
+  static get WOTC_MODULE_PREFIXES() { return SourceDetector.WOTC_MODULE_PREFIXES; }
 
   /**
-   * @deprecated since 1.6.0 — retained for backward compatibility only.
-   * Use {@link OFFICIAL_WOTC_PACKAGES} instead. The previous prefix-based
-   * matching was too permissive and caught non-WotC modules.
-   * @type {string[]}
-   * @static
-   * @readonly
+   * Optional priority refinements for packages we already know about.
+   * Classification is otherwise fully dynamic, so a newly released official
+   * book never needs an entry here.
    */
-  static #WOTC_MODULE_PREFIXES = Object.freeze(["dnd-", "dnd5e"]);
-  static get WOTC_MODULE_PREFIXES() {
-    return CompendiumManager.#WOTC_MODULE_PREFIXES;
-  }
+  static get COMPENDIUM_PRIORITIES() { return SourceDetector.KNOWN_PRIORITIES; }
 
-  /**
-   * Compendium priority levels (higher = preferred).
-   *
-   * Covers ONLY the 11 official Wizards of the Coast packages on Foundry VTT
-   * (see {@link OFFICIAL_WOTC_PACKAGES}).
-   *
-   * Priority 1: SRD / Tasha's (lowest — fallback/options)
-   * Priority 2: Core Rulebooks 2024 (Monster Manual, PHB, DMG)
-   * Priority 3: Expansions (Forge of the Artificer)
-   * Priority 4: Adventures (highest — adventure-specific reskins preferred)
-   *
-   * @type {Object<string, number>}
-   * @static
-   * @readonly
-   */
-  static #COMPENDIUM_PRIORITIES = Object.freeze({
-    // ── Priority 1 ─ FALLBACK ─────────────────────────────────────────────────
-    "dnd5e": 1,                           // D&D 5e system SRD monsters
-    "dnd-tashas-cauldron": 1,             // Tasha's Cauldron of Everything
+  static get PRIORITY_LABELS() { return SourceDetector.PRIORITY_LABELS; }
 
-    // ── Priority 2 ─ CORE (2024 edition) ──────────────────────────────────────
-    "dnd-monster-manual": 2,              // Monster Manual (2024)
-    "dnd-players-handbook": 2,            // Player's Handbook (2024)
-    "dnd-dungeon-masters-guide": 2,       // Dungeon Master's Guide (2024)
+  /** Highest priority still considered "core" content (SRD + rulebooks). */
+  static get CORE_MAX_PRIORITY() { return SourceDetector.PRIORITY.CORE; }
 
-    // ── Priority 3 ─ EXPANSIONS ───────────────────────────────────────────────
-    "dnd-forge-artificer": 3,             // Eberron: Forge of the Artificer
-
-    // ── Priority 4 ─ ADVENTURES ───────────────────────────────────────────────
-    "dnd-phandelver-below": 4,            // Phandelver and Below: The Shattered Obelisk
-    "dnd-tomb-annihilation": 4,           // Tomb of Annihilation
-    "dnd-adventures-faerun": 4,           // Forgotten Realms: Adventures in Faerûn
-    "dnd-heroes-faerun": 4,               // Forgotten Realms: Heroes of Faerûn
-    "dnd-heroes-borderlands": 4           // Heroes of the Borderlands
-  });
-  static get COMPENDIUM_PRIORITIES() {
-    return CompendiumManager.#COMPENDIUM_PRIORITIES;
-  }
-
-  /**
-   * Priority level labels for display
-   * @type {Object<number, string>}
-   * @static
-   * @readonly
-   */
-  static #PRIORITY_LABELS = Object.freeze({
-    1: "FALLBACK",
-    2: "CORE",
-    3: "EXPANSION",
-    4: "ADVENTURE"
-  });
-
-  /**
-   * Human-readable labels for the 11 official WotC packages.
-   * Used for display in logs and settings UI.
-   * @type {Object<string, string>}
-   * @static
-   * @readonly
-   */
-  static #KNOWN_MODULE_LABELS = Object.freeze({
-    "dnd5e": "D&D 5e SRD Monsters",
-    "dnd-tashas-cauldron": "Tasha's Cauldron of Everything",
-    "dnd-monster-manual": "Monster Manual (2024)",
-    "dnd-players-handbook": "Player's Handbook (2024)",
-    "dnd-dungeon-masters-guide": "Dungeon Master's Guide (2024)",
-    "dnd-forge-artificer": "Eberron: Forge of the Artificer",
-    "dnd-phandelver-below": "Phandelver and Below: The Shattered Obelisk",
-    "dnd-tomb-annihilation": "Tomb of Annihilation",
-    "dnd-adventures-faerun": "Forgotten Realms: Adventures in Faerûn",
-    "dnd-heroes-faerun": "Forgotten Realms: Heroes of Faerûn",
-    "dnd-heroes-borderlands": "Heroes of the Borderlands"
-  });
-  static get KNOWN_MODULE_LABELS() {
-    return CompendiumManager.#KNOWN_MODULE_LABELS;
-  }
-  static get PRIORITY_LABELS() {
-    return CompendiumManager.#PRIORITY_LABELS;
-  }
-
-  /**
-   * Get the priority of a compendium pack
-   * Higher priority = preferred when multiple matches exist
-   * @param {CompendiumCollection} pack - The compendium pack
-   * @returns {number} Priority level (1=SRD/Fallback, 2=Core, 3=Expansions, 4=Adventures)
-   * @static
-   * @example
-   * const pack = game.packs.get("dnd-monster-manual.monsters");
-   * const priority = CompendiumManager.getCompendiumPriority(pack);
-   * // Returns: 2 (CORE)
-   */
+  /** Get priority for a pack (higher = preferred). */
   static getCompendiumPriority(pack) {
-    const packageName = pack.metadata.packageName || "";
-
-    // Strict whitelist lookup — only official WotC packages have a priority.
-    if (packageName in CompendiumManager.COMPENDIUM_PRIORITIES) {
-      return CompendiumManager.COMPENDIUM_PRIORITIES[packageName];
-    }
-
-    // Non-WotC packages receive no implicit priority. Any other dnd-* module
-    // (homebrew, DDB-Importer, community content) is deliberately excluded —
-    // previous prefix-based fallback caused false positives with third-party
-    // content. See OFFICIAL_WOTC_PACKAGES for the authoritative list.
-
-    // Fallback for unknown packages (non-WOTC)
-    return 1;
+    return SourceDetector.classify(pack).priority;
   }
 
   /**
-   * Detect all available WOTC Actor compendiums
-   * Searches for compendiums from packages with known WOTC prefixes (dnd-, dnd5e)
-   * Results are cached to avoid repeated lookups
-   * @returns {CompendiumCollection[]} Array of WOTC compendium packs with Actor documents
-   * @static
-   * @example
-   * const wotcPacks = CompendiumManager.detectWOTCCompendiums();
-   * console.log(`Found ${wotcPacks.length} official D&D compendiums`);
+   * Extra package ids or pack collections the GM added by hand — the escape
+   * hatch for content the automatic signals cannot recognise.
+   * @returns {Set<string>|null}
+   */
+  static #getManualSourceIds() {
+    let raw;
+    try {
+      raw = game.settings.get(MODULE_ID, "additionalSources");
+    } catch (error) {
+      Logger.debug(`additionalSources setting unavailable: ${error.message}`);
+      return null;
+    }
+    if (typeof raw !== "string" || raw.trim() === "") return null;
+    const ids = raw.split(/[\s,;]+/).map(id => id.trim()).filter(Boolean);
+    return ids.length > 0 ? new Set(ids) : null;
+  }
+
+  /**
+   * Detect every Actor compendium that can supply D&D creatures.
+   *
+   * Two layers: the authoritative whitelist of Wizards of the Coast packages
+   * (trusted by default), plus forward-looking signals — WotC authorship,
+   * premium content declaring this system, or a package id the GM added by
+   * hand — which are detected and listed but only used when the GM opts in.
+   * That way a book released after this version is never silently ignored,
+   * and a third-party module is never silently trusted. Cached.
+   *
+   * @returns {readonly CompendiumCollection[]}
    */
   static detectWOTCCompendiums() {
     if (CompendiumManager.#wotcCompendiumsCache) {
@@ -412,59 +223,74 @@ class CompendiumManager {
 
     Logger.log("Detecting official D&D compendiums...");
 
-    const wotcPacks = game.packs.filter(pack => {
-      // Only Actor compendiums
+    const manualIds = CompendiumManager.#getManualSourceIds();
+    const classifications = new Map();
+
+    const detected = game.packs.filter(pack => {
       if (pack.documentName !== "Actor") return false;
-
-      // Whitelist check: include only the 11 official WotC packages on Foundry VTT
-      // (see OFFICIAL_WOTC_PACKAGES). Prefix-based matching was removed in 1.6.0
-      // because it captured third-party modules (DDB-Importer, homebrew, legacy
-      // books not published by WotC on Foundry).
-      const packageName = pack.metadata.packageName || "";
-      const isWotc = CompendiumManager.OFFICIAL_WOTC_PACKAGES.includes(packageName);
-
-      return isWotc;
+      const info = SourceDetector.classify(pack, manualIds);
+      if (info.tier === SourceDetector.TIER.NONE) return false;
+      classifications.set(pack.collection, info);
+      return true;
     });
 
-    Logger.log(`Found ${wotcPacks.length} official D&D Actor compendiums:`);
-    wotcPacks.forEach(pack => {
-      const priority = CompendiumManager.getCompendiumPriority(pack);
-      const priorityLabel = CompendiumManager.PRIORITY_LABELS[priority] || "UNKNOWN";
-      Logger.log(`  - ${pack.collection} (${pack.metadata.label}) [package: ${pack.metadata.packageName}, priority: ${priority}-${priorityLabel}]`);
+    CompendiumManager.#classifications = classifications;
+
+    const beyondWhitelist = detected.filter(pack => classifications.get(pack.collection).tier === SourceDetector.TIER.PUBLISHER);
+    if (beyondWhitelist.length > 0) {
+      Logger.warn(
+        `${beyondWhitelist.length} package(s) look like official D&D content but are not in the known list: ` +
+        `${beyondWhitelist.map(pack => pack.metadata.packageName).join(", ")}. ` +
+        "Switch the compendium mode to \"Everything Detected\" to use them."
+      );
+    }
+
+    Logger.log(`Found ${detected.length} D&D Actor compendium(s):`);
+    detected.forEach(pack => {
+      const info = classifications.get(pack.collection);
+      const priorityLabel = CompendiumManager.PRIORITY_LABELS[info.priority] || "UNKNOWN";
+      Logger.log(`  - ${pack.collection} (${pack.metadata.label}) [package: ${info.packageName}, tier: ${info.tier}, priority: ${info.priority}-${priorityLabel}]`);
     });
 
-    CompendiumManager.#wotcCompendiumsCache = wotcPacks;
-    return wotcPacks;
+    CompendiumManager.#wotcCompendiumsCache = Object.freeze(detected);
+    return CompendiumManager.#wotcCompendiumsCache;
+  }
+
+  /** How a detected pack was recognised: "system", "official", "premium" or "manual". */
+  static getSourceTier(pack) {
+    return CompendiumManager.#classifications.get(pack?.collection)?.tier
+      ?? SourceDetector.classify(pack).tier;
+  }
+
+  /** True when the pack comes from first-party D&D content (system SRD or WotC module). */
+  static isOfficialSource(pack) {
+    const tier = CompendiumManager.getSourceTier(pack);
+    return tier === SourceDetector.TIER.SYSTEM || tier === SourceDetector.TIER.OFFICIAL;
   }
 
   /**
-   * Get the list of enabled compendiums based on settings
-   * Interprets the enabledCompendiums setting which can be:
-   * - ["default"] - Only FALLBACK (priority 1) and CORE (priority 2) compendiums
-   * - ["all"] - All available WOTC compendiums
-   * - [pack.collection, ...] - Specific compendium IDs
-   * @returns {CompendiumCollection[]} Array of enabled compendium packs
-   * @static
-   * @example
-   * const enabledPacks = CompendiumManager.getEnabledCompendiums();
-   * console.log(`Using ${enabledPacks.length} compendiums`);
+   * Resolve the compendiums to read, from the `enabledCompendiums` setting:
+   *   ["default"] every auto-detected OFFICIAL source (system SRD + WotC modules)
+   *   ["core"]    only SRD + core rulebooks (priority 1-2)
+   *   ["all"]     everything detected, including premium and manually added packs
+   *   [ids...]    the listed pack collections
+   * @returns {readonly CompendiumCollection[]}
    */
   static getEnabledCompendiums() {
     if (CompendiumManager.#enabledPacksCache) return CompendiumManager.#enabledPacksCache;
 
     const allPacks = CompendiumManager.detectWOTCCompendiums();
 
-    // Get the setting (stored as JSON string)
-    // BUG-02: Split into two try/catch blocks for distinct error messages
     let settingValue;
     try {
       settingValue = game.settings.get(MODULE_ID, "enabledCompendiums");
     } catch (e) {
       Logger.warn(`Failed to retrieve enabledCompendiums setting (${e.name}: ${e.message})`);
       ui.notifications.error(game.i18n.localize("NPC_REPLACER.ErrorSettingsRetrieve"));
-      const result = allPacks.filter(pack => CompendiumManager.getCompendiumPriority(pack) <= 2);
-      CompendiumManager.#enabledPacksCache = result;
-      return result;
+      // Reading the setting failed: stay conservative rather than silently widening scope
+      const result = allPacks.filter(pack => CompendiumManager.getCompendiumPriority(pack) <= CompendiumManager.CORE_MAX_PRIORITY);
+      CompendiumManager.#enabledPacksCache = Object.freeze(result);
+      return CompendiumManager.#enabledPacksCache;
     }
 
     let enabledPackIds;
@@ -473,63 +299,62 @@ class CompendiumManager {
     } catch (e) {
       Logger.warn(`Failed to parse enabledCompendiums JSON (${e.name}: ${e.message})`);
       ui.notifications.error(game.i18n.localize("NPC_REPLACER.ErrorSettingsParse"));
-      enabledPackIds = ["default"];
+      enabledPackIds = ["core"];
     }
 
-    // If no specific selection or empty, use default (Core + Fallback only)
     if (!enabledPackIds || !Array.isArray(enabledPackIds) || enabledPackIds.length === 0) {
       enabledPackIds = ["default"];
     }
 
     let result;
-
-    // "all" - use all available compendiums
     if (enabledPackIds.includes("all")) {
-      Logger.log("Using all available compendiums");
+      Logger.log("Using all detected compendiums");
       result = allPacks;
+    } else if (enabledPackIds.includes("core")) {
+      result = allPacks.filter(pack => CompendiumManager.getCompendiumPriority(pack) <= CompendiumManager.CORE_MAX_PRIORITY);
+      Logger.log(`Using core compendiums (SRD + rulebooks): ${result.map(p => p.metadata.label).join(", ")}`);
     } else if (enabledPackIds.includes("default")) {
-      // "default" - only FALLBACK (priority 1) and CORE (priority 2) compendiums
-      result = allPacks.filter(pack => CompendiumManager.getCompendiumPriority(pack) <= 2);
-      Logger.log(`Using default compendiums (Core + Fallback): ${result.map(p => p.metadata.label).join(", ")}`);
+      result = allPacks.filter(pack => CompendiumManager.isOfficialSource(pack));
+      Logger.log(`Using every official D&D compendium: ${result.map(p => p.metadata.label).join(", ")}`);
     } else {
-      // Otherwise filter by specific compendium IDs — Set for O(1) lookup
       const enabledSet = new Set(enabledPackIds);
       result = allPacks.filter(pack => enabledSet.has(pack.collection));
       Logger.log(`Enabled compendiums: ${result.map(p => p.metadata.label).join(", ")}`);
     }
 
-    CompendiumManager.#enabledPacksCache = result;
-    return result;
+    CompendiumManager.#enabledPacksCache = Object.freeze(result);
+    return CompendiumManager.#enabledPacksCache;
   }
 
   /**
-   * Load the combined monster index from all enabled compendiums
-   * Fetches and combines indexes from all enabled compendiums, sorted by priority
-   * Results are cached to avoid repeated loading
-   * @param {boolean} [forceReload=false] - Force reload even if cached
-   * @returns {Promise<Array<{entry: Object, pack: CompendiumCollection}>>} Array of {entry, pack} objects
-   * @static
-   * @example
-   * const index = await CompendiumManager.loadMonsterIndex();
-   * console.log(`Loaded ${index.length} monster entries`);
-   *
-   * // Force reload after settings change
-   * const freshIndex = await CompendiumManager.loadMonsterIndex(true);
+   * Actor types that are never scene creatures. A blocklist (rather than an
+   * allowlist) keeps actor types introduced by future system versions indexed
+   * instead of silently dropping them.
    */
+  static #NON_CREATURE_TYPES = Object.freeze(new Set(["character", "group", "vehicle"]));
+
+  /** True when a compendium index entry can stand in for an NPC token. */
+  static isCreatureEntry(entry) {
+    const type = entry?.type;
+    if (!type) return true; // no type information — keep it and let name matching decide
+    return !CompendiumManager.#NON_CREATURE_TYPES.has(type);
+  }
+
+  /** Load combined monster index from all enabled compendiums. Cached unless forceReload. */
   static async loadMonsterIndex(forceReload = false) {
     if (CompendiumManager.#indexCache && !forceReload) {
       return CompendiumManager.#indexCache;
     }
 
-    // Reset load errors for this run
     CompendiumManager.#lastLoadErrors = [];
 
     const enabledPacks = CompendiumManager.getEnabledCompendiums();
 
     if (enabledPacks.length === 0) {
       Logger.log("No enabled compendiums found");
-      CompendiumManager.#indexCache = [];
+      CompendiumManager.#indexCache = Object.freeze([]);
       CompendiumManager.#indexMap = new Map();
+      CompendiumManager.#wordIndex = new Map();
       return CompendiumManager.#indexCache;
     }
 
@@ -537,106 +362,100 @@ class CompendiumManager {
 
     const combinedIndex = [];
 
-    // Sort packs by priority for logging (highest first)
     const sortedPacks = [...enabledPacks].sort((a, b) =>
       CompendiumManager.getCompendiumPriority(b) - CompendiumManager.getCompendiumPriority(a)
     );
 
-    for (const pack of sortedPacks) {
-      try {
-        await pack.getIndex({ fields: ["name", "type"] });
-        const priority = CompendiumManager.getCompendiumPriority(pack);
-        const priorityLabel = CompendiumManager.PRIORITY_LABELS[priority] || "UNKNOWN";
-        for (const entry of pack.index.contents) {
-          const normalizedName = NameMatcher.normalizeName(entry.name);
-          const significantWords = normalizedName.split(" ").filter(w => w.length >= NameMatcher.MIN_PARTIAL_LENGTH);
-          combinedIndex.push({
-            entry,
-            pack,
-            normalizedName,
-            significantWords,
-            priority
-          });
-        }
-        Logger.log(`  [${priority}-${priorityLabel}] Loaded ${pack.index.size} entries from ${pack.metadata.label}`);
-      } catch (error) {
+    const indexResults = await Promise.allSettled(
+      sortedPacks.map(pack => pack.getIndex({ fields: ["name", "type"] }).then(() => pack))
+    );
+
+    for (let i = 0; i < indexResults.length; i++) {
+      const result = indexResults[i];
+      const pack = sortedPacks[i];
+
+      if (result.status === "rejected") {
         CompendiumManager.#lastLoadErrors.push({
           packId: pack.collection,
           packLabel: pack.metadata.label,
-          error: error.message
+          error: result.reason?.message || String(result.reason)
         });
-        Logger.error(`Failed to load index from ${pack.collection}`, error);
+        Logger.error(`Failed to load index from ${pack.collection}`, result.reason);
         ui.notifications.error(game.i18n.format("NPC_REPLACER.ErrorCompendiumLoad", { name: pack.metadata.label }));
+        continue;
       }
+
+      const priority = CompendiumManager.getCompendiumPriority(pack);
+      const priorityLabel = CompendiumManager.PRIORITY_LABELS[priority] || "UNKNOWN";
+      let indexed = 0;
+      for (const entry of pack.index.contents) {
+        if (!CompendiumManager.isCreatureEntry(entry)) continue;
+        indexed++;
+        const normalizedName = NameMatcher.normalizeName(entry.name);
+        const significantWords = normalizedName.split(" ").filter(w => w.length >= NameMatcher.MIN_PARTIAL_LENGTH);
+        combinedIndex.push({
+          entry,
+          pack,
+          normalizedName,
+          significantWords,
+          priority
+        });
+      }
+      Logger.log(`  [${priority}-${priorityLabel}] Loaded ${indexed}/${pack.index.size} creature entries from ${pack.metadata.label}`);
     }
 
     Logger.log(`Total: ${combinedIndex.length} entries from all compendiums`);
     Logger.log("Priority order: Adventures (4) > Expansions (3) > Core Rulebooks (2) > SRD (1)");
 
-    // Build O(1) lookup Map by normalized name
     const indexMap = new Map();
+    const wordIndex = new Map();
     for (const item of combinedIndex) {
       const key = item.normalizedName;
       if (!indexMap.has(key)) indexMap.set(key, []);
       indexMap.get(key).push(item);
+
+      if (item.significantWords) {
+        for (const word of item.significantWords) {
+          if (!wordIndex.has(word)) wordIndex.set(word, []);
+          wordIndex.get(word).push(item);
+        }
+      }
     }
 
-    CompendiumManager.#indexCache = combinedIndex;
+    CompendiumManager.#indexCache = Object.freeze(combinedIndex);
     CompendiumManager.#indexMap = indexMap;
+    CompendiumManager.#wordIndex = wordIndex;
 
     return CompendiumManager.#indexCache;
   }
 
-  /**
-   * Clear all compendium caches
-   * Call this when settings change or when compendiums may have been modified
-   * @returns {void}
-   * @static
-   * @example
-   * // After settings update
-   * CompendiumManager.clearCache();
-   */
   static clearCache() {
     CompendiumManager.#indexCache = null;
     CompendiumManager.#indexMap = null;
+    CompendiumManager.#wordIndex = null;
     CompendiumManager.#wotcCompendiumsCache = null;
     CompendiumManager.#enabledPacksCache = null;
     CompendiumManager.#lastLoadErrors = [];
+    CompendiumManager.#classifications = new Map();
     Logger.debug("CompendiumManager caches cleared");
   }
 
-  /**
-   * Get errors from the most recent loadMonsterIndex() call
-   * @returns {Array<{packId: string, packLabel: string, error: string}>} Copy of load errors
-   * @static
-   */
   static getLastLoadErrors() {
     return [...CompendiumManager.#lastLoadErrors];
   }
 
-  /**
-   * Get the index Map for O(1) exact-name lookups
-   * @returns {Map<string, Array>|null} Map of normalizedName -> matches, or null if not loaded
-   * @static
-   */
   static getIndexMap() {
     return CompendiumManager.#indexMap;
   }
 
-  /**
-   * Check if the monster index is cached
-   * @returns {boolean} True if index is cached
-   * @static
-   */
+  static getWordIndex() {
+    return CompendiumManager.#wordIndex;
+  }
+
   static isIndexCached() {
     return CompendiumManager.#indexCache !== null;
   }
 
-  /**
-   * Get the cached index size for debugging
-   * @returns {number} Number of cached index entries, or 0 if not cached
-   * @static
-   */
   static getCacheSize() {
     return CompendiumManager.#indexCache ? CompendiumManager.#indexCache.length : 0;
   }
@@ -646,44 +465,19 @@ class CompendiumManager {
 NameMatcher.setCompendiumManager(CompendiumManager);
 
 /**
- * TokenReplacer utility class for token replacement operations
- * Handles extracting token properties, finding matching compendium entries,
- * and replacing tokens with official compendium versions
- * @class
+ * Handles token replacement: extract properties, import actors, create new tokens.
  */
 class TokenReplacer {
-  /**
-   * Sequential counter for token variations
-   * Used to cycle through available token variants when mode is "sequential"
-   * Reset at the start of each replacement session
-   * @type {number}
-   * @static
-   * @private
-   */
   static #sequentialCounter = 0;
-
-  /**
-   * Cached variation mode setting — read once per session, cleared after
-   * @type {string|null}
-   * @static
-   * @private
-   */
   static #variationMode = null;
-
-  /**
-   * Session-scoped Map for O(1) actor lookups by compendium UUID
-   * Built once per replacement session via buildActorLookup()
-   * @type {Map<string, Actor>|null}
-   * @static
-   * @private
-   */
+  /** Session-scoped Map: compendium UUID -> world Actor */
   static #actorLookup = null;
+  static #compendiumDocCache = new Map();
+  static #COMPENDIUM_DOC_CACHE_MAX = 100;
 
-  /**
-   * Build the actor lookup Map for the current session
-   * @returns {void}
-   * @static
-   */
+  // TODO [MEDIUM] Compatibility: compendiumSource path may change in future dnd5e/Foundry versions.
+  // If this path changes, lookup produces an empty Map and every replacement re-imports actors,
+  // creating duplicates. Add a fallback matching by actor name + source compendium label.
   static buildActorLookup() {
     TokenReplacer.#actorLookup = new Map();
     for (const a of game.actors) {
@@ -693,163 +487,82 @@ class TokenReplacer {
     Logger.debug(`Built actor lookup Map with ${TokenReplacer.#actorLookup.size} entries`);
   }
 
-  /**
-   * Clear the actor lookup Map to free memory after a session
-   * @returns {void}
-   * @static
-   */
   static clearActorLookup() {
     TokenReplacer.#actorLookup = null;
     TokenReplacer.#variationMode = null;
+    TokenReplacer.#compendiumDocCache.clear();
     Logger.debug("Actor lookup Map and variation mode cleared");
   }
 
-  /**
-   * Properties to preserve when replacing a token
-   * These are the token properties that get transferred from old to new token
-   * @type {string[]}
-   * @static
-   * @readonly
-   */
+  // TODO [MEDIUM] Compatibility: allowlist silently drops properties added in new Foundry versions.
+  // Missing now: flags (module data), light, sight, detectionModes, bar1, bar2.
+  // Consider inverting to a blocklist of properties to OVERRIDE from compendium instead,
+  // so unknown properties are preserved by default. Trade-off: blocklist risks keeping stale data.
+  /** Token properties preserved during replacement */
   static #PRESERVED_PROPERTIES = Object.freeze([
     "x", "y", "elevation", "width", "height",
     "hidden", "rotation", "disposition", "locked", "alpha"
   ]);
-  static get PRESERVED_PROPERTIES() {
-    return TokenReplacer.#PRESERVED_PROPERTIES;
-  }
+  static get PRESERVED_PROPERTIES() { return TokenReplacer.#PRESERVED_PROPERTIES; }
 
-  /**
-   * Get the current value of the sequential counter
-   * Useful for debugging and testing
-   * @returns {number} Current counter value
-   * @static
-   */
   static getSequentialCounter() {
     return TokenReplacer.#sequentialCounter;
   }
 
-  /**
-   * Reset the sequential variant counter
-   * Call this at the start of each replacement session to ensure
-   * consistent variant distribution across tokens
-   * @returns {void}
-   * @static
-   * @example
-   * // At start of replacement session
-   * TokenReplacer.resetCounter();
-   */
   static resetCounter() {
     TokenReplacer.#sequentialCounter = 0;
     Logger.debug("TokenReplacer sequential counter reset");
   }
 
-  /**
-   * Extract token properties that need to be preserved during replacement
-   * @param {TokenDocument} tokenDoc - The token document to extract properties from
-   * @returns {Object} Object containing properties to preserve
-   * @static
-   * @example
-   * const props = TokenReplacer.extractTokenProperties(tokenDoc);
-   * // Returns: { x: 100, y: 200, elevation: 0, width: 1, height: 1, ... }
-   */
   static extractTokenProperties(tokenDoc) {
-    return {
-      x: tokenDoc.x,
-      y: tokenDoc.y,
-      elevation: tokenDoc.elevation,
-      width: tokenDoc.width,
-      height: tokenDoc.height,
-      hidden: tokenDoc.hidden,
-      rotation: tokenDoc.rotation,
-      disposition: tokenDoc.disposition,
-      locked: tokenDoc.locked,
-      alpha: tokenDoc.alpha
-    };
+    const props = {};
+    for (const prop of TokenReplacer.PRESERVED_PROPERTIES) {
+      props[prop] = tokenDoc[prop];
+    }
+    return props;
   }
 
-  /**
-   * Get NPC tokens to process - selected tokens if any, otherwise all scene tokens
-   * Prioritizes user-selected tokens, falling back to all NPCs in the scene
-   * @returns {{tokens: TokenDocument[], isSelection: boolean}} Object with tokens array and selection flag
-   * @static
-   * @example
-   * const { tokens, isSelection } = TokenReplacer.getNPCTokensToProcess();
-   * if (isSelection) {
-   *   console.log(`Processing ${tokens.length} selected NPC tokens`);
-   * } else {
-   *   console.log(`Processing all ${tokens.length} NPC tokens in scene`);
-   * }
-   */
+  static #isNPCToken(tokenDoc) {
+    return tokenDoc.actor?.type === "npc";
+  }
+
+  /** Get NPC tokens: selected if any, otherwise all scene NPCs. */
   static getNPCTokensToProcess() {
     if (!canvas.scene) {
       return { tokens: [], isSelection: false };
     }
 
-    // Check if there are selected tokens
     const selectedTokens = canvas.tokens.controlled;
 
     if (selectedTokens.length > 0) {
-      // Filter selected tokens to only NPCs
       const selectedNPCs = selectedTokens
         .map(token => token.document)
-        .filter(tokenDoc => {
-          const actor = tokenDoc.actor;
-          if (!actor) return false;
-          return actor.type === "npc";
-        });
+        .filter(TokenReplacer.#isNPCToken);
 
       if (selectedNPCs.length > 0) {
         Logger.log(`Using ${selectedNPCs.length} selected NPC token(s) out of ${selectedTokens.length} selected`);
         return { tokens: selectedNPCs, isSelection: true };
       }
 
-      // Selected tokens but none are NPCs — respect user intent, don't process entire scene
       Logger.log("Selected tokens contain no NPCs");
       return { tokens: [], isSelection: true };
     }
 
-    // No selection or no NPCs in selection - use all scene tokens
-    const allTokens = canvas.scene.tokens.contents;
-    const npcTokens = allTokens.filter(tokenDoc => {
-      const actor = tokenDoc.actor;
-      if (!actor) return false;
-      return actor.type === "npc";
-    });
-
+    const npcTokens = canvas.scene.tokens.contents.filter(TokenReplacer.#isNPCToken);
     return { tokens: npcTokens, isSelection: false };
   }
 
-  /**
-   * Get all NPC tokens from the current scene
-   * Convenience method that returns just the tokens array
-   * @returns {TokenDocument[]} Array of NPC token documents
-   * @static
-   * @example
-   * const npcTokens = TokenReplacer.getNPCTokensFromScene();
-   * console.log(`Found ${npcTokens.length} NPC tokens in scene`);
-   */
+  /** Convenience: get all scene NPC tokens (ignores selection). */
   static getNPCTokensFromScene() {
-    return TokenReplacer.getNPCTokensToProcess().tokens;
+    if (!canvas.scene) return [];
+    return canvas.scene.tokens.contents.filter(TokenReplacer.#isNPCToken);
   }
 
-  /**
-   * Find or import the world actor for a compendium entry
-   * Checks if actor already exists in world (by name and compendium source),
-   * otherwise imports from compendium
-   * @param {Actor} compendiumActor - The actor document from compendium
-   * @param {Object} compendiumEntry - The compendium index entry
-   * @param {CompendiumCollection} pack - The source compendium pack
-   * @returns {Promise<Actor>} The world actor (existing or newly imported)
-   * @throws {Error} If import fails
-   * @static
-   * @private
-   */
+  /** Find existing world actor or import from compendium. */
   static async #getOrImportWorldActor(compendiumActor, compendiumEntry, pack) {
-    // O(1) lookup via session-scoped Map (built by buildActorLookup before processing loop)
     let worldActor = TokenReplacer.#actorLookup?.get(compendiumActor.uuid) || null;
 
-    // BUG-01: Guard against stale cached references (actor deleted between sessions)
+    // Guard against stale cached references (actor deleted between sessions)
     if (worldActor && !game.actors.has(worldActor.id)) {
       Logger.warn(`Cached actor "${worldActor.name}" (id: ${worldActor.id}) no longer exists in game.actors, will re-import`);
       TokenReplacer.#actorLookup.delete(compendiumActor.uuid);
@@ -861,11 +574,7 @@ class TokenReplacer {
       return worldActor;
     }
 
-    // Get or create the import folder
     const importFolder = await FolderManager.getOrCreateImportFolder();
-
-    // Import the actor from compendium using the standard Foundry API
-    // Pass the folder ID in the updateData parameter
     if (!importFolder) {
       Logger.warn(`Import folder unavailable — actor "${compendiumActor.name}" will be imported to the root folder`);
     }
@@ -876,7 +585,6 @@ class TokenReplacer {
       throw new Error(`Failed to import actor "${compendiumActor.name}" from compendium`);
     }
 
-    // Register newly imported actor in session lookup for future O(1) hits
     if (TokenReplacer.#actorLookup) {
       TokenReplacer.#actorLookup.set(compendiumActor.uuid, worldActor);
     }
@@ -885,28 +593,22 @@ class TokenReplacer {
     return worldActor;
   }
 
-  /**
-   * Resolve wildcard token texture path to an actual file
-   * Handles Monster Manual 2024 wildcard patterns like "specter-*.webp"
-   * @param {Object} prototypeToken - The prototype token object to modify
-   * @param {Actor} compendiumActor - The compendium actor for fallback portrait
-   * @param {string} creatureName - Name of creature for logging
-   * @returns {Promise<void>} Modifies prototypeToken.texture.src in place
-   * @static
-   * @private
-   */
+  /** Resolve wildcard texture path (e.g. "specter-*.webp") to an actual file. */
   static async #resolveWildcardTexture(prototypeToken, compendiumActor, creatureName) {
     const originalPath = prototypeToken.texture.src;
     Logger.log(`Detected wildcard pattern in token path: ${originalPath}`);
 
-    // Use cached variation mode (read once per session)
     if (!TokenReplacer.#variationMode) {
-      TokenReplacer.#variationMode = game.settings.get(MODULE_ID, "tokenVariationMode");
+      try {
+        TokenReplacer.#variationMode = game.settings.get(MODULE_ID, "tokenVariationMode");
+      } catch (error) {
+        Logger.warn(`Failed to read tokenVariationMode setting, using "sequential": ${error.message}`);
+        TokenReplacer.#variationMode = "sequential";
+      }
       Logger.log(`Token variation mode: ${TokenReplacer.#variationMode}`);
     }
     const variationMode = TokenReplacer.#variationMode;
 
-    // Use WildcardResolver to find and select variant
     const currentIndex = TokenReplacer.#sequentialCounter;
     const result = await WildcardResolver.resolve(
       originalPath,
@@ -915,89 +617,110 @@ class TokenReplacer {
       compendiumActor.img // Use actor portrait as fallback
     );
 
-    // Update the sequential counter if in sequential mode
     if (variationMode === "sequential" && result.nextIndex > currentIndex) {
       TokenReplacer.#sequentialCounter = result.nextIndex;
     }
 
-    Logger.log(`Resolved wildcard for ${creatureName}: ${result.resolvedPath}`);
+    if (result.resolvedPath === "icons/svg/mystery-man.svg") {
+      Logger.warn(`No token art variants found for "${creatureName}" — using placeholder`);
+      ui.notifications.warn(game.i18n.format("NPC_REPLACER.WildcardFallback", { name: creatureName }));
+    } else {
+      Logger.log(`Resolved wildcard for ${creatureName}: ${result.resolvedPath}`);
+    }
     prototypeToken.texture.src = result.resolvedPath;
   }
 
-  /**
-   * Prepare new token data by merging prototype token with preserved properties
-   * @param {Object} prototypeToken - The prototype token from compendium actor
-   * @param {Object} originalProps - Properties extracted from original token
-   * @param {string} worldActorId - ID of the world actor to link
-   * @returns {Object} Complete token data ready for creation
-   * @static
-   * @private
-   */
+  /** Compendium token properties to adopt (visual/behavioral identity). */
+  static #COMPENDIUM_TOKEN_FIELDS = Object.freeze([
+    "name", "texture", "scale", "tint",
+    "displayName", "displayBars",
+    "lockRotation"
+  ]);
+
+  /** Merge compendium token identity with preserved properties from original. */
   static #prepareNewTokenData(prototypeToken, originalProps, worldActorId) {
-    const overrides = {};
-    for (const prop of TokenReplacer.PRESERVED_PROPERTIES) {
-      overrides[prop] = originalProps[prop];
+    const newData = {};
+    for (const prop of TokenReplacer.#COMPENDIUM_TOKEN_FIELDS) {
+      if (prop in prototypeToken) newData[prop] = prototypeToken[prop];
     }
-    return {
-      ...prototypeToken,
-      ...overrides,
-      actorId: worldActorId,
-      actorLink: false
-    };
+    for (const prop of TokenReplacer.PRESERVED_PROPERTIES) {
+      newData[prop] = originalProps[prop];
+    }
+    newData.actorId = worldActorId;
+    newData.actorLink = prototypeToken.actorLink ?? false;
+    return newData;
   }
 
   /**
-   * Replace a single token with its Monster Manual/compendium version
-   * Imports the actor if needed, resolves wildcard token paths, and creates new token
-   * @param {TokenDocument} tokenDoc - The token document to replace
-   * @param {Object} compendiumEntry - The matching compendium index entry
-   * @param {CompendiumCollection} pack - The compendium pack containing the entry
-   * @returns {Promise<TokenDocument>} The newly created token document
-   * @throws {Error} If actor import or token creation fails
-   * @static
-   * @example
-   * const match = NameMatcher.findMatch("Goblin", monsterIndex);
-   * if (match) {
-   *   const newToken = await TokenReplacer.replaceToken(tokenDoc, match.entry, match.pack);
-   *   console.log(`Replaced with ${newToken.name}`);
-   * }
+   * Replace a single token with its compendium version.
+   * Imports actor if needed, resolves wildcards, creates new token, deletes old.
+   * @throws {TokenReplacerError} with phase "import_failed", "creation_failed", or "delete_failed"
    */
   static async replaceToken(tokenDoc, compendiumEntry, pack) {
-    // Save original properties
     const originalProps = TokenReplacer.extractTokenProperties(tokenDoc);
     const originalName = tokenDoc.name;
 
     Logger.log(`Replacing token "${originalName}" with "${compendiumEntry.name}"`);
 
-    // Get the full actor document from the compendium
-    const compendiumActor = await pack.getDocument(compendiumEntry._id);
+    let compendiumActor;
+    try {
+      const docCacheKey = `${pack.collection}|${compendiumEntry._id}`;
+      compendiumActor = TokenReplacer.#compendiumDocCache.get(docCacheKey);
+      if (!compendiumActor) {
+        compendiumActor = await pack.getDocument(compendiumEntry._id);
+        if (TokenReplacer.#compendiumDocCache.size >= TokenReplacer.#COMPENDIUM_DOC_CACHE_MAX) {
+          // Evict oldest entry (Map preserves insertion order)
+          const oldest = TokenReplacer.#compendiumDocCache.keys().next().value;
+          TokenReplacer.#compendiumDocCache.delete(oldest);
+        }
+        TokenReplacer.#compendiumDocCache.set(docCacheKey, compendiumActor);
+      }
+    } catch (error) {
+      throw new TokenReplacerError(`Failed to load "${compendiumEntry.name}" from compendium: ${error.message}`, "import_failed");
+    }
 
-    // Get or import the world actor
-    const worldActor = await TokenReplacer.#getOrImportWorldActor(compendiumActor, compendiumEntry, pack);
+    let worldActor;
+    try {
+      worldActor = await TokenReplacer.#getOrImportWorldActor(compendiumActor, compendiumEntry, pack);
+    } catch (error) {
+      throw new TokenReplacerError(`Failed to import "${compendiumEntry.name}": ${error.message}`, "import_failed");
+    }
 
-    // IMPORTANT: Always use the COMPENDIUM actor's prototypeToken to get the correct Monster Manual 2024 token image
-    // The world actor might have been imported from a different source (old SRD) with different token art
+    // Always use COMPENDIUM actor's prototypeToken — world actor may have stale token art
     const prototypeToken = compendiumActor.prototypeToken.toObject();
     Logger.log(`Using token image from compendium: ${prototypeToken.texture?.src || "default"}`);
 
-    // Handle wildcard patterns in token texture paths
     if (WildcardResolver.isWildcardPath(prototypeToken.texture?.src)) {
       await TokenReplacer.#resolveWildcardTexture(prototypeToken, compendiumActor, compendiumEntry.name);
     }
 
-    // Prepare new token data, merging prototype with original properties
     const newTokenData = TokenReplacer.#prepareNewTokenData(prototypeToken, originalProps, worldActor.id);
 
-    // Create new token first, then delete old one — avoids data loss if creation fails
-    const createdTokens = await canvas.scene.createEmbeddedDocuments("Token", [newTokenData]);
-    const newToken = createdTokens[0];
-
-    if (!newToken) {
-      throw new Error(`Failed to create new token for "${compendiumEntry.name}"`);
+    // Create new token first, then delete old — avoids data loss if creation fails
+    let newToken;
+    try {
+      const createdTokens = await canvas.scene.createEmbeddedDocuments("Token", [newTokenData]);
+      newToken = createdTokens[0];
+      if (!newToken) {
+        throw new Error("createEmbeddedDocuments returned empty result");
+      }
+    } catch (error) {
+      throw new TokenReplacerError(`Failed to create token for "${compendiumEntry.name}": ${error.message}`, "creation_failed");
     }
 
-    // Safe to delete now — new token exists
-    await canvas.scene.deleteEmbeddedDocuments("Token", [tokenDoc.id]);
+    try {
+      if (!canvas.scene.tokens.has(tokenDoc.id)) {
+        Logger.warn(`Token "${originalName}" was already removed — skipping delete`);
+      } else {
+        await canvas.scene.deleteEmbeddedDocuments("Token", [tokenDoc.id]);
+      }
+    } catch (deleteError) {
+      Logger.error(`Created new token but failed to delete old "${originalName}" — duplicate may exist`, deleteError);
+      throw new TokenReplacerError(
+        `delete_failed: new token created but old "${originalName}" could not be removed`,
+        "delete_failed"
+      );
+    }
 
     Logger.log(`Successfully replaced "${originalName}" with "${compendiumEntry.name}"`);
 
@@ -1006,58 +729,27 @@ class TokenReplacer {
 }
 
 /**
- * NPCTokenReplacerController - Main facade class for orchestrating NPC token replacement
- * Coordinates all module operations: compendium detection, name matching, and token replacement
- * Provides a unified API for the module and prevents concurrent execution
- * @class
+ * Main facade: orchestrates compendium detection, name matching, and token replacement.
  */
 class NPCTokenReplacerController {
-  /**
-   * Lock flag to prevent concurrent execution of replacement operations
-   * Only one replacement session can run at a time
-   * @type {boolean}
-   * @static
-   * @private
-   */
   static #isProcessing = false;
 
-  /**
-   * Check if a replacement operation is currently in progress
-   * @returns {boolean} True if processing is active
-   * @static
-   * @example
-   * if (NPCTokenReplacerController.isProcessing()) {
-   *   console.log("Please wait, replacement in progress...");
-   * }
-   */
   static isProcessing() {
     return NPCTokenReplacerController.#isProcessing;
   }
 
-  /**
-   * Validate all prerequisites before running the replacement
-   * Checks: user is GM, scene is active, WOTC compendiums are available
-   * @returns {boolean} Whether all prerequisites are met
-   * @static
-   * @example
-   * if (!NPCTokenReplacerController.validatePrerequisites()) {
-   *   return; // User has been notified of the issue
-   * }
-   */
+  /** Check GM status, active scene, and compendium availability. */
   static validatePrerequisites() {
-    // Check if user is GM
     if (!game.user.isGM) {
       ui.notifications.warn(game.i18n.localize("NPC_REPLACER.GMOnly"));
       return false;
     }
 
-    // Check if there's an active scene
     if (!canvas.scene) {
       ui.notifications.error(game.i18n.localize("NPC_REPLACER.NoScene"));
       return false;
     }
 
-    // Check if any WOTC modules with Actor compendiums are active
     const wotcPacks = CompendiumManager.detectWOTCCompendiums();
     if (wotcPacks.length === 0) {
       ui.notifications.error(game.i18n.localize("NPC_REPLACER.NoModule"));
@@ -1067,55 +759,46 @@ class NPCTokenReplacerController {
     return true;
   }
 
-  // Removed: showConfirmationDialog — replaced by showPreviewDialog
-
-  /**
-   * Show a preview dialog with token-to-creature match mapping
-   * Replaces the old confirmation dialog with a rich 3-column table showing
-   * Token Name | Will Match As | Source Compendium for each token.
-   * Matched tokens appear first, unmatched tokens last.
-   * @param {Array<{tokenDoc: Object, creatureName: string, match: Object|null}>} matchResults - Pre-computed match results from computeMatches
-   * @returns {Promise<boolean>} Whether user confirmed to proceed
-   * @static
-   */
+  /** Show 3-column preview dialog (Token | Match | Source). Returns true if user confirms. */
   static async showPreviewDialog(matchResults) {
     const matched = matchResults.filter(r => r.match !== null);
     const unmatched = matchResults.filter(r => r.match === null);
     const sorted = [...matched, ...unmatched];
 
-    const noMatchText = game.i18n.localize("NPC_REPLACER.PreviewNoMatch");
+    const noMatchText = escapeHtml(game.i18n.localize("NPC_REPLACER.PreviewNoMatch"));
 
-    let rowsHtml = "";
+    const rows = [];
     for (const result of sorted) {
       if (result.match) {
-        rowsHtml += `<tr>
+        rows.push(`<tr>
           <td>${escapeHtml(result.creatureName)}</td>
           <td>${escapeHtml(result.match.entry.name)}</td>
           <td>${escapeHtml(result.match.pack.metadata.label)}</td>
-        </tr>`;
+        </tr>`);
       } else {
-        rowsHtml += `<tr>
+        rows.push(`<tr>
           <td>${escapeHtml(result.creatureName)}</td>
-          <td style="color: red;">${noMatchText}</td>
+          <td class="npc-replacer-no-match">${noMatchText}</td>
           <td>&mdash;</td>
-        </tr>`;
+        </tr>`);
       }
     }
+    const rowsHtml = rows.join("");
 
-    const summary = game.i18n.format("NPC_REPLACER.PreviewSummary", {
+    const summary = escapeHtml(game.i18n.format("NPC_REPLACER.PreviewSummary", {
       matched: matched.length,
       total: matchResults.length
-    });
+    }));
 
     const content = `
       <p>${summary}</p>
-      <div style="max-height: 300px; overflow-y: auto; margin: 10px 0;">
-        <table style="width: 100%; border-collapse: collapse;">
+      <div class="npc-replacer-preview-table-container">
+        <table class="npc-replacer-preview-table">
           <thead>
             <tr>
-              <th>${game.i18n.localize("NPC_REPLACER.PreviewColToken")}</th>
-              <th>${game.i18n.localize("NPC_REPLACER.PreviewColMatch")}</th>
-              <th>${game.i18n.localize("NPC_REPLACER.PreviewColSource")}</th>
+              <th>${escapeHtml(game.i18n.localize("NPC_REPLACER.PreviewColToken"))}</th>
+              <th>${escapeHtml(game.i18n.localize("NPC_REPLACER.PreviewColMatch"))}</th>
+              <th>${escapeHtml(game.i18n.localize("NPC_REPLACER.PreviewColSource"))}</th>
             </tr>
           </thead>
           <tbody>
@@ -1125,59 +808,44 @@ class NPCTokenReplacerController {
       </div>
     `;
 
-    const dialogOpts = {
+    let dialogTimeoutMinutes = 5;
+    try {
+      const value = game.settings.get(MODULE_ID, "dialogTimeout");
+      if (Number.isFinite(value) && value > 0) dialogTimeoutMinutes = value;
+    } catch (error) {
+      Logger.debug(`dialogTimeout setting not available, using default ${dialogTimeoutMinutes}min: ${error.message}`);
+    }
+    const DIALOG_TIMEOUT_MS = dialogTimeoutMinutes * 60 * 1000;
+
+    let timeoutId;
+    const { answer, close } = FoundryCompat.confirmDialog({
       title: game.i18n.localize("NPC_REPLACER.PreviewTitle"),
       content,
-      yes: null,
-      no: null,
-      defaultYes: false,
-      close: null
-    };
-
-    // When all tokens are unmatched, disable the Replace/yes button
-    if (matched.length === 0) {
-      dialogOpts.render = (html) => {
-        html.find('.yes, [data-button="yes"]').prop("disabled", true);
-      };
-    }
-
-    return new Promise(resolve => {
-      dialogOpts.yes = () => resolve(true);
-      dialogOpts.no = () => resolve(false);
-      dialogOpts.close = () => resolve(false);
-      // Feature-detect DialogV2 (Foundry v13+) with fallback to legacy Dialog (v12)
-      const DialogV2 = foundry?.applications?.api?.DialogV2;
-      if (DialogV2) {
-        // v13+ ApplicationV2-based dialog
-        DialogV2.confirm({
-          window: { title: dialogOpts.title },
-          content: dialogOpts.content,
-          yes: { label: dialogOpts.buttons?.yes?.label ?? game.i18n.localize("NPC_REPLACER.ConfirmYes"), callback: () => resolve(true) },
-          no: { label: dialogOpts.buttons?.no?.label ?? game.i18n.localize("NPC_REPLACER.ConfirmNo"), callback: () => resolve(false) },
-          render: dialogOpts.render
-        });
-      } else {
-        // v12 legacy Dialog
-        Dialog.confirm(dialogOpts);
-      }
+      yesLabel: game.i18n.localize("NPC_REPLACER.ConfirmYes"),
+      noLabel: game.i18n.localize("NPC_REPLACER.ConfirmNo"),
+      // Nothing to replace: the confirm button stays unusable
+      yesDisabled: matched.length === 0
     });
+
+    try {
+      const timeoutPromise = new Promise(resolve => {
+        timeoutId = setTimeout(() => {
+          ui.notifications.warn(game.i18n.localize("NPC_REPLACER.DialogTimeout"));
+          close();
+          resolve(false);
+        }, DIALOG_TIMEOUT_MS);
+      });
+
+      return await Promise.race([answer, timeoutPromise]);
+    } finally {
+      clearTimeout(timeoutId);
+    }
   }
 
-  // Removed: #processToken — replacement logic inlined in replaceNPCTokens using pre-computed matches
-
-  /**
-   * Report the results of a replacement session
-   * Displays appropriate notifications and logs details
-   * @param {number} replaced - Count of successfully replaced tokens
-   * @param {string[]} notFound - Names of tokens not found in compendiums
-   * @param {string[]} importFailed - Names of tokens that failed during import
-   * @param {string[]} creationFailed - Names of tokens that failed during creation
-   * @returns {void}
-   * @static
-   * @private
-   */
-  static #reportResults(replaced, notFound, importFailed, creationFailed) {
-    if (replaced > 0) {
+  /** Display result notifications and log replacement summary. */
+  static #reportResults(replaced, notFound, importFailed, creationFailed, deleteFailed = []) {
+    const totalErrors = importFailed.length + creationFailed.length;
+    if (replaced > 0 && totalErrors === 0 && notFound.length === 0 && deleteFailed.length === 0) {
       ui.notifications.info(game.i18n.format("NPC_REPLACER.Complete", { count: replaced }));
     }
 
@@ -1186,7 +854,11 @@ class NPCTokenReplacerController {
       Logger.log("Creatures not found in compendiums:", notFound);
     }
 
-    const totalErrors = importFailed.length + creationFailed.length;
+    if (deleteFailed.length > 0) {
+      ui.notifications.warn(game.i18n.format("NPC_REPLACER.DeleteFailedCount", { count: deleteFailed.length }));
+      Logger.log("Delete failures (duplicates may exist):", deleteFailed);
+    }
+
     if (totalErrors > 0) {
       ui.notifications.error(game.i18n.format("NPC_REPLACER.SummaryPartialFailure", {
         replaced,
@@ -1198,57 +870,36 @@ class NPCTokenReplacerController {
       if (creationFailed.length > 0) Logger.log("Creation failures:", creationFailed);
     }
 
-    Logger.log(`Replacement complete: ${replaced} replaced, ${notFound.length} not found, ${importFailed.length} import failures, ${creationFailed.length} creation failures`);
+    Logger.log(`Replacement complete: ${replaced} replaced, ${notFound.length} not found, ${importFailed.length} import failures, ${creationFailed.length} creation failures, ${deleteFailed.length} delete failures`);
   }
 
-  /**
-   * Main function to replace NPC tokens (selected or all in scene)
-   * Orchestrates the entire replacement workflow:
-   * 1. Validates prerequisites (GM, scene, compendiums)
-   * 2. Gets tokens to process (selected or all NPCs)
-   * 3. Shows confirmation dialog
-   * 4. Processes each token
-   * 5. Reports results
-   *
-   * @returns {Promise<void>}
-   * @static
-   * @example
-   * // Triggered by button click or console
-   * await NPCTokenReplacerController.replaceNPCTokens();
-   *
-   * // From debug API
-   * NPCTokenReplacer.replaceNPCTokens();
-   */
+  /** Main entry: validate → scan → preview → replace → report. */
   static async replaceNPCTokens() {
-    // Prevent double execution — acquire lock immediately to avoid TOCTOU race
     if (NPCTokenReplacerController.#isProcessing) {
       Logger.log("Already processing tokens, ignoring duplicate call");
+      ui.notifications.warn(game.i18n.localize("NPC_REPLACER.AlreadyProcessing"));
       return;
     }
     NPCTokenReplacerController.#isProcessing = true;
 
     try {
-      // Validate prerequisites
       if (!NPCTokenReplacerController.validatePrerequisites()) {
         return;
       }
 
-      // Check if any compendiums are available
       const enabledPacks = CompendiumManager.getEnabledCompendiums();
       if (enabledPacks.length === 0) {
         ui.notifications.error(game.i18n.localize("NPC_REPLACER.NoCompendium"));
         return;
       }
 
-      // Load the combined monster index from all enabled compendiums
       const index = await CompendiumManager.loadMonsterIndex();
 
       if (index.length === 0) {
-        ui.notifications.error(game.i18n.localize("NPC_REPLACER.NoCompendium"));
+        ui.notifications.error(game.i18n.localize("NPC_REPLACER.IndexEmpty"));
         return;
       }
 
-      // Get NPC tokens to process (selected if any, otherwise all scene NPCs)
       const { tokens: npcTokens, isSelection } = TokenReplacer.getNPCTokensToProcess();
       if (npcTokens.length === 0) {
         const message = isSelection
@@ -1261,109 +912,90 @@ class NPCTokenReplacerController {
       const sourceDesc = isSelection ? "selected" : "in scene";
       Logger.log(`Found ${npcTokens.length} NPC tokens ${sourceDesc}`);
 
-      // Pre-compute matches (scan phase with progress)
       const scanProgress = new ProgressReporter();
-      const matchResults = NPCTokenReplacerController.computeMatches(npcTokens, index, scanProgress);
+      let matchResults;
+      try {
+        matchResults = await NPCTokenReplacerController.computeMatches(npcTokens, index, scanProgress);
+      } finally {
+        scanProgress.finish();
+      }
 
-      // Show preview dialog with match results
       const confirmed = await NPCTokenReplacerController.showPreviewDialog(matchResults);
       if (!confirmed) {
         Logger.log("Token replacement cancelled by user");
         return;
       }
 
-      // Reset sequential counter and build actor lookup for this session
       TokenReplacer.resetCounter();
       TokenReplacer.buildActorLookup();
 
-      // Filter to only matched tokens for replacement
       const toReplace = matchResults.filter(r => r.match !== null);
       const notFoundNames = matchResults.filter(r => r.match === null).map(r => r.creatureName);
 
       // TODO [MEDIUM] Performance: token processing loop is fully sequential — 2N socket round-trips.
       // Split into parallel resolve phase (getDocument, import, wildcard) + batched mutation phase
       // (single deleteEmbeddedDocuments + createEmbeddedDocuments call for all tokens).
-      // Track results
       let replaced = 0;
       const importFailed = [];
       const creationFailed = [];
+      const deleteFailed = [];
       const processedIds = new Set();
 
-      // Start progress bar for replacement phase
       const progress = new ProgressReporter();
       progress.start(toReplace.length, game.i18n.format("NPC_REPLACER.ProgressStart", { count: toReplace.length }));
 
-      // Replace each matched token using pre-computed match data
-      for (const result of toReplace) {
-        const { tokenDoc, creatureName } = result;
+      try {
+        for (const result of toReplace) {
+          const { tokenDoc, creatureName } = result;
 
-        // Skip if already processed (handles duplicate entries)
-        if (processedIds.has(tokenDoc.id)) {
-          Logger.log(`Skipping already processed token: ${tokenDoc.name}`);
-          continue;
-        }
-
-        // Check if token still exists in scene (may have been deleted during preview)
-        if (!canvas.scene.tokens.has(tokenDoc.id)) {
-          Logger.log(`Token "${tokenDoc.name}" no longer exists, skipping`);
-          continue;
-        }
-
-        processedIds.add(tokenDoc.id);
-
-        try {
-          await TokenReplacer.replaceToken(tokenDoc, result.match.entry, result.match.pack);
-          replaced++;
-        } catch (error) {
-          // Classify failure based on error message content.
-          // replaceToken throws from import stage (getDocument, #getOrImportWorldActor)
-          // or creation stage (createEmbeddedDocuments, deleteEmbeddedDocuments).
-          // Default to "creation_failed" since import is attempted first.
-          const msg = (error.message || "").toLowerCase();
-          const isImportError = msg.includes("import") ||
-                                msg.includes("failed to load") ||
-                                msg.includes("getdocument");
-          const status = isImportError ? "import_failed" : "creation_failed";
-          Logger.error(`Error replacing token ${tokenDoc.name} (${status})`, error);
-          if (status === "import_failed") {
-            importFailed.push(creatureName);
-          } else {
-            creationFailed.push(creatureName);
+          if (processedIds.has(tokenDoc.id)) {
+            Logger.log(`Skipping already processed token: ${tokenDoc.name}`);
+            continue;
           }
-        }
 
-        const processed = replaced + importFailed.length + creationFailed.length;
-        progress.update(processed,
-          game.i18n.format("NPC_REPLACER.ProgressUpdate", {
-            current: processed,
-            total: toReplace.length,
-            name: tokenDoc.name
-          }));
+          if (!canvas.scene.tokens.has(tokenDoc.id)) {
+            Logger.log(`Token "${tokenDoc.name}" no longer exists, skipping`);
+            continue;
+          }
+
+          processedIds.add(tokenDoc.id);
+
+          try {
+            await TokenReplacer.replaceToken(tokenDoc, result.match.entry, result.match.pack);
+            replaced++;
+          } catch (error) {
+            const status = error instanceof TokenReplacerError ? error.phase : "creation_failed";
+            Logger.error(`Error replacing token ${tokenDoc.name} (${status})`, error);
+            if (status === "import_failed") {
+              importFailed.push(creatureName);
+            } else if (status === "delete_failed") {
+              deleteFailed.push(creatureName);
+              replaced++; // New token was created successfully despite delete failure
+            } else {
+              creationFailed.push(creatureName);
+            }
+          }
+
+          const processed = replaced + importFailed.length + creationFailed.length + deleteFailed.length;
+          progress.update(processed,
+            game.i18n.format("NPC_REPLACER.ProgressUpdate", {
+              current: processed,
+              total: toReplace.length,
+              name: escapeHtml(tokenDoc.name)
+            }));
+        }
+      } finally {
+        progress.finish();
       }
 
-      progress.finish();
-
-      // Report results
-      NPCTokenReplacerController.#reportResults(replaced, notFoundNames, importFailed, creationFailed);
+      NPCTokenReplacerController.#reportResults(replaced, notFoundNames, importFailed, creationFailed, deleteFailed);
     } finally {
-      // Always release the lock and clean up session state
-      NPCTokenReplacerController.#isProcessing = false;
       TokenReplacer.clearActorLookup();
+      NPCTokenReplacerController.#isProcessing = false;
     }
   }
 
-  /**
-   * Clear all module caches
-   * Clears caches from all manager classes and legacy module-level caches
-   * Call this when settings change or to force fresh data
-   * @returns {void}
-   * @static
-   * @example
-   * // After settings update
-   * NPCTokenReplacerController.clearCache();
-   */
   static clearCache() {
-    // Clear all class-based caches
     CompendiumManager.clearCache();
     FolderManager.clearCache();
     WildcardResolver.clearCache();
@@ -1371,17 +1003,8 @@ class NPCTokenReplacerController {
     Logger.log("All caches cleared");
   }
 
-  /**
-   * Pre-compute matches for all tokens against the monster index
-   * Separates "find matches" from "replace tokens" so a preview dialog
-   * can be shown between the two steps (dry-run preview).
-   * @param {Object[]} tokens - Array of token documents to match
-   * @param {Object[]} index - The combined monster index
-   * @param {ProgressReporter} progress - Progress reporter instance
-   * @returns {Array<{tokenDoc: Object, creatureName: string, match: Object|null}>} Match results
-   * @static
-   */
-  static computeMatches(tokens, index, progress) {
+  /** Scan phase: match each token against the index (dry-run for preview). */
+  static async computeMatches(tokens, index, progress) {
     progress.start(tokens.length, game.i18n.localize("NPC_REPLACER.PreviewScanning"));
 
     const results = [];
@@ -1394,24 +1017,16 @@ class NPCTokenReplacerController {
       progress.update(i + 1, game.i18n.format("NPC_REPLACER.ProgressUpdate", {
         current: i + 1,
         total: tokens.length,
-        name: tokenDoc.name
+        name: escapeHtml(tokenDoc.name)
       }));
+
+      if (i % 10 === 9) await new Promise(resolve => setTimeout(resolve, 0));
     }
 
-    progress.finish();
     return results;
   }
 
-  /**
-   * Initialize the module during ready hook
-   * Detects available compendiums and pre-caches the monster index
-   * @returns {Promise<void>}
-   * @static
-   * @example
-   * Hooks.once("ready", async () => {
-   *   await NPCTokenReplacerController.initialize();
-   * });
-   */
+  /** Detect compendiums and pre-cache monster index. Called from ready hook. */
   static async initialize() {
     Logger.log("NPC Token Replacer is ready");
 
@@ -1419,33 +1034,25 @@ class NPCTokenReplacerController {
     const wotcPacks = CompendiumManager.detectWOTCCompendiums();
 
     if (wotcPacks.length === 0) {
-      Logger.log("Warning: No official D&D compendiums found. Install official D&D content for this module to work.");
+      Logger.log("No official D&D compendiums found. Install official D&D content for this module to work.");
     } else {
       Logger.log(`Found ${wotcPacks.length} official D&D compendium(s)`);
 
-      // Pre-cache the monster index (async, non-blocking)
       try {
         await CompendiumManager.loadMonsterIndex();
         Logger.log("Monster index pre-cached successfully");
       } catch (error) {
         Logger.error("Failed to pre-cache monster index", error);
+        ui.notifications.warn(game.i18n.localize("NPC_REPLACER.ErrorIndexLoad"));
       }
     }
   }
 
-  /**
-   * Get debug API object for window.NPCTokenReplacer
-   * Returns an object with all public API methods
-   * @returns {Object} API object with module methods
-   * @static
-   * @example
-   * window.NPCTokenReplacer = NPCTokenReplacerController.getDebugAPI();
-   */
+  /** Build the window.NPCTokenReplacer debug API object. */
   static getDebugAPI() {
     return {
       replaceNPCTokens: () => NPCTokenReplacerController.replaceNPCTokens(),
       getMonsterManualPack: () => {
-        // Legacy method - returns first enabled compendium pack
         const packs = CompendiumManager.getEnabledCompendiums();
         return packs.length > 0 ? packs[0] : null;
       },
@@ -1462,14 +1069,8 @@ class NPCTokenReplacerController {
   }
 }
 
-/**
- * Register module settings
- * Registers all world settings for the module during the init phase.
- * Must be called before game.ready since settings need to be available early.
- * @returns {void}
- */
+/** Register all module settings (called during init hook). */
 function registerSettings() {
-  // Token variation mode setting
   game.settings.register(MODULE_ID, "tokenVariationMode", {
     name: game.i18n.localize("NPC_REPLACER.Settings.VariationMode.Name"),
     hint: game.i18n.localize("NPC_REPLACER.Settings.VariationMode.Hint"),
@@ -1484,17 +1085,25 @@ function registerSettings() {
     default: "sequential"
   });
 
-  // Enabled compendiums setting (stored as JSON string for reliability)
   game.settings.register(MODULE_ID, "enabledCompendiums", {
     name: game.i18n.localize("NPC_REPLACER.Settings.EnabledCompendiums.Name"),
     hint: game.i18n.localize("NPC_REPLACER.Settings.EnabledCompendiums.Hint"),
     scope: "world",
-    config: false, // We'll use a custom form for this
+    config: false,
     type: String,
     default: JSON.stringify(["default"])
   });
 
-  // HTTP timeout setting for wildcard HEAD requests
+  game.settings.register(MODULE_ID, "dialogTimeout", {
+    name: game.i18n.localize("NPC_REPLACER.Settings.DialogTimeout.Name"),
+    hint: game.i18n.localize("NPC_REPLACER.Settings.DialogTimeout.Hint"),
+    scope: "world",
+    config: true,
+    type: Number,
+    range: { min: 1, max: 30, step: 1 },
+    default: 5
+  });
+
   game.settings.register(MODULE_ID, "httpTimeout", {
     name: game.i18n.localize("NPC_REPLACER.Settings.HttpTimeout.Name"),
     hint: game.i18n.localize("NPC_REPLACER.Settings.HttpTimeout.Hint"),
@@ -1505,160 +1114,34 @@ function registerSettings() {
     default: 5
   });
 
-  // Register the settings menu for compendium selection
-  game.settings.registerMenu(MODULE_ID, "compendiumSelector", {
-    name: game.i18n.localize("NPC_REPLACER.Settings.CompendiumSelector.Name"),
-    label: game.i18n.localize("NPC_REPLACER.Settings.CompendiumSelector.Label"),
-    hint: game.i18n.localize("NPC_REPLACER.Settings.CompendiumSelector.Hint"),
-    icon: "fas fa-book",
-    type: CompendiumSelectorForm,
-    restricted: true
+  // Escape hatch: content the automatic signals cannot recognise (e.g. a future
+  // official release under an unexpected package id) can be added by hand.
+  game.settings.register(MODULE_ID, "additionalSources", {
+    name: game.i18n.localize("NPC_REPLACER.Settings.AdditionalSources.Name"),
+    hint: game.i18n.localize("NPC_REPLACER.Settings.AdditionalSources.Hint"),
+    scope: "world",
+    config: true,
+    type: String,
+    default: ""
   });
-}
 
-/**
- * Custom FormApplication for selecting which compendiums to use for token replacement
- * Extends Foundry's FormApplication to provide a settings menu UI
- * Allows users to select between default (Core + Fallback), all, or custom compendium selection
- * @class
- * @extends FormApplication
- */
-class CompendiumSelectorForm extends FormApplication {
-  /**
-   * Get the default options for the form application
-   * Configures the form ID, title, template, dimensions, and behavior
-   * @returns {Object} Default options merged with parent class defaults
-   * @static
-   * @override
-   */
-  static get defaultOptions() {
-    return foundry.utils.mergeObject(super.defaultOptions, {
-      id: "npc-replacer-compendium-selector",
-      title: game.i18n.localize("NPC_REPLACER.Settings.CompendiumSelector.Title"),
-      template: `modules/${MODULE_ID}/templates/compendium-selector.html`,
-      width: 500,
-      height: "auto",
-      closeOnSubmit: true
+  const SelectorForm = buildCompendiumSelectorForm({
+    compendiumManager: CompendiumManager,
+    onSaved: () => NPCTokenReplacerController.clearCache()
+  });
+
+  if (SelectorForm) {
+    game.settings.registerMenu(MODULE_ID, "compendiumSelector", {
+      name: game.i18n.localize("NPC_REPLACER.Settings.CompendiumSelector.Name"),
+      label: game.i18n.localize("NPC_REPLACER.Settings.CompendiumSelector.Label"),
+      hint: game.i18n.localize("NPC_REPLACER.Settings.CompendiumSelector.Hint"),
+      icon: "fas fa-book",
+      type: SelectorForm,
+      restricted: true
     });
   }
-
-  /**
-   * Prepare data for the form template
-   * Retrieves all available WOTC compendiums and current selection state
-   * @returns {Object} Data object containing mode and compendiums array for template rendering
-   * @property {string} mode - Current selection mode: 'default', 'all', or 'custom'
-   * @property {Array<Object>} compendiums - Array of compendium objects with selection state
-   * @override
-   */
-  getData() {
-    const allPacks = CompendiumManager.detectWOTCCompendiums();
-
-    // Parse the JSON setting
-    let enabledPackIds;
-    try {
-      const settingValue = game.settings.get(MODULE_ID, "enabledCompendiums");
-      enabledPackIds = typeof settingValue === "string" ? JSON.parse(settingValue) : settingValue;
-    } catch (e) {
-      Logger.warn(`Error parsing enabledCompendiums in form (${e.name}: ${e.message}), displaying default selection`);
-      enabledPackIds = ["default"];
-    }
-
-    // Determine current mode
-    let mode = "custom";
-    if (!enabledPackIds || !Array.isArray(enabledPackIds) || enabledPackIds.length === 0 || enabledPackIds.includes("default")) {
-      mode = "default";
-    } else if (enabledPackIds.includes("all")) {
-      mode = "all";
-    }
-
-    Logger.log("CompendiumSelectorForm getData:", { enabledPackIds, mode });
-
-    // Build Set for O(1) lookup in custom mode
-    const enabledSet = mode === "custom" ? new Set(enabledPackIds) : null;
-
-    return {
-      mode,
-      compendiums: allPacks.map((pack, index) => {
-        const priority = CompendiumManager.getCompendiumPriority(pack);
-        return {
-          index,
-          id: pack.collection,
-          name: pack.metadata.label,
-          module: pack.metadata.packageName,
-          priority,
-          priorityLabel: CompendiumManager.PRIORITY_LABELS[priority] || "UNKNOWN",
-          enabled: mode === "all" || mode === "default" || (enabledSet !== null && enabledSet.has(pack.collection)),
-          isCoreFallback: priority <= 2
-        };
-      })
-    };
-  }
-
-  /**
-   * Process form submission and save the compendium selection
-   * Converts form data to the appropriate setting format and clears caches
-   * @param {Event} event - The form submission event
-   * @param {Object} formData - The form data object containing mode and compendium selections
-   * @returns {Promise<void>}
-   * @override
-   * @async
-   */
-  async _updateObject(event, formData) {
-    Logger.log("CompendiumSelectorForm formData:", formData);
-
-    const mode = formData.mode;
-    const allPacks = CompendiumManager.detectWOTCCompendiums();
-
-    let enabledArray;
-    if (mode === "default") {
-      enabledArray = ["default"];
-    } else if (mode === "all") {
-      enabledArray = ["all"];
-    } else {
-      // Collect all checked compendiums using index — extract number via substring not replace+parseInt
-      enabledArray = [];
-      const prefix = "compendium-";
-      for (const [key, value] of Object.entries(formData)) {
-        if (key.startsWith(prefix) && value) {
-          const index = parseInt(key.substring(prefix.length), 10);
-          if (!isNaN(index) && allPacks[index]) {
-            enabledArray.push(allPacks[index].collection);
-          }
-        }
-      }
-      if (enabledArray.length === 0) {
-        ui.notifications.warn(game.i18n.localize("NPC_REPLACER.NoCompendium"));
-        enabledArray = ["default"];
-      }
-    }
-
-    // Save as JSON string
-    const jsonValue = JSON.stringify(enabledArray);
-    Logger.log("Saving enabledCompendiums:", jsonValue);
-
-    try {
-      await game.settings.set(MODULE_ID, "enabledCompendiums", jsonValue);
-
-      // Clear all caches to reload with new settings
-      NPCTokenReplacerController.clearCache();
-
-      ui.notifications.info(game.i18n.localize("NPC_REPLACER.Settings.CompendiumSelector.Saved"));
-    } catch (e) {
-      Logger.error(`Failed to save compendium settings (${e.name}: ${e.message})`);
-      ui.notifications.error(game.i18n.localize("NPC_REPLACER.Settings.CompendiumSelector.SaveError"));
-    }
-  }
 }
 
-/**
- * Escape HTML special characters to prevent XSS
- * Utility function used in confirmation dialogs to safely display token names
- * @param {string} str - The string to escape
- * @returns {string} Escaped string safe for HTML insertion
- * @example
- * escapeHtml('<script>alert("XSS")</script>');
- * // Returns: '&lt;script&gt;alert(&quot;XSS&quot;)&lt;/script&gt;'
- */
 const HTML_ESCAPES = Object.freeze({
   "&": "&amp;",
   "<": "&lt;",
@@ -1674,93 +1157,64 @@ function escapeHtml(str) {
 }
 
 /**
- * Register the control button in the token controls
- * Handles both Foundry v12 (array structure) and v13+ (object structure) control formats
- * @param {Object|Array} controls - The scene controls object/array from Foundry
- * @returns {void}
+ * Add the replace button to the token controls.
+ *
+ * v13+ passes an object keyed by control name whose tools fire `onChange`;
+ * v12 passes an array of control groups whose tools fire `onClick`. Only the
+ * callback the running version actually uses is attached — supplying both makes
+ * v13 run the action twice.
  */
 function registerControlButton(controls) {
-  const toolConfig = {
+  const run = () => NPCTokenReplacerController.replaceNPCTokens();
+  const tool = {
     name: "npcReplacer",
     title: game.i18n.localize("NPC_REPLACER.Button"),
     icon: "fas fa-sync-alt",
     button: true,
-    visible: game.user.isGM,
-    onClick: () => NPCTokenReplacerController.replaceNPCTokens()
-    // Note: Do NOT add onChange - it causes double execution with onClick
+    visible: game.user.isGM
   };
 
-  // Foundry v13+ uses object structure
-  if (controls.tokens && typeof controls.tokens === "object" && !Array.isArray(controls.tokens)) {
-    controls.tokens.tools.npcReplacer = toolConfig;
-  } else if (Array.isArray(controls)) {
-    // Foundry v12 and earlier uses array structure
+  const tokenGroup = controls?.tokens;
+  if (tokenGroup && typeof tokenGroup === "object" && !Array.isArray(tokenGroup)) {
+    if (!tokenGroup.tools) {
+      Logger.error("Token controls found but 'tools' property is missing — toolbar button not registered");
+      return;
+    }
+    tokenGroup.tools.npcReplacer = { ...tool, order: Object.keys(tokenGroup.tools).length, onChange: run };
+    return;
+  }
+
+  if (Array.isArray(controls)) {
     const tokenControls = controls.find(c => c.name === "token");
     if (tokenControls && Array.isArray(tokenControls.tools)) {
-      tokenControls.tools.push(toolConfig);
+      tokenControls.tools.push({ ...tool, onClick: run });
     } else {
       Logger.error("Could not find token controls group — toolbar button not registered");
     }
-  } else {
-    Logger.error("Unrecognized scene controls format — toolbar button not registered. This may indicate an incompatible Foundry version.");
+    return;
   }
+
+  Logger.error("Unrecognized scene controls format — toolbar button not registered. This may indicate an incompatible Foundry version.");
 }
 
-/**
- * Module initialization hook (init phase)
- * Settings must be registered during init, before game.ready
- * Note: OOP classes are available but Foundry APIs (game.packs, etc.) are not yet ready
- */
 Hooks.once("init", () => {
-  Logger.log("Initializing NPC Token Replacer");
+  Logger.log(`Initializing NPC Token Replacer (Foundry generation ${FoundryCompat.generation || "unknown"})`);
   registerSettings();
+  preloadSelectorTemplates();
 });
 
-/**
- * Module ready hook (ready phase)
- * Initialize OOP class instances and wire dependencies
- * All Foundry APIs are now available (game.packs, game.actors, etc.)
- *
- * Initialization flow:
- * 1. NPCTokenReplacerController.initialize() - detects compendiums, pre-caches monster index
- * 2. window.NPCTokenReplacer - exposes debug API using OOP class methods
- *
- * Classes initialized:
- * - CompendiumManager: Detects WOTC compendiums and manages the monster index
- * - TokenReplacer: Handles token replacement operations
- * - NameMatcher: Provides name matching logic
- * - FolderManager: Manages import folders
- * - WildcardResolver: Resolves wildcard token paths
- * - NPCTokenReplacerController: Main facade coordinating all operations
- */
 Hooks.once("ready", async () => {
   try {
     await NPCTokenReplacerController.initialize();
   } catch (error) {
     Logger.error("Failed to initialize NPC Token Replacer", error);
+    ui.notifications.error(game.i18n.localize("NPC_REPLACER.ErrorInitFailed"));
   }
 
-  /**
-   * Global debug API for console access
-   * Exposes OOP class methods through the NPCTokenReplacerController facade
-   *
-   * Available methods:
-   * - NPCTokenReplacer.replaceNPCTokens() - Run token replacement
-   * - NPCTokenReplacer.detectWOTCCompendiums() - List detected compendiums
-   * - NPCTokenReplacer.getEnabledCompendiums() - List enabled compendiums
-   * - NPCTokenReplacer.clearCache() - Force index reload
-   * - NPCTokenReplacer.getNPCTokensFromScene() - Get NPC tokens in current scene
-   * - NPCTokenReplacer.findInMonsterManual(name, index) - Find creature in index
-   * - NPCTokenReplacer.getOrCreateImportFolder() - Get/create import folder
-   * - NPCTokenReplacer.getMonsterManualPack() - Get first enabled compendium (legacy)
-   */
   window.NPCTokenReplacer = NPCTokenReplacerController.getDebugAPI();
 });
 
-/**
- * Register control button hook
- */
 Hooks.on("getSceneControlButtons", registerControlButton);
 
-// Named exports for testing — classes remain in main.js due to Foundry global dependencies
-export { FolderManager, CompendiumManager, TokenReplacer, NPCTokenReplacerController };
+// Named exports for testing
+export { FolderManager, CompendiumManager, TokenReplacer, NPCTokenReplacerController, TokenReplacerError, registerControlButton };

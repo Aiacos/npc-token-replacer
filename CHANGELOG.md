@@ -5,6 +5,57 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+## [1.7.0] - 2026-08-30
+
+This release merges the long-lived `develop` line into `main`. It keeps the
+strict Wizards of the Coast whitelist introduced in 1.6.0 and adds a detection
+layer around it, a version-agnostic compatibility layer, and the security and
+reliability fixes that had accumulated on `develop` without ever reaching a
+published release.
+
+### Security
+- **Path traversal in wildcard token resolution**: probe URLs are validated before the HEAD request, so a crafted token path can no longer reach outside the expected asset directory.
+- **XSS in progress bar labels**: creature names are HTML-escaped before being rendered into progress messages.
+- **Token data allowlist**: token creation copies an explicit list of fields from the compendium prototype instead of spreading arbitrary data.
+- **jQuery removed**: the last DOM interactions using jQuery were rewritten with vanilla DOM.
+
+### Added
+- **Forward-looking source detection** on top of the 1.6.0 whitelist. A package authored by Wizards of the Coast / Foundry Gaming, or premium content declaring the dnd5e system, is now detected as `publisher` / `premium` tier: logged with a warning that names the package, listed in the compendium picker, and usable by switching to **Everything Detected**. A newly released official book is therefore never silently ignored — and never silently trusted either.
+- **`FoundryCompat`** (`scripts/lib/foundry-compat.js`): feature-detected access to every Foundry API that moved between generations — `DialogV2`/`Dialog`, `ApplicationV2`/`FormApplication`, `SceneNavigation`, the Handlebars template loader, `foundry.utils.mergeObject`. Namespaced APIs resolve first, so deprecated-global warnings are never triggered.
+- **ApplicationV2 settings form**: the compendium picker renders as an `ApplicationV2` when available and falls back to `FormApplication` otherwise, both driven by one shared model. It also finally has a **Save button** — the previous form had no submit control.
+- **Dynamic priority classification** for sources outside the whitelist: an Adventure compendium means adventure content (4), Scene compendiums mean a setting book (3), neither means a rulebook (2).
+- **`core` selection mode** (SRD + rulebooks only) and the **Additional Compendium Sources** setting for package ids the automatic signals cannot recognise.
+- **Dedicated stylesheet** (`styles/npc-token-replacer.css`), replacing the inline styles previously emitted from `main.js`.
+- **Tooling**: `tools/validate-manifest.mjs` (manifest, referenced files, i18n keys, template and partial paths, translation parity), `tools/bump-version.mjs`, `tools/check-foundry-version.mjs`, `tools/publish-foundry.mjs`; npm scripts `validate` and `check`.
+- **CI/CD**: lint + validation + tests on a Node 20/22 matrix, coverage artifact, and a package smoke test asserting every manifest-referenced file is inside the ZIP. A one-trigger Release workflow (bump → validate → tag → build → verify → GitHub release → Foundry package registry). A weekly Foundry compatibility watch that opens a PR when a new generation ships. Dependabot for actions and dev dependencies.
+- **Documentation**: `docs/COMPATIBILITY.md`, `docs/DEVELOPMENT.md`, and a Constitution of non-negotiable principles in `CLAUDE.md`.
+- **57 new unit tests** covering source detection, the compatibility layer and the settings form (208 total).
+
+### Changed
+- **Italian translation completed**: `lang/it.json` was missing 19 keys and carried 8 that no longer exist. Both language files are now in parity, and the manifest validator warns when they drift again.
+- **Only creature entries are indexed**: `character`, `group` and `vehicle` compendium entries are skipped. The filter is a blocklist, so actor types added by future system versions are still indexed.
+- **Scene control registration**: v13+ object-format controls use `onChange`, v12 array-format controls use `onClick` — attaching both made v13 run the replacement twice.
+- **Compendium checkboxes are keyed by pack id** rather than list position, so a change in detection order can no longer shift a saved custom selection.
+- **Corrupt settings fall back conservatively** to the core-rulebook set.
+- **`compatibility.verified` raised to 14.** No `compatibility.maximum` is declared, and the validator now fails the build if one is added.
+- **`module.json` declares `flags.hotReload`** for live reloading of styles, templates and language files during development.
+
+### Fixed
+- **Module load could break on a future Foundry release**: the settings form extended the `FormApplication` global at module-evaluation time, so removing that global (announced for v16) would have failed the entire module import, not just the settings dialog. The class is now built by a factory at registration time.
+- **Dialog timeout left the window open**: the timeout resolved the promise but never dismissed the dialog.
+- **Lock release race condition**: `clearActorLookup()` now runs before the processing lock is released.
+- **Wildcard 404 cache miss**: empty results are cached, preventing dozens of redundant HEAD requests per duplicate creature.
+- **Infinite loop guard** in `FolderManager.getFolderPath` for circular folder references.
+- **Disposition dead write**: `disposition` was listed in both the compendium and preserved property lists, so the compendium value was silently discarded.
+
+### Removed
+- `eslint.config.mjs`, a second dead ESLint configuration.
+- 12 unused i18n keys.
+- `fix-todos/` session state is no longer tracked.
+
+
 ## [1.6.0] - 2026-04-24
 
 ### Changed (BREAKING)
@@ -95,10 +146,33 @@ explicit pack-ID setting, or (b) fork the module and extend
 - **`package.json`**: version aligned to `1.5.0`; added `foundry` section
   (`minimum: "13"`, `verified: "14"`).
 
-## [1.4.1] - 2025-04-XX
+## [1.4.1] - 2025-03-07
+
+### Added
+- **Configurable dialog timeout**: New "Preview Dialog Timeout" setting (1-30 minutes) controls how long the preview dialog stays open before auto-closing
+- **Reverse word index**: O(1) lookup for Stage 3 partial name matching, significantly faster for large monster indexes
+- **Compendium document cache**: Avoids repeated `getDocument()` calls during batch replacements
+- **New unit tests**: Added test suites for FolderManager, registerControlButton, and TokenReplacer.replaceToken
+
+### Changed
+- **Parallel compendium loading**: Monster indexes are now loaded in parallel via `Promise.allSettled` instead of sequentially
+- **Immutable caches**: All cached arrays are now frozen with `Object.freeze` to prevent accidental mutation
+- **Structured errors**: New `TokenReplacerError` class replaces fragile string-matching for failure classification
+- **CSS extraction**: Moved inline styles from preview dialog and templates to dedicated CSS classes
+- **Token properties**: `extractTokenProperties` now uses a `PRESERVED_PROPERTIES` constant instead of hardcoded property list
+- **Actor link preservation**: Token replacement now preserves `actorLink` from prototype token data
 
 ### Fixed
-- Minor stability improvements.
+- Dialog timeout and notification timing issues resolved
+- Wildcard resolver no longer permanently caches failed network probes
+- Execution lock bug in `NPCTokenReplacerController` fixed
+- `FolderManager.getFolderPath` now handles null folder input gracefully
+- Fixed missing `await` in `computeMatches` test
+- i18n key corrections for compendium priority labels
+
+### Security
+- Resolved npm audit vulnerabilities in dependencies
+- Added `_bmad/` directory to `.gitignore`
 
 ## [1.4.0] - 2025-01-XX
 

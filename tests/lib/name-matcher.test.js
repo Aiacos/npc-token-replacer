@@ -7,19 +7,22 @@ const mockCompendiumManager = {
     const priorities = { "dnd-monster-manual": 2, "dnd5e": 1, "dnd-phandelver-below": 4 };
     return priorities[pack.metadata.packageName] ?? 1;
   }),
-  getIndexMap: vi.fn(() => null)
+  getIndexMap: vi.fn(() => null),
+  getWordIndex: vi.fn(() => null)
 };
 
 beforeEach(() => {
   NameMatcher.setCompendiumManager(mockCompendiumManager);
   mockCompendiumManager.getCompendiumPriority.mockClear();
   mockCompendiumManager.getIndexMap.mockClear();
+  mockCompendiumManager.getWordIndex.mockClear();
   // Restore default implementation after mockClear
   mockCompendiumManager.getCompendiumPriority.mockImplementation((pack) => {
     const priorities = { "dnd-monster-manual": 2, "dnd5e": 1, "dnd-phandelver-below": 4 };
     return priorities[pack.metadata.packageName] ?? 1;
   });
   mockCompendiumManager.getIndexMap.mockReturnValue(null);
+  mockCompendiumManager.getWordIndex.mockReturnValue(null);
 });
 
 // ---------------------------------------------------------------------------
@@ -33,7 +36,7 @@ describe("normalizeName", () => {
 
   it("removes special characters (Unicode-safe)", () => {
     expect(NameMatcher.normalizeName("Mind Flayer's Minion")).toBe("mind flayers minion");
-    expect(NameMatcher.normalizeName("Half-Dragon")).toBe("halfdragon");
+    expect(NameMatcher.normalizeName("Half-Dragon")).toBe("half dragon");
   });
 
   it("normalizes internal whitespace", () => {

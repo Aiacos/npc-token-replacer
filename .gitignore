@@ -55,5 +55,13 @@ release/
 # Auto Claude data directory
 .auto-claude/
 
+# BMAD framework
+_bmad/
+
+# Tooling session state (ephemeral, not a project artifact)
+security-scan/
+fix-todos/
+_bmad-output/
+
 # Test coverage output
 coverage/
