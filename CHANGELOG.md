@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.8.6] - 2026-10-31
+
 ### Added
 - **Stale-code warning.** After an update the browser can keep running cached module files while Foundry already reports the new version, so the module half-works on old code — the replace button missing from the Actors tab and D&D Beyond actors imported instead of overwritten were both traced to this in a live world. The code now carries its own version (`scripts/lib/version.js`); at `ready` it is compared with the installed manifest and, if they differ, the GM gets a permanent warning naming both versions and telling them to reload with Ctrl+Shift+R. The console also logs the running code version at `init`. README troubleshooting explains how to check by hand.
 
