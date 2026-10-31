@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.8.0] - 2026-10-31
+
 ### Added
 - **D&D Beyond Importer imports are overwritten in place instead of duplicated.** When a creature already exists in the world as a D&D Beyond Importer monster (an `npc` carrying `flags.ddbimporter.id`, the importer's own test), replacing a token now overwrites that actor with the official compendium data — same id, folder, ownership and sort, so every token and link pointing at it follows — rather than importing a second copy into the module's folder. Uses `update(data, {diff: false, recursive: false})` so DDB items are replaced, not merged with the official ones. An actor already imported from the same compendium entry still wins, same-named homebrew actors are never touched, and overwritten actors are tagged (`flags.npc-token-replacer.sourceUuid`) so later runs reuse them.
 - **The preview lists every actor it will overwrite**, with a warning summary, before anything changes.
