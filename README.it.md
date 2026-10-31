@@ -112,7 +112,7 @@ giocanti, gruppi e veicoli presenti in quei compendi vengono ignorati.
 ## 🛡️ Requisiti
 
 - **Foundry VTT**: versione 13 o superiore (verificato su v14)
-- **Sistema**: D&D 5th Edition (dnd5e) v4.0.0+
+- **Sistema**: D&D 5ª edizione (dnd5e) — verificato con dnd5e 6.0.6 su Foundry 14.369
 - **Contenuti D&D ufficiali**: almeno un modulo ufficiale D&D con compendi Actor (es. Monster Manual 2024)
 
 ## 📦 Installazione
@@ -252,7 +252,7 @@ Il modulo offre quattro modalità:
 | Modalità | Descrizione |
 |----------|-------------|
 | **Tutto il contenuto D&D ufficiale** (predefinita) | Legge ogni sorgente ufficiale rilevata nel mondo: l'SRD di sistema più tutti i moduli Wizards of the Coast noti a questa versione. |
-| **Solo manuali base + SRD** | Limita la ricerca all'SRD e ai manuali base (Monster Manual, PHB, DMG). Avventure ed espansioni vengono ignorate. |
+| **Solo manuali base + SRD** | Limita la ricerca ai contenuti ufficiali dell'SRD e dei manuali (Monster Manual, PHB, DMG, Tasha's). Avventure, espansioni e sorgenti non ufficiali vengono ignorate. È anche il ripiego usato se l'impostazione non è leggibile. |
 | **Tutto ciò che viene rilevato** | Include anche i manuali usciti dopo questa versione (riconosciuti dall'autore Wizards of the Coast / Foundry Gaming), i contenuti D&D premium di altri editori e tutto ciò aggiunto in **Sorgenti compendio aggiuntive**. |
 | **Selezione personalizzata** | Scegli manualmente quali compendi usare. |
 
@@ -286,12 +286,16 @@ Il modulo usa un confronto in tre fasi per trovare le creature nei compendi:
 
 ### 🔍 Esempi
 
+Il nome esatto vince sempre. Le righe con le varianti valgono solo quando i
+compendi abilitati non hanno una voce con quel nome esatto (il Monster Manual
+2024, per esempio, ha un suo "Goblin Warrior").
+
 | Token nella scena | Corrispondenza nel compendio |
 |-------------------|------------------------------|
 | "Goblin" | "Goblin" |
-| "Goblin Warrior" | "Goblin" |
-| "Young Red Dragon" | "Red Dragon" |
-| "Orc War Chief" | "Orc" |
+| "Goblin Warrior" | "Goblin" (se non esiste "Goblin Warrior") |
+| "Young Red Dragon" | "Red Dragon" (se non esiste "Young Red Dragon") |
+| "Orc Chief" | "Orc" (se non esiste "Orc Chief") |
 
 ## 🐛 Comandi da console
 
@@ -351,6 +355,11 @@ import("/modules/npc-token-replacer/scripts/lib/version.js").then(m => console.l
 ```
 
 Deve stampare la stessa versione mostrata in **Gestisci moduli**.
+
+**Dietro un reverse proxy?** L'opzione **"Cache Assets"** di Nginx Proxy Manager
+(e cache simili di proxy o CDN) dice al browser di tenere i file `.js` per un po'
+senza chiedere al server: dopo ogni aggiornamento del modulo continua a girare il
+codice vecchio finché la cache non scade. Disattivala per l'host di Foundry.
 
 ### 🐛 Alcuni token danno errore
 

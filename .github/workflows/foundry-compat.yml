@@ -63,7 +63,7 @@ jobs:
           cat > pr-body.md <<BODY
           Foundry VTT **v${LATEST}** is now the newest published generation, while this module declares \`compatibility.verified: "${VERIFIED}"\`.
 
-          This PR bumps the manifest and re-runs lint, manifest validation and the unit suite against it.
+          This PR bumps the manifest and re-runs manifest validation and the unit suite against it.
 
           Before merging, smoke-test the module in a v${LATEST} world:
 

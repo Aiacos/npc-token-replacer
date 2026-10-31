@@ -65,3 +65,7 @@ _bmad-output/
 
 # Test coverage output
 coverage/
+
+# Local assistant/tool settings (machine-specific, not project artifacts)
+.claude_settings.json
+.auto-claude-security.json

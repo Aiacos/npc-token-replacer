@@ -1,6 +1,6 @@
 {
   "NPC_REPLACER": {
-    "Button": "Sostituisci Token NPC",
+    "Button": "Sostituisci Token PNG",
     "ProgressStart": "Sostituzione di {count} token...",
     "ProgressUpdate": "({current}/{total}) {name}",
     "Complete": "{count} token sostituiti con successo",
@@ -54,7 +54,7 @@
         "Saved": "Impostazioni compendio salvate. L'indice sarà ricaricato al prossimo utilizzo.",
         "SaveError": "Impossibile salvare le impostazioni del compendio. Riprova.",
         "ModeCore": "Solo manuali base + SRD",
-        "ModeCoreHint": "Limita la ricerca all'SRD e ai manuali base (Monster Manual, Manuale del Giocatore, Guida del Dungeon Master). Avventure ed espansioni vengono ignorate.",
+        "ModeCoreHint": "Limita la ricerca ai contenuti ufficiali dell'SRD e dei manuali (Monster Manual, Manuale del Giocatore, Guida del Dungeon Master, Tasha's). Avventure, espansioni e sorgenti non ufficiali vengono ignorate.",
         "Save": "Salva selezione"
       },
       "HttpTimeout": {

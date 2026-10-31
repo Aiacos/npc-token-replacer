@@ -61,7 +61,7 @@
         "Saved": "Compendium settings saved. The index will be reloaded on next use.",
         "SaveError": "Failed to save compendium settings. Please try again.",
         "ModeCore": "Core Rulebooks + SRD Only",
-        "ModeCoreHint": "Restrict matching to the SRD and the core rulebooks (Monster Manual, Player's Handbook, Dungeon Master's Guide). Adventures and expansions are ignored.",
+        "ModeCoreHint": "Restrict matching to official SRD and rulebook content (Monster Manual, Player's Handbook, Dungeon Master's Guide, Tasha's). Adventures, expansions and non-official sources are ignored.",
         "Save": "Save Selection"
       },
       "DialogTimeout": {

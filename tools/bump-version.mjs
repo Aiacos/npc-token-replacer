@@ -4,7 +4,7 @@
  *
  * Usage: node tools/bump-version.mjs <patch|minor|major|x.y.z>
  *
- * Updates module.json (version + download URL), package.json, the CODE_VERSION
+ * Updates module.json (version + download URL), package.json, package-lock.json, the CODE_VERSION
  * constant in scripts/lib/version.js, and promotes the CHANGELOG "Unreleased"
  * section to the new version. Prints the new version to
  * stdout and writes it to $GITHUB_OUTPUT when running in Actions.
@@ -65,6 +65,19 @@ function promoteChangelog(changelog, version, date) {
   };
 }
 
+/**
+ * Set the project version recorded in package-lock.json, so `npm ci` and the
+ * lockfile never disagree with package.json about what is being released.
+ * @param {object} lock Parsed package-lock.json
+ * @param {string} version
+ * @returns {object} the same object, updated
+ */
+function setLockfileVersion(lock, version) {
+  lock.version = version;
+  if (lock.packages?.[""]) lock.packages[""].version = version;
+  return lock;
+}
+
 const CODE_VERSION_FILE = "scripts/lib/version.js";
 const CODE_VERSION_PATTERN = /(CODE_VERSION\s*=\s*")[^"]*(")/;
 
@@ -108,6 +121,11 @@ function main() {
     writeFileSync("package.json", `${JSON.stringify(pkg, null, 2)}\n`);
   }
 
+  if (existsSync("package-lock.json")) {
+    const lock = setLockfileVersion(JSON.parse(readFileSync("package-lock.json", "utf8")), version);
+    writeFileSync("package-lock.json", `${JSON.stringify(lock, null, 2)}\n`);
+  }
+
   if (existsSync(CODE_VERSION_FILE)) {
     const result = setCodeVersion(readFileSync(CODE_VERSION_FILE, "utf8"), version);
     if (result.changed) writeFileSync(CODE_VERSION_FILE, result.content);
@@ -127,4 +145,4 @@ function main() {
 // Only act when run as a script, so the helpers can be imported by tests.
 if (process.argv[1] && process.argv[1].endsWith("bump-version.mjs")) main();
 
-export { nextVersion, promoteChangelog, setCodeVersion };
+export { nextVersion, promoteChangelog, setCodeVersion, setLockfileVersion };

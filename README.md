@@ -113,7 +113,7 @@ groups and vehicles in those compendiums are skipped.
 ## 🛡️ Requirements
 
 - **Foundry VTT**: Version 13 or higher (verified on v14)
-- **System**: D&D 5th Edition (dnd5e) v4.0.0+
+- **System**: D&D 5th Edition (dnd5e) — verified with dnd5e 6.0.6 on Foundry 14.369
 - **Official D&D Content**: At least one official D&D module with Actor compendiums (e.g., Monster Manual 2024)
 
 ## 📦 Installation
@@ -251,7 +251,7 @@ The module offers four compendium selection modes:
 | Mode | Description |
 |------|-------------|
 | **All Official D&D Content** (Default) | Reads every official source detected in this world - the system SRD plus every Wizards of the Coast module this version knows. |
-| **Core Rulebooks + SRD Only** | Restricts matching to the SRD and the core rulebooks (Monster Manual, PHB, DMG). Adventures and expansions are ignored. |
+| **Core Rulebooks + SRD Only** | Restricts matching to official SRD and rulebook content (Monster Manual, PHB, DMG, Tasha's). Adventures, expansions and non-official sources are ignored. This is also what the module falls back to if the setting cannot be read. |
 | **Everything Detected** | Also includes books released after this version (recognised from Wizards of the Coast / Foundry Gaming authorship), premium D&D content from other publishers, and anything added under **Additional Compendium Sources**. |
 | **Custom Selection** | Manually select which compendiums to use. |
 
@@ -284,12 +284,16 @@ The module uses intelligent name matching to find creatures in the compendiums:
 
 ### 🔍 Examples
 
+An exact name always wins. The variant rows apply only when the enabled
+compendiums have no entry with that exact name (the 2024 Monster Manual, for
+example, has its own "Goblin Warrior").
+
 | Scene Token | Compendium Match |
 |-------------|------------------|
 | "Goblin" | "Goblin" |
-| "Goblin Warrior" | "Goblin" |
-| "Young Red Dragon" | "Red Dragon" |
-| "Orc War Chief" | "Orc" |
+| "Goblin Warrior" | "Goblin" (if no exact "Goblin Warrior") |
+| "Young Red Dragon" | "Red Dragon" (if no exact "Young Red Dragon") |
+| "Orc Chief" | "Orc" (if no exact "Orc Chief") |
 
 ## 🐛 Console Commands
 
@@ -343,6 +347,11 @@ import("/modules/npc-token-replacer/scripts/lib/version.js").then(m => console.l
 
 It must print the same version shown in **Manage Modules**.
 
+**Behind a reverse proxy?** Nginx Proxy Manager's **"Cache Assets"** option (and
+similar proxy or CDN caching) tells browsers to keep `.js` files for a while
+without asking the server, so after every module update the old code keeps
+running until the cache expires. Turn the option off for the Foundry host.
+
 ### 🐛 Some tokens show errors
 
 If specific tokens fail to replace, check the console for error details. Common causes:
@@ -355,7 +364,7 @@ If specific tokens fail to replace, check the console for error details. Common 
 | Foundry | Status | Notes |
 |---------|--------|-------|
 | v12 | Not supported since 1.6.0 | The compatibility layer still carries the AppV1 fallbacks, but the manifest requires 13 |
-| v13 | Supported (minimum) | Object-based scene controls, notification progress bar |
+| v13 | Supported (minimum) | Button in the Actors sidebar (ApplicationV2), notification progress bar |
 | v14 | Verified | Current stable; AppV1 classes still present but deprecated |
 | v15+ | Expected to work | No `compatibility.maximum` is declared and every moved API is feature-detected, so newer generations are not blocked |
 
