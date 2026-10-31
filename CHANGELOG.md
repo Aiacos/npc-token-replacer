@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- **The button now replaces NPC tokens on every scene of the world**, not only the scene open on the canvas. Each token is replaced on its own scene; no scene needs to be open. Selecting tokens still narrows the run to those tokens. The preview gains a **Scene** column and counts the scenes involved. Tokens are tracked by uuid, since token ids are only unique within a scene. The "No active scene" check and its message were removed.
+- Tests: 287 → 293.
+
 ## [1.8.5] - 2026-10-31
 
 ### Added

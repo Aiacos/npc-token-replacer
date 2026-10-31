@@ -75,7 +75,7 @@ Tests exist to catch regressions, not to be green.
    cancelled dialogs, missing compendiums, failed imports, network timeouts.
 4. **Both compatibility paths are tested.** Anything routed through
    `FoundryCompat` needs a test with the modern API present *and* absent.
-5. **Coverage never regresses.** Currently 287 tests; a PR that lowers the
+5. **Coverage never regresses.** Currently 293 tests; a PR that lowers the
    count needs an explicit justification in the CHANGELOG.
 6. **Cache-clearing in `beforeEach`.** Static caches leak between tests; clear
    every cache the test touches.
@@ -394,6 +394,8 @@ graph TD
 
 **Token Replacement** (`TokenReplacer.replaceToken`): Handles wildcard token art paths (`*.webp`), resolves the world actor, creates tokens with preserved properties on the token's own scene (`tokenDoc.parent`, never `canvas.scene` — the preview is non-modal).
 
+**Token scope** (`getNPCTokensToProcess`): the selected NPC tokens if any, otherwise NPC tokens on **every scene** of the world (`game.scenes`); no scene needs to be open. Each token is mutated on its own scene (`sceneOf`), and the processed set is keyed by token **uuid** because token ids are only unique within a scene.
+
 **One button, two passes** (`replaceNPCTokens`): `planActorOverwrites()` pairs every D&D Beyond Importer actor in the world with an official entry by **exact normalized name** (no variants — the overwrite is destructive); the single preview lists those and the scene's token matches; on confirm, actors are overwritten first, then tokens are replaced and reuse them. Placed tokens are independent copies of the prototype: overwriting an actor updates linked/unlinked token *stats* (unlinked via ActorDelta, keeping per-token overrides) but not their art/size — only token replacement does that.
 
 **World actor resolution** (`#getOrImportWorldActor`), in order: an actor already imported from the same compendium entry → a D&D Beyond Importer actor with the same name, overwritten in place via `update(data, {diff: false, recursive: false})` keeping folder/ownership/sort (setting `overwriteImportedActors`, listed in the preview) → a fresh import into the module folder.
@@ -440,7 +442,7 @@ NPCTokenReplacer.replaceNPCTokens();      // Run replacement
 NPCTokenReplacer.detectWOTCCompendiums(); // List detected compendiums
 NPCTokenReplacer.getEnabledCompendiums(); // List enabled compendiums
 NPCTokenReplacer.clearCache();            // Force index reload
-NPCTokenReplacer.getNPCTokensFromScene(); // Get NPC tokens in current scene
+NPCTokenReplacer.getNPCTokensFromScene(); // Get NPC tokens in the scene open on the canvas
 NPCTokenReplacer.findInMonsterManual(name, index); // Find creature in index
 NPCTokenReplacer.getOrCreateImportFolder(); // Get/create import folder
 NPCTokenReplacer.getLastLoadErrors();     // Compendiums that failed to index

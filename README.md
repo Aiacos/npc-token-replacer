@@ -2,7 +2,7 @@
 
 **English** · [Italiano](README.it.md)
 
-A Foundry VTT module that automatically replaces NPC tokens in your scene with official D&D compendium versions, preserving their position, elevation, dimensions, and visibility.
+A Foundry VTT module that automatically replaces NPC tokens on every scene of your world with official D&D compendium versions, preserving their position, elevation, dimensions, and visibility.
 
 ## ✨ Features
 
@@ -148,43 +148,44 @@ groups and vehicles in those compendiums are skipped.
 
 ## 🎯 Usage
 
-1. Open a scene with NPC tokens placed on it
-2. Open the **Actors** tab in the right sidebar
-3. **Optional**: Select specific tokens on the scene to replace only those (if no tokens are selected, all scene NPCs will be processed)
-4. Click **Replace NPC Tokens** at the bottom of the Actors tab
-5. A confirmation dialog will appear showing the NPC tokens that will be replaced
-6. Click **Replace Tokens** to proceed or **Cancel** to abort
-7. The module will:
+1. Open the **Actors** tab in the right sidebar — no scene needs to be open
+2. **Optional**: select specific tokens on the open scene to replace only those (with no selection, NPC tokens on **every scene** of the world are processed)
+3. Click **Replace NPC Tokens** at the bottom of the Actors tab
+4. A confirmation dialog lists every token that will be replaced, with its scene
+5. Click **Replace Tokens** to proceed or **Cancel** to abort
+6. The module will:
    - Search all enabled compendiums for matching creatures
+   - Create new tokens from the compendium on the same scene, with the original position, elevation, size, and visibility
    - Delete the original tokens
-   - Create new tokens from the compendium with the original position, elevation, size, and visibility
-8. A notification will show the results
+7. A notification will show the results
 
 ### 🎯 D&D Beyond Importer actors
 
 With **Overwrite D&D Beyond Imports** on (the default), the button also updates
-**every** actor D&D Beyond Importer created in the world, not only those on the
-current scene:
+**every** actor D&D Beyond Importer created in the world, not only those with a
+token on a scene:
 
 - each one is matched to the official compendium by **exact name** (a variant
   such as "Goblin Warrior" is never turned into "Goblin");
 - the preview lists, in a separate section, which actors will be overwritten and
   which have no official version and stay unchanged;
-- actors are overwritten first, then the scene's tokens are replaced and reuse
-  them — nothing is overwritten twice;
-- it works with an empty scene too.
+- actors are overwritten first, then the tokens are replaced and reuse them —
+  nothing is overwritten twice;
+- it works when no scene has tokens too.
 
-**Tokens on other scenes.** A placed token is an independent copy of the
-prototype, so its **art, size and name** do not change when its actor is
-overwritten. Its **statistics** follow the actor: a linked token reads the actor
-directly; an unlinked token is the actor plus its own per-token changes (for
-example its current hit points), which it keeps. Run the button on each scene
-whose tokens should also get the official art.
+**Why tokens are replaced, not just their actors.** A placed token is an
+independent copy of the prototype, so its **art, size and name** do not change
+when its actor is overwritten — only replacing the token does that, which is why
+the button processes every scene. Its **statistics** follow the actor anyway: a
+linked token reads the actor directly; an unlinked token is the actor plus its
+own per-token changes (for example its current hit points), which it keeps.
+Tokens left out of a run (by selecting others) keep their old art until the next
+run.
 
 ### 🎯 Selection Mode
 
 - **With selected tokens**: Only the selected NPC tokens will be replaced
-- **Without selection**: All NPC tokens in the scene will be replaced
+- **Without selection**: All NPC tokens on **every scene** of the world will be replaced
 
 ### 🎯 Macros
 
@@ -304,7 +305,7 @@ NPCTokenReplacer.detectWOTCCompendiums();
 // Get currently enabled compendiums
 NPCTokenReplacer.getEnabledCompendiums();
 
-// Get all NPC tokens in the current scene
+// Get all NPC tokens in the scene open on the canvas
 NPCTokenReplacer.getNPCTokensFromScene();
 
 // Clear the cached monster index (forces reload)
@@ -428,7 +429,7 @@ A global debug API is exposed via `window.NPCTokenReplacer` for console access.
 
 | Command | Purpose |
 |---------|---------|
-| `npm test` | Run the unit suite (287 tests) |
+| `npm test` | Run the unit suite (293 tests) |
 | `npm run lint` | ESLint over `scripts/`, `tools/` and `tests/` |
 | `npm run validate` | Verify `module.json`, referenced files, i18n keys and template paths |
 | `npm run check` | All three, in order |

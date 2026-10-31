@@ -6,7 +6,7 @@
     "Complete": "Replaced {count} tokens successfully",
     "DialogTimeout": "Preview dialog timed out. Please try again.",
     "AlreadyProcessing": "Token replacement is already in progress, please wait.",
-    "NoTokens": "No NPC tokens found in the current scene",
+    "NoTokens": "No NPC tokens found in any scene",
     "NoSelectedNPCs": "No NPC tokens in selection (select NPC tokens or deselect all to process entire scene)",
     "NotFoundCount": "{count} creatures not found in compendiums",
     "DeleteFailedCount": "{count} token(s) replaced but old token could not be removed — duplicates may exist",
@@ -18,14 +18,13 @@
     "ErrorInitFailed": "NPC Token Replacer failed to initialize. Check the browser console for details.",
     "ErrorFolderCreate": "Failed to create import folder. Actors will be imported to root.",
     "WildcardFallback": "No token art variants found for \"{name}\" — using placeholder icon.",
-    "NoScene": "No active scene found",
     "NoModule": "No official D&D compendiums found. Install official D&D content (Monster Manual, Adventures, etc.)",
     "NoCompendium": "No compendiums available for token replacement",
     "IndexEmpty": "Monster index is empty — compendiums may have failed to load. Check the console for details.",
     "GMOnly": "Only the GM can replace tokens",
     "PreviewScanning": "Scanning tokens...",
     "PreviewTitle": "Token Replacement Preview",
-    "PreviewSummary": "{matched} of {total} tokens matched",
+    "PreviewSummary": "{matched} of {total} tokens matched, across {scenes} scene(s)",
     "PreviewColToken": "Token Name",
     "PreviewColMatch": "Will Match As",
     "PreviewColSource": "Source Compendium",
@@ -99,6 +98,7 @@
     "ActorsOverwritten": "{count} D&D Beyond actor(s) overwritten with the official version.",
     "ActorsOverwriteFailed": "{count} D&D Beyond actor(s) could not be overwritten — see the console for details.",
     "NewOfficialSourcesEnabled": "New official D&D book detected and enabled automatically: {names}. Its creatures are now used for token replacement.",
-    "ActorsSkippedLoadError": "A compendium failed to load, so D&D Beyond actors were not updated this time (tokens are still replaced). Try again once it loads."
+    "ActorsSkippedLoadError": "A compendium failed to load, so D&D Beyond actors were not updated this time (tokens are still replaced). Try again once it loads.",
+    "PreviewColScene": "Scene"
   }
 }
