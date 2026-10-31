@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **The release commit left `scripts/lib/version.js` behind.** The Release workflow committed only `module.json`, `package.json` and `CHANGELOG.md`, so tag `v1.8.6` records `CODE_VERSION` 1.8.5 while its `module.json` says 1.8.6. The published 1.8.6 ZIP is correct (it is built after the bump and was verified to announce 1.8.6); only the repository was out of step. The workflow now commits `version.js` too, and the repository is realigned.
+
 ## [1.8.6] - 2026-10-31
 
 ### Added
