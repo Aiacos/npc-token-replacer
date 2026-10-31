@@ -100,6 +100,43 @@ describe("SourceDetector.classify", () => {
       expect(result.official).toBe(false);
     });
 
+    // A future WotC book is sold through the official channel: protected
+    // (premium) and built for dnd5e. Both signals together are trusted, so new
+    // books work without a module update.
+    it("trusts a protected WotC-authored book for the active system as VERIFIED", () => {
+      modules.set("dnd-future-book", {
+        authors: [{ name: "Wizards of the Coast" }],
+        protected: true,
+        relationships: { systems: [{ id: "dnd5e" }] },
+        packs: [{ type: "Actor" }, { type: "Adventure" }]
+      });
+      const result = SourceDetector.classify(pack("dnd-future-book"));
+      expect(result.tier).toBe(TIER.VERIFIED);
+      expect(result.official).toBe(true);
+      expect(result.priority).toBe(PRIORITY.ADVENTURE);
+    });
+
+    it("does not trust a free module that merely claims WotC authorship", () => {
+      modules.set("fake-official", {
+        authors: [{ name: "Wizards of the Coast" }],
+        relationships: { systems: [{ id: "dnd5e" }] },
+        packs: [{ type: "Actor" }]
+      });
+      const result = SourceDetector.classify(pack("fake-official"));
+      expect(result.tier).toBe(TIER.PUBLISHER);
+      expect(result.official).toBe(false);
+    });
+
+    it("does not trust a protected WotC book built for another system", () => {
+      modules.set("wotc-other-system", {
+        authors: [{ name: "Wizards of the Coast" }],
+        protected: true,
+        relationships: { systems: [{ id: "pf2e" }] },
+        packs: [{ type: "Actor" }]
+      });
+      expect(SourceDetector.classify(pack("wotc-other-system")).official).toBe(false);
+    });
+
     it("flags premium content built for the active system as PREMIUM", () => {
       modules.set("third-party-bestiary", {
         protected: true,

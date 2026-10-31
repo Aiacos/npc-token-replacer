@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **One button also updates every D&D Beyond Importer actor in the world.** Pressing Replace NPC Tokens now pairs every DDB actor in the world — not only those used on the current scene — with its official version by **exact name** (no variants: the overwrite is destructive), lists them in a separate section of the same preview (with the ones that have no official version, which stay unchanged), and on confirm overwrites them in place before replacing the scene's tokens, which then reuse them. Works with an empty scene. One failing actor never stops the rest; the result is reported. If any compendium failed to load, the actor pass is skipped with a warning (an overwrite is permanent, so it must not be matched against an incomplete index); tokens are still replaced.
+- **New official books are trusted without a module update.** A package authored by Wizards of the Coast / Foundry Gaming **and** distributed as protected premium content for the active system is a new `verified` tier ("Official (detected)"), used by the default mode like the whitelist; the GM is notified once that it was enabled. Authorship alone (any manifest can claim it) stays opt-in.
+- Docs explain how overwriting an actor affects tokens already placed on other scenes (stats follow via the actor link / ActorDelta; art and size do not).
+
+### Changed
+- **The replace button moved from the token toolbar to the bottom of the Actors sidebar tab** (GM only), added through the documented `renderActorDirectory` hook into the `footer` part of v13/v14 `DocumentDirectory`. The scene-control registration (`registerControlButton`, which handled the v12 array and v13 object control formats) and its 5 tests were removed with it; 6 tests cover the new placement.
+- Tests: 272 → 287.
+
 ## [1.8.1] - 2026-10-31
 
 ### Added

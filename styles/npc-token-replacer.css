@@ -148,3 +148,8 @@
 .npc-replacer-overwrite-summary {
   color: var(--color-level-warning, #c9a227);
 }
+
+/* Replace button at the bottom of the Actors sidebar tab */
+.npc-replacer-run {
+  flex: 1 1 100%;
+}

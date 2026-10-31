@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import { TokenReplacer, NPCTokenReplacerController } from "../scripts/main.js";
+import { TokenReplacer, NPCTokenReplacerController, CompendiumManager } from "../scripts/main.js";
 import { FoundryCompat } from "../scripts/lib/foundry-compat.js";
 
 /**
@@ -247,5 +247,161 @@ describe("Preview — overwrites are listed before anything changes", () => {
     const { content } = confirm.mock.calls[0][0];
     expect(content).toContain("NPC_REPLACER.PreviewOverwriteSummary");
     expect(content).toContain("NPC_REPLACER.PreviewOverwrites");
+  });
+});
+
+describe("One button — every D&D Beyond actor in the world", () => {
+  const indexedPack = (entries) => ({
+    collection: "dnd-monster-manual.actors",
+    metadata: { packageName: "dnd-monster-manual", packageType: "module", label: "Monster Manual" },
+    documentName: "Actor",
+    getIndex: vi.fn().mockResolvedValue(),
+    index: { contents: entries, size: entries.length },
+    getDocument: vi.fn(id => Promise.resolve({ ...compendiumActor, id, uuid: `Compendium.dnd-monster-manual.actors.Actor.${id}` }))
+  });
+
+  let mmPack;
+  let confirmSpy;
+
+  beforeEach(async () => {
+    vi.restoreAllMocks();
+    CompendiumManager.clearCache();
+    TokenReplacer.clearActorLookup();
+    setOverwriteSetting(true);
+    game.settings.get = vi.fn((ns, key) => ({
+      overwriteImportedActors: true, enabledCompendiums: '["default"]', tokenVariationMode: "none"
+    })[key]);
+    game.user.isGM = true;
+    game.i18n.localize = vi.fn(key => key);
+    game.i18n.format = vi.fn((key, data) => `${key} ${JSON.stringify(data)}`);
+    ui.notifications.info = vi.fn();
+    ui.notifications.warn = vi.fn();
+    ui.notifications.error = vi.fn();
+    game.actors.fromCompendium = vi.fn(doc => ({ name: doc.name, type: "npc", flags: {}, items: [] }));
+    game.actors.importFromCompendium = vi.fn();
+    mmPack = indexedPack([{ name: "Goblin", _id: "goblin" }, { name: "Owlbear", _id: "owlbear" }]);
+    game.packs.filter = vi.fn(pred => [mmPack].filter(pred));
+    vi.spyOn(TokenReplacer, "getNPCTokensToProcess").mockReturnValue({ tokens: [], isSelection: false });
+    confirmSpy = vi.spyOn(NPCTokenReplacerController, "showPreviewDialog").mockResolvedValue(true);
+  });
+
+  it("overwrites DDB actors that are not on the scene, even with an empty scene", async () => {
+    const owlbear = ddbActor({ id: "ddb-owlbear", name: "Owlbear", _stats: { compendiumSource: "Compendium.world.ddb-monsters.Actor.o" } });
+    setWorldActors([owlbear]);
+
+    await NPCTokenReplacerController.replaceNPCTokens();
+
+    expect(owlbear.update).toHaveBeenCalledTimes(1);
+    expect(owlbear.update.mock.calls[0][0].flags["npc-token-replacer"].sourceUuid)
+      .toBe("Compendium.dnd-monster-manual.actors.Actor.owlbear");
+  });
+
+  it("matches by exact name only — a variant is left unchanged", async () => {
+    const warrior = ddbActor({ id: "ddb-gw", name: "Goblin Warrior" });
+    setWorldActors([warrior]);
+
+    await NPCTokenReplacerController.replaceNPCTokens();
+
+    expect(warrior.update).not.toHaveBeenCalled();
+  });
+
+  it("previews actor overwrites and unmatched actors before changing anything", async () => {
+    const owlbear = ddbActor({ id: "ddb-owlbear", name: "Owlbear" });
+    const homebrew = ddbActor({ id: "ddb-x", name: "Ddb Only Horror" });
+    setWorldActors([owlbear, homebrew]);
+    confirmSpy.mockResolvedValue(false);
+
+    await NPCTokenReplacerController.replaceNPCTokens();
+
+    const [, plan] = confirmSpy.mock.calls[0];
+    expect(plan.map(p => [p.actor.id, p.match?.entry.name ?? null]))
+      .toEqual([["ddb-owlbear", "Owlbear"], ["ddb-x", null]]);
+    expect(owlbear.update).not.toHaveBeenCalled(); // cancelled
+  });
+
+  it("overwrites an actor once even when scene tokens also use it", async () => {
+    const goblin = ddbActor();
+    setWorldActors([goblin]);
+    TokenReplacer.getNPCTokensToProcess.mockReturnValue({ tokens: [tokenDoc()], isSelection: false });
+    canvas.scene.createEmbeddedDocuments = vi.fn().mockResolvedValue([{ id: "new" }]);
+    canvas.scene.deleteEmbeddedDocuments = vi.fn().mockResolvedValue([]);
+    canvas.scene.tokens = { has: vi.fn(() => true) };
+
+    await NPCTokenReplacerController.replaceNPCTokens();
+
+    expect(goblin.update).toHaveBeenCalledTimes(1);
+    expect(game.actors.importFromCompendium).not.toHaveBeenCalled();
+    expect(canvas.scene.createEmbeddedDocuments.mock.calls[0][1][0].actorId).toBe("ddb-goblin");
+  });
+
+  it("reports how many actors were overwritten", async () => {
+    setWorldActors([ddbActor({ id: "ddb-owlbear", name: "Owlbear" })]);
+
+    await NPCTokenReplacerController.replaceNPCTokens();
+
+    expect(ui.notifications.info).toHaveBeenCalledWith(expect.stringContaining("NPC_REPLACER.ActorsOverwritten"));
+  });
+
+  it("keeps going and reports when one actor cannot be overwritten", async () => {
+    const broken = ddbActor({ id: "ddb-goblin" });
+    broken.update = vi.fn().mockRejectedValue(new Error("permission"));
+    const owlbear = ddbActor({ id: "ddb-owlbear", name: "Owlbear" });
+    setWorldActors([broken, owlbear]);
+
+    await NPCTokenReplacerController.replaceNPCTokens();
+
+    expect(owlbear.update).toHaveBeenCalledTimes(1);
+    expect(ui.notifications.warn).toHaveBeenCalledWith(expect.stringContaining("NPC_REPLACER.ActorsOverwriteFailed"));
+  });
+
+  // An overwrite tags the actor as official for good, so matching it against an
+  // index that is missing a pack could lock in a lower-priority version
+  it("skips the actor pass, and says so, when a compendium failed to load", async () => {
+    const owlbear = ddbActor({ id: "ddb-owlbear", name: "Owlbear" });
+    setWorldActors([owlbear]);
+    const broken = indexedPack([]);
+    broken.collection = "dnd-phandelver-below.actors";
+    broken.metadata = { packageName: "dnd-phandelver-below", packageType: "module", label: "Phandelver" };
+    broken.getIndex = vi.fn().mockRejectedValue(new Error("timeout"));
+    game.packs.filter = vi.fn(pred => [mmPack, broken].filter(pred));
+
+    await NPCTokenReplacerController.replaceNPCTokens();
+
+    expect(owlbear.update).not.toHaveBeenCalled();
+    expect(ui.notifications.warn).toHaveBeenCalledWith("NPC_REPLACER.ActorsSkippedLoadError");
+  });
+
+  it("with the setting off, the button only handles scene tokens as before", async () => {
+    game.settings.get = vi.fn((ns, key) => ({ overwriteImportedActors: false, enabledCompendiums: '["default"]' })[key]);
+    const owlbear = ddbActor({ id: "ddb-owlbear", name: "Owlbear" });
+    setWorldActors([owlbear]);
+
+    await NPCTokenReplacerController.replaceNPCTokens();
+
+    expect(owlbear.update).not.toHaveBeenCalled();
+    expect(ui.notifications.info).toHaveBeenCalledWith("NPC_REPLACER.NoTokens");
+  });
+});
+
+describe("Preview — D&D Beyond actors section", () => {
+  it("lists overwrites and unmatched actors, and enables confirm with no tokens", async () => {
+    vi.restoreAllMocks();
+    game.i18n.localize = vi.fn(key => key);
+    game.i18n.format = vi.fn((key, data) => `${key} ${JSON.stringify(data)}`);
+    const confirm = vi.spyOn(FoundryCompat, "confirmDialog").mockReturnValue({ answer: Promise.resolve(false), close: vi.fn() });
+    const plan = [
+      { actor: ddbActor({ id: "a", name: "Owlbear" }), match: { entry: { name: "Owlbear" }, pack } },
+      { actor: ddbActor({ id: "b", name: "Ddb <Only>" }), match: null }
+    ];
+
+    await NPCTokenReplacerController.showPreviewDialog([], plan);
+
+    const { content, yesDisabled } = confirm.mock.calls[0][0];
+    expect(content).toContain("NPC_REPLACER.PreviewActorsTitle");
+    expect(content).toContain("NPC_REPLACER.PreviewActorUnchanged");
+    expect(content).toContain("Ddb &lt;Only&gt;");
+    // Format output is HTML-escaped before it reaches the dialog
+    expect(content).toContain("NPC_REPLACER.PreviewOverwriteSummary {&quot;count&quot;:1}");
+    expect(yesDisabled).toBe(false);
   });
 });

@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 NPC Token Replacer is a Foundry VTT module (v13 through v14+) for D&D 5e that replaces scene NPC tokens with official WotC compendium versions while preserving position, elevation, dimensions, and other token properties.
 
-Official content is recognised in two layers: an **exact whitelist** of the packages Wizards of the Coast publishes on Foundry (trusted by default) plus **forward-looking signals** that surface books released after this version without trusting them silently. Every Foundry API that moved between generations is reached through `FoundryCompat`, which feature-detects instead of checking `game.version`.
+Official content is recognised in two layers: an **exact whitelist** of the packages Wizards of the Coast publishes on Foundry (trusted by default) plus **forward-looking signals**: a book released after this version is trusted automatically when it is both WotC-authored and a protected premium package for the active system (`verified` tier), and only surfaced otherwise. Every Foundry API that moved between generations is reached through `FoundryCompat`, which feature-detects instead of checking `game.version`.
 
 ---
 
@@ -75,7 +75,7 @@ Tests exist to catch regressions, not to be green.
    cancelled dialogs, missing compendiums, failed imports, network timeouts.
 4. **Both compatibility paths are tested.** Anything routed through
    `FoundryCompat` needs a test with the modern API present *and* absent.
-5. **Coverage never regresses.** Currently 272 tests; a PR that lowers the
+5. **Coverage never regresses.** Currently 287 tests; a PR that lowers the
    count needs an explicit justification in the CHANGELOG.
 6. **Cache-clearing in `beforeEach`.** Static caches leak between tests; clear
    every cache the test touches.
@@ -312,7 +312,7 @@ https://github.com/Aiacos/npc-token-replacer/releases/latest/download/module.jso
 scripts/
 ├── main.js                     # FolderManager, CompendiumManager, TokenReplacer,
 │                               # NPCTokenReplacerController,
-│                               # registerSettings(), registerControlButton(), escapeHtml()
+│                               # registerSettings(), registerActorDirectoryButton(), escapeHtml()
 └── lib/
     ├── logger.js               # Logger class + MODULE_ID constant
     ├── foundry-compat.js       # FoundryCompat (feature-detected Foundry API access)
@@ -382,7 +382,9 @@ graph TD
 **Compendium Detection** (`CompendiumManager` + `SourceDetector`): two deliberate layers.
 
 1. **Whitelist** — `OFFICIAL_WOTC_PACKAGES`, the 14 packages Wizards of the Coast publishes on Foundry VTT. Exact, no false positives, trusted by default. Package-id prefixes (`dnd-`, `ddb-`) are **not** a signal: they also match third-party importers, homebrew and community adventures.
-2. **Forward-looking signals** — WotC/Foundry Gaming authorship (`publisher` tier) or premium content declaring the active system (`premium` tier), plus package ids the GM lists in `additionalSources` (`manual` tier). These catch books released after this version. They are detected, logged and listed in the picker, but only used when the GM selects "Everything Detected" — never trusted silently.
+2. **Forward-looking signals** — these catch books released after this version, without a module update:
+   - WotC/Foundry Gaming authorship **and** a protected premium package declaring the active system → `verified` tier, **trusted by default** like the whitelist. Authorship alone can be typed into any manifest; `protected` packages go through Foundry's premium distribution. The GM is notified once (`notifyNewOfficialSources`).
+   - Authorship alone (`publisher`), premium content from other publishers (`premium`), or package ids in `additionalSources` (`manual`) → detected, listed in the picker and (for `publisher`) announced once, but only used under "Everything Detected" or an explicit selection.
 
 **Priority System** (`SourceDetector.classify`): 4 tiers (Adventure > Expansion > Core > Fallback). Known packages keep their curated priority; unknown packages are classified from what their module actually ships — an Adventure pack means adventure content, Scene packs mean a setting book, neither means a rulebook.
 
@@ -391,6 +393,8 @@ graph TD
 **Name Matching** (`NameMatcher.findMatch`): Exact match → variant transforms (removes prefixes/suffixes) → partial word matching
 
 **Token Replacement** (`TokenReplacer.replaceToken`): Handles wildcard token art paths (`*.webp`), resolves the world actor, creates tokens with preserved properties on the token's own scene (`tokenDoc.parent`, never `canvas.scene` — the preview is non-modal).
+
+**One button, two passes** (`replaceNPCTokens`): `planActorOverwrites()` pairs every D&D Beyond Importer actor in the world with an official entry by **exact normalized name** (no variants — the overwrite is destructive); the single preview lists those and the scene's token matches; on confirm, actors are overwritten first, then tokens are replaced and reuse them. Placed tokens are independent copies of the prototype: overwriting an actor updates linked/unlinked token *stats* (unlinked via ActorDelta, keeping per-token overrides) but not their art/size — only token replacement does that.
 
 **World actor resolution** (`#getOrImportWorldActor`), in order: an actor already imported from the same compendium entry → a D&D Beyond Importer actor with the same name, overwritten in place via `update(data, {diff: false, recursive: false})` keeping folder/ownership/sort (setting `overwriteImportedActors`, listed in the preview) → a fresh import into the module folder.
 
@@ -410,12 +414,12 @@ graph TD
 
 - `Hooks.once("init")`: Register settings
 - `Hooks.once("ready")`: Initialize controller, notify the GM once about new official-looking books (`notifyNewOfficialSources`, remembered in the hidden `notifiedSources` setting), pre-cache monster index
-- `Hooks.on("getSceneControlButtons")`: Add toolbar button (handles both v12 array and v13 object formats)
+- `Hooks.on("renderActorDirectory")`: Add the replace button to the Actors tab footer — v13/v14 `DocumentDirectory` renders a `footer` part, and the hook passes the app `HTMLElement` (`hookEvents.renderApplicationV2`); it fires on every re-render, so the button is added once
 - `window.NPCTokenReplacer`: Debug API exposed globally via `NPCTokenReplacerController.getDebugAPI()`
 
 ## 🧩 Key Patterns
 
-**Version Compatibility**: Never branch on `game.version`. Foundry APIs that moved between generations are reached through `FoundryCompat`, which resolves the namespaced API first and only falls back to the deprecated global. `registerControlButton` handles both the v12 array-based controls (`onClick`) and the v13+ object-based controls (`onChange`) — attaching both callbacks makes v13 fire the action twice.
+**Version Compatibility**: Never branch on `game.version`. Foundry APIs that moved between generations are reached through `FoundryCompat`, which resolves the namespaced API first and only falls back to the deprecated global.
 
 **Application Framework**: `buildCompendiumSelectorForm()` resolves its base class *at registration time*. A `class X extends FormApplication` declaration would evaluate the global at module load and break the whole module on a Foundry version that removed it (planned for v16).
 
@@ -451,7 +455,7 @@ All user-facing strings use `game.i18n.localize()` with keys from `lang/en.json`
 
 In addition to classes, three standalone utility functions remain:
 - `registerSettings()`: Registers module settings during init hook
-- `registerControlButton(controls)`: Adds the replace button to token controls
+- `registerActorDirectoryButton(app, html)`: Adds the replace button to the bottom of the Actors sidebar tab (GM only)
 - `escapeHtml(str)`: Escapes HTML special characters for safe display
 
 ## ⚙️ Configuration Constants
@@ -463,7 +467,7 @@ const OFFICIAL_WOTC_PACKAGES = [ /* 14 ids */ ];  // Authoritative whitelist
 const KNOWN_MODULE_LABELS = {...};                // Human-readable book names
 const OFFICIAL_AUTHOR_PATTERN = /wizards of the coast|foundry gaming/i;
 const PRIORITY = { FALLBACK: 1, CORE: 2, EXPANSION: 3, ADVENTURE: 4 };
-const TIER = { SYSTEM, OFFICIAL, PUBLISHER, PREMIUM, MANUAL, NONE };
+const TIER = { SYSTEM, OFFICIAL, VERIFIED, PUBLISHER, PREMIUM, MANUAL, NONE };
 const KNOWN_PRIORITIES = {...};                   // Priorities for the whitelist
 const WOTC_MODULE_PREFIXES = ["dnd-", "dnd5e"];   // DEPRECATED since 1.6.0, unused
 ```

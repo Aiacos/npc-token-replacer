@@ -6,8 +6,8 @@ Un modulo per Foundry VTT che sostituisce automaticamente i token PNG della scen
 
 ## ✨ Caratteristiche
 
-- **Sostituzione in un clic**: aggiunge un pulsante alla barra dei Controlli Token
-- **Rilevamento automatico dei compendi**: trova ogni sorgente D&D ufficiale installata partendo dai segnali del pacchetto — l'SRD di sistema, i moduli pubblicati da Wizards of the Coast e i contenuti D&D premium. Non c'è una lista da mantenere, quindi anche i manuali usciti dopo questo modulo vengono riconosciuti.
+- **Sostituzione in un clic**: un pulsante **Sostituisci Token PNG** in fondo alla scheda **Attori** della barra laterale (solo GM)
+- **Rilevamento automatico dei compendi**: si fida di un elenco esatto dei pacchetti pubblicati da Wizards of the Coast su Foundry, più l'SRD di sistema. I manuali usciti dopo questa versione vengono riconosciuti da soli, senza aggiornare il modulo, quando sono firmati Wizards of the Coast **e** venduti come contenuto premium protetto per dnd5e; il GM viene avvisato quando uno viene attivato.
 - **Supporto multi-compendio**: cerca in più compendi ufficiali contemporaneamente
 - **Sistema di priorità intelligente**: preferisce le creature di avventure ed espansioni al Monster Manual, e il Monster Manual all'SRD
 - **Selezione dei compendi configurabile**: leggi tutte le sorgenti ufficiali (predefinito), limitati ai manuali base, includi contenuti premium di terze parti, oppure scegli i compendi uno per uno
@@ -18,7 +18,7 @@ Un modulo per Foundry VTT che sostituisce automaticamente i token PNG della scen
 - **Confronto nomi intelligente**: gestisce le varianti dei nomi (es. "Goblin Warrior" corrisponde a "Goblin")
 - **Modalità variazione token**: scegli come gestire più varianti grafiche dello stesso token (Nessuna/Sequenziale/Casuale)
 - **Organizzazione in cartelle**: i mostri importati vengono ordinati automaticamente in cartelle
-- **Compatibile con D&D Beyond Importer**: le creature già importate da D&D Beyond Importer vengono sovrascritte sul posto con la versione ufficiale — stessa cartella, stessi permessi, nessun duplicato — e prima elencate nell'anteprima
+- **Compatibile con D&D Beyond Importer**: lo stesso pulsante aggiorna anche tutte le creature importate da D&D Beyond Importer — ognuna viene sovrascritta sul posto con la versione ufficiale (stessa cartella, stessi permessi, nessun duplicato), abbinata per nome esatto ed elencata prima nell'anteprima. Le creature senza versione ufficiale restano invariate
 
 ## 📚 Contenuti D&D ufficiali supportati
 
@@ -35,14 +35,18 @@ e te li segnala, invece di ignorarli in silenzio:
 |---------------------------------------|---------|-----------|------------------|
 | I compendi del sistema di gioco attivo | mostri SRD di `dnd5e` | SRD | ✅ |
 | Presente nell'elenco ufficiale WotC | `dnd-monster-manual` | Ufficiale | ✅ |
-| Firmata Wizards of the Coast / Foundry Gaming | un manuale uscito dopo questa versione | Sembra ufficiale | ⚙️ opzionale |
+| Firmata Wizards of the Coast / Foundry Gaming **e** pacchetto premium protetto per dnd5e | un manuale uscito dopo questa versione | Ufficiale (rilevato) | ✅ |
+| Firmata Wizards of the Coast / Foundry Gaming, ma non contenuto premium protetto | un modulo gratuito che si dichiara WotC | Sembra ufficiale | ⚙️ opzionale |
 | Contenuto premium che dichiara il sistema dnd5e | bestiari a pagamento di terzi | Premium | ⚙️ opzionale |
 | Id aggiunto in **Sorgenti compendio aggiuntive** | qualsiasi altra cosa | Manuale | ⚙️ opzionale |
 
-Quando installi un nuovo manuale ufficiale, viene rilevato come **"Sembra
-ufficiale"**, registrato nel log con un avviso che ne indica il nome e mostrato
-nel selettore dei compendi: passa a **Tutto ciò che viene rilevato** per usarlo
-subito, senza aspettare un aggiornamento del modulo.
+Quando installi un nuovo manuale ufficiale, viene riconosciuto come **"Ufficiale
+(rilevato)"** e usato subito — senza aggiornare il modulo — e il GM riceve una
+notifica, una sola volta, con il suo nome. L'autore da solo non basta, perché
+chiunque può scrivere "Wizards of the Coast" in un manifest: il pacchetto deve
+anche essere contenuto premium protetto, distribuito tramite il sistema premium
+di Foundry. Ciò che si *dichiara* soltanto WotC resta **"Sembra ufficiale"**: il
+GM viene avvisato una volta e può attivarlo con **Tutto ciò che viene rilevato**.
 
 I contenuti di terze parti — DDB-Importer (`ddb-*`), moduli homebrew della
 community e i manuali storici mai portati su Foundry da WotC (Volo's, MToF,
@@ -144,9 +148,9 @@ giocanti, gruppi e veicoli presenti in quei compendi vengono ignorati.
 ## 🎯 Utilizzo
 
 1. Apri una scena con dei token PNG posizionati
-2. Seleziona il livello **Controlli Token** (l'icona della persona nella barra a sinistra)
-3. **Facoltativo**: seleziona dei token specifici per sostituire solo quelli (senza selezione vengono elaborati tutti i PNG della scena)
-4. Clicca il pulsante **Sostituisci Token PNG** (icona di sincronizzazione)
+2. Apri la scheda **Attori** nella barra laterale destra
+3. **Facoltativo**: seleziona dei token specifici nella scena per sostituire solo quelli (senza selezione vengono elaborati tutti i PNG della scena)
+4. Clicca **Sostituisci Token PNG** in fondo alla scheda Attori
 5. Compare una finestra di conferma con l'elenco dei token che verranno sostituiti
 6. Clicca **Sostituisci Token** per procedere o **Annulla** per interrompere
 7. Il modulo:
@@ -154,6 +158,27 @@ giocanti, gruppi e veicoli presenti in quei compendi vengono ignorati.
    - elimina i token originali
    - crea i nuovi token dal compendio mantenendo posizione, elevazione, dimensioni e visibilità originali
 8. Una notifica riporta il risultato
+
+### 🎯 Attori di D&D Beyond Importer
+
+Con **Sovrascrivi gli import di D&D Beyond** attivo (predefinito), il pulsante
+aggiorna anche **tutti** gli attori creati da D&D Beyond Importer nel mondo, non
+solo quelli della scena corrente:
+
+- ognuno viene abbinato al compendio ufficiale per **nome esatto** (una variante
+  come "Goblin Warrior" non diventa mai "Goblin");
+- l'anteprima elenca, in una sezione a parte, quali attori verranno sovrascritti
+  e quali non hanno una versione ufficiale e restano invariati;
+- prima vengono sovrascritti gli attori, poi vengono sostituiti i token della
+  scena, che li riusano: niente viene sovrascritto due volte;
+- funziona anche con una scena vuota.
+
+**Token nelle altre scene.** Un token piazzato è una copia indipendente del
+prototipo, quindi **grafica, dimensioni e nome** non cambiano quando il suo
+attore viene sovrascritto. Le **statistiche** invece seguono l'attore: un token
+collegato legge direttamente l'attore; un token non collegato è l'attore più le
+sue modifiche personali (per esempio i punti ferita attuali), che conserva. Usa
+il pulsante in ogni scena i cui token devono avere anche la grafica ufficiale.
 
 ### 🎯 Modalità di selezione
 
@@ -168,7 +193,7 @@ dalla hotbar o da una scorciatoia. La logica resta nel modulo, quindi la macro s
 aggiorna insieme a esso.
 
 ```js
-// Sostituisci i token PNG (come il pulsante nella barra)
+// Come il pulsante Sostituisci Token PNG nella scheda Attori
 NPCTokenReplacer.replaceNPCTokens();
 ```
 
@@ -230,11 +255,11 @@ Il modulo offre quattro modalità:
 | **Tutto ciò che viene rilevato** | Include anche i manuali usciti dopo questa versione (riconosciuti dall'autore Wizards of the Coast / Foundry Gaming), i contenuti D&D premium di altri editori e tutto ciò aggiunto in **Sorgenti compendio aggiuntive**. |
 | **Selezione personalizzata** | Scegli manualmente quali compendi usare. |
 
-> **Nuovi manuali ufficiali.** Un manuale uscito dopo questa versione viene
-> rilevato ma non usato da **Tutto il contenuto D&D ufficiale** finché un
-> aggiornamento del modulo non lo aggiunge all'elenco noto. Il GM riceve una
-> notifica, una sola volta, con il suo nome e può usarlo subito con **Tutto ciò
-> che viene rilevato** o spuntandolo in **Selezione personalizzata**.
+> **Nuovi manuali ufficiali.** Un manuale uscito dopo questa versione viene usato
+> automaticamente da **Tutto il contenuto D&D ufficiale** quando è un pacchetto
+> premium protetto WotC per dnd5e, e il GM riceve una notifica una sola volta. Un
+> pacchetto che si dichiara soltanto WotC viene segnalato una volta ma usato solo
+> con **Tutto ciò che viene rilevato** o spuntandolo in **Selezione personalizzata**.
 
 > Vieni dalla 1.4.x? La modalità predefinita è cambiata: i mondi che non hanno
 > mai toccato questa impostazione ora leggono **tutto** il contenuto ufficiale
@@ -359,7 +384,7 @@ Documentazione tecnica di supporto:
 
 | Comando | Scopo |
 |---------|-------|
-| `npm test` | Esegue la suite di test (272 test) |
+| `npm test` | Esegue la suite di test (287 test) |
 | `npm run lint` | ESLint su `scripts/`, `tools/` e `tests/` |
 | `npm run validate` | Verifica `module.json`, i file referenziati, le chiavi i18n e i percorsi dei template |
 | `npm run check` | Tutti e tre, in ordine |

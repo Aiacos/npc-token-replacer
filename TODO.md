@@ -14,8 +14,10 @@ Open work only. Finished items are removed — their record lives in
   → `scripts/main.js` (`TODO [MEDIUM] Compatibility`, `buildActorLookup`)
 - [ ] **Preserved-property allowlist** silently drops token fields added by future Foundry
   versions. → `scripts/main.js` (`TODO [MEDIUM] Compatibility`)
-- [ ] **Verify in a live v13/v14 world**: the compendium picker opens and saves; a DDB
-  Importer actor is overwritten with its items replaced (not merged); DialogV2 honours
+- [ ] **Verify in a live v13/v14 world**: a DDB Importer actor is overwritten with its
+  items and effects replaced (not merged) — both from a scene token and from the
+  world-wide pass; the replace button shows at the bottom of the Actors tab; a
+  protected WotC book outside the list is used and announced; DialogV2 honours
   `disabled` on the confirm button. → `scripts/lib/compendium-selector.js`,
   `scripts/lib/foundry-compat.js`
 
