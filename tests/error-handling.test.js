@@ -7,6 +7,7 @@ import {
   TokenReplacerError
 } from "../scripts/main.js";
 import { WildcardResolver } from "../scripts/lib/wildcard-resolver.js";
+import { ProgressReporter } from "../scripts/lib/progress-reporter.js";
 
 /**
  * Cross-cutting Error Handling Tests
@@ -168,6 +169,35 @@ describe("ERR-01 — CompendiumManager.loadMonsterIndex error notification", () 
     expect(ui.notifications.error).toHaveBeenCalledTimes(1);
   });
 
+});
+
+describe("ERR-01 — a partially loaded index is not cached", () => {
+  beforeEach(() => {
+    CompendiumManager.clearCache();
+    game.settings.get = vi.fn().mockReturnValue('["all"]');
+  });
+
+  // A transient failure during the ready-hook pre-cache must not leave every
+  // later run matching against a reduced index until the page is reloaded.
+  it("retries the failed pack on the next load instead of reusing the partial index", async () => {
+    const pack = (name, entries) => ({
+      documentName: "Actor",
+      metadata: { packageName: name, label: name },
+      collection: `${name}.monsters`,
+      getIndex: vi.fn().mockResolvedValue(),
+      index: { contents: entries, size: entries.length }
+    });
+    const flaky = pack("dnd-phandelver-below", [{ name: "Nothic", _id: "n1" }]);
+    flaky.getIndex = vi.fn().mockRejectedValueOnce(new Error("timeout")).mockResolvedValue();
+    const stable = pack("dnd-monster-manual", [{ name: "Goblin", _id: "g1" }]);
+    game.packs.filter = vi.fn(pred => [flaky, stable].filter(pred));
+
+    const first = await CompendiumManager.loadMonsterIndex(true);
+    expect(first).toHaveLength(1);
+
+    const second = await CompendiumManager.loadMonsterIndex();
+    expect(second).toHaveLength(2);
+  });
 });
 
 // ─── Test Group 4: ERR-01 — FolderManager notification ─────────────────────
@@ -478,3 +508,69 @@ describe("ERR-02 — Failure classification via replaceNPCTokens", () => {
   });
 
 });
+
+describe("replaceNPCTokens loop bookkeeping", () => {
+  const goblinPack = () => ({
+    collection: "dnd5e.monsters",
+    metadata: { packageName: "dnd5e", label: "Monsters" },
+    documentName: "Actor",
+    getIndex: vi.fn().mockResolvedValue(),
+    index: { contents: [{ name: "Goblin", _id: "entry-1" }], size: 1 }
+  });
+
+  beforeEach(async () => {
+    vi.restoreAllMocks();
+    CompendiumManager.clearCache();
+    TokenReplacer.clearActorLookup();
+    ui.notifications.info = vi.fn();
+    ui.notifications.warn = vi.fn();
+    ui.notifications.error = vi.fn();
+    game.i18n.format = vi.fn((key, data) => `${key}: ${JSON.stringify(data)}`);
+    game.i18n.localize = vi.fn(key => key);
+    game.user.isGM = true;
+    game.actors[Symbol.iterator] = function* () {};
+    canvas.scene = canvas.scene || {};
+    canvas.scene.tokens = canvas.scene.tokens || {};
+    canvas.scene.tokens.has = vi.fn(() => true);
+
+    const pack = goblinPack();
+    game.packs.filter = vi.fn(pred => [pack].filter(pred));
+    game.settings.get = vi.fn().mockReturnValue('["all"]');
+    await CompendiumManager.loadMonsterIndex(true);
+    vi.spyOn(CompendiumManager, "detectWOTCCompendiums").mockReturnValue([pack]);
+    vi.spyOn(NPCTokenReplacerController, "showPreviewDialog").mockResolvedValue(true);
+  });
+
+  const runWith = async (tokens) => {
+    vi.spyOn(TokenReplacer, "getNPCTokensToProcess").mockReturnValue({ tokens, isSelection: false });
+    await NPCTokenReplacerController.replaceNPCTokens();
+  };
+
+  // A delete failure still counts as replaced (the new token exists), so it
+  // must not be counted a second time in the progress total.
+  it("never reports more processed tokens than were queued", async () => {
+    const update = vi.spyOn(ProgressReporter.prototype, "update");
+    vi.spyOn(TokenReplacer, "replaceToken")
+      .mockRejectedValue(new TokenReplacerError("old token stuck", "delete_failed"));
+
+    await runWith([
+      { id: "t1", name: "Goblin", actor: { name: "Goblin", type: "npc" } },
+      { id: "t2", name: "Goblin", actor: { name: "Goblin", type: "npc" } }
+    ]);
+
+    // update() also reports the matching phase, so assert the bound, not a sequence
+    const counts = update.mock.calls.map(([processed]) => processed);
+    expect(Math.max(...counts)).toBeLessThanOrEqual(2);
+  });
+
+  it("checks token existence on the token's own scene, not the viewed one", async () => {
+    canvas.scene.tokens.has = vi.fn(() => false); // GM switched to another scene
+    const ownScene = { tokens: { has: vi.fn(() => true) } };
+    const replace = vi.spyOn(TokenReplacer, "replaceToken").mockResolvedValue({ id: "new" });
+
+    await runWith([{ id: "t1", name: "Goblin", actor: { name: "Goblin", type: "npc" }, parent: ownScene }]);
+
+    expect(replace).toHaveBeenCalledTimes(1);
+  });
+});
+

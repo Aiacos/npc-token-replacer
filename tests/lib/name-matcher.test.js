@@ -324,3 +324,39 @@ describe("findMatch - Stage 3 Partial Match", () => {
     expect(resultFail).toBeNull();
   });
 });
+
+// ---------------------------------------------------------------------------
+// Stage 3: short distinguishing words
+// ---------------------------------------------------------------------------
+describe("findMatch - Stage 3 short distinguishing words", () => {
+  beforeEach(() => {
+    mockCompendiumManager.getIndexMap.mockReturnValue(null);
+    mockCompendiumManager.getWordIndex.mockReturnValue(null);
+  });
+
+  const entry = (name) => {
+    const normalizedName = NameMatcher.normalizeName(name);
+    return {
+      entry: { name, _id: name },
+      pack: { metadata: { packageName: "dnd-monster-manual", label: "MM" }, collection: "dnd-monster-manual.monsters" },
+      normalizedName,
+      significantWords: normalizedName.split(" ").filter(w => w.length >= NameMatcher.MIN_PARTIAL_LENGTH),
+      priority: 2
+    };
+  };
+
+  // "hen" and "rat" fall under MIN_PARTIAL_LENGTH, so both names reduce to
+  // ["giant"] — without this guard a Giant Hen silently becomes a Giant Rat.
+  it("does not match names that differ only by a short word", () => {
+    expect(NameMatcher.findMatch("Giant Hen", [entry("Giant Rat")])).toBeNull();
+  });
+
+  it("does not match a bare word against an entry with an extra short word", () => {
+    expect(NameMatcher.findMatch("Giant", [entry("Giant Rat")])).toBeNull();
+  });
+
+  it("still ignores numbering and filler words", () => {
+    expect(NameMatcher.findMatch("Goblin 2", [entry("Goblin")])?.entry.name).toBe("Goblin");
+    expect(NameMatcher.findMatch("Ogre of Doom", [entry("Doom Ogre")])?.entry.name).toBe("Doom Ogre");
+  });
+});

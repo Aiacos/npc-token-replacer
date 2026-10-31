@@ -224,4 +224,25 @@ describe("TokenReplacer.replaceToken", () => {
     expect(canvas.scene.deleteEmbeddedDocuments).not.toHaveBeenCalled();
   });
 
+
+  // The preview dialog is non-modal, so the GM can switch scenes before
+  // confirming. Every mutation must target the scene that owns the token.
+  it("creates and deletes on the token's own scene, not the currently viewed one", async () => {
+    const ownScene = {
+      createEmbeddedDocuments: vi.fn().mockResolvedValue([createdToken]),
+      deleteEmbeddedDocuments: vi.fn().mockResolvedValue([]),
+      tokens: { has: vi.fn(() => true) }
+    };
+    const viewedScene = canvas.scene;
+    viewedScene.createEmbeddedDocuments = vi.fn().mockResolvedValue([createdToken]);
+    viewedScene.deleteEmbeddedDocuments = vi.fn().mockResolvedValue([]);
+    mockTokenDoc = createMockTokenDoc({ parent: ownScene });
+
+    await TokenReplacer.replaceToken(mockTokenDoc, compendiumEntry, mockPack);
+
+    expect(ownScene.createEmbeddedDocuments).toHaveBeenCalledTimes(1);
+    expect(ownScene.deleteEmbeddedDocuments).toHaveBeenCalledWith("Token", [mockTokenDoc.id]);
+    expect(viewedScene.createEmbeddedDocuments).not.toHaveBeenCalled();
+    expect(viewedScene.deleteEmbeddedDocuments).not.toHaveBeenCalled();
+  });
 });

@@ -1,4 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
+import process from "node:process";
 import { buildCompendiumSelectorForm, CompendiumSelectorModel, MODES } from "../../scripts/lib/compendium-selector.js";
 
 /**
@@ -200,6 +203,31 @@ describe("buildCompendiumSelectorForm", () => {
     expect(FormClass.DEFAULT_OPTIONS.tag).toBe("form");
     expect(FormClass.PARTS.body.template).toContain("compendium-selector-body.hbs");
     expect(FormClass.PARTS.footer.template).toContain("compendium-selector-footer.hbs");
+  });
+
+  // HandlebarsApplicationMixin (v13/v14) throws during render when a PART
+  // template has more than one top-level element, so the settings button
+  // silently opens nothing. Mustache tags are stripped before parsing because
+  // only the element structure matters here.
+  it("every ApplicationV2 part template renders a single root element", () => {
+    globalThis.foundry = {
+      applications: {
+        api: {
+          ApplicationV2: class { static DEFAULT_OPTIONS = {}; },
+          HandlebarsApplicationMixin: Base => class extends Base {}
+        }
+      }
+    };
+    const FormClass = buildCompendiumSelectorForm({ compendiumManager, onSaved: vi.fn() });
+
+    for (const [partId, { template }] of Object.entries(FormClass.PARTS)) {
+      const file = template.replace(/^modules\/npc-token-replacer\//, "");
+      const markup = readFileSync(resolve(process.cwd(), file), "utf8")
+        .replace(/\{\{[^}]*\}\}/g, "");
+      const holder = document.createElement("template");
+      holder.innerHTML = markup;
+      expect(holder.content.children.length, `part "${partId}"`).toBe(1);
+    }
   });
 
   it("routes the ApplicationV2 form handler into the shared model", async () => {

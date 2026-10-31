@@ -30,6 +30,8 @@
     "PreviewColMatch": "Will Match As",
     "PreviewColSource": "Source Compendium",
     "PreviewNoMatch": "No match found",
+    "PreviewOverwrites": "Overwrites the D&D Beyond actor \"{name}\" in place",
+    "PreviewOverwriteSummary": "{count} actor(s) imported by D&D Beyond Importer will be overwritten in place with the official compendium data. Their folder and ownership are kept; D&D Beyond data and manual edits on them are replaced.",
     "ConfirmYes": "Replace Tokens",
     "ConfirmNo": "Cancel",
     "Settings": {
@@ -74,6 +76,10 @@
       "AdditionalSources": {
         "Name": "Additional Compendium Sources",
         "Hint": "Package ids or compendium ids to treat as official creature sources, separated by commas. Only needed for content this module cannot recognise on its own."
+      },
+      "OverwriteImportedActors": {
+        "Name": "Overwrite D&D Beyond Imports",
+        "Hint": "When a creature was already imported into the world by D&D Beyond Importer, overwrite that actor in place with the official compendium version (keeping its folder and ownership) instead of importing a duplicate. Every overwrite is listed in the preview before it happens."
       }
     },
     "Tier": {
