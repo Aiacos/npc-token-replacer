@@ -12,54 +12,122 @@ Official content is recognised in two layers: an **exact whitelist** of the pack
 
 ## 📜 Constitution — Non-Negotiable Principles
 
-These principles govern every change to this repository. They override
+These fifteen principles govern every change to this repository. They override
 convenience, speed, and personal preference. When a request conflicts with a
 principle, say so, propose the compliant alternative, and only then proceed.
+Each principle states the general rule first, then how it applies here.
 
-### 🧱 I. Code Quality
+### 🧱 I. Simplicity, Quality, Correctness & Security
+
+Prioritise, in this order when they conflict: **correctness, security,
+simplicity, readability, maintainability**. The simplest design that is correct
+wins over a clever one.
 
 1. **No dead code, no duplicated logic.** Two call sites doing the same thing
    share one implementation. Delete rather than comment out.
-2. **One responsibility per class.** Classes stay static-only with `#private`
-   state unless instance state is genuinely required.
-3. **Fail loudly at the boundary, degrade gracefully in the UI.** Throw typed
+2. **Fail loudly at the boundary, degrade gracefully in the UI.** Throw typed
    errors (`TokenReplacerError` with a `phase`) internally; surface a localized
    notification to the user.
-4. **Never widen scope on error.** A failure to read configuration falls back to
+3. **Never widen scope on error.** A failure to read configuration falls back to
    the *conservative* option, never the permissive one.
+4. **Treat every external value as untrusted.** Actor names, compendium labels
+   and settings are escaped (`escapeHtml`) before reaching HTML; network paths
+   are probed, never assumed.
 5. **Comments explain WHY.** The code already says what. Match the density and
    idiom of the surrounding file.
-6. **`npm run lint` must pass with zero errors** on `scripts/` and `tools/`
-   before any commit.
 
-### 🧪 II. Testing Standards
+### 🧩 II. Architecture Before Implementation
+
+1. **Plan before coding.** Any change touching more than one class starts with a
+   written plan: affected classes, data flow, and the tests that will prove it.
+2. **One responsibility per class.** Classes stay static-only with `#private`
+   state unless instance state is genuinely required.
+3. **Use OOP and patterns where they pay for themselves** — the facade
+   (`NPCTokenReplacerController`), the compatibility adapter (`FoundryCompat`),
+   the shared model with thin framework shells (`compendium-selector.js`). Do
+   not add a layer, interface or pattern that has a single trivial use.
+4. **Prefer blocklists over allowlists where the domain grows** (future actor
+   types), and allowlists where safety matters (preserved token properties).
+
+### 📚 III. Research Before Integration
+
+1. **Verify Foundry, dnd5e and library APIs against official documentation**
+   before using them — never from memory. Foundry's API moves every generation.
+2. **Record the finding, not just the code.** A version-specific behaviour gets
+   a comment naming the generation and the deprecation horizon; a dependency
+   constraint (e.g. a peer-dependency pin) is recorded in `CHANGELOG.md` and
+   `docs/DEVELOPMENT.md` with the reason.
+3. **Feature-detect, never version-check.** `game.version` may be logged; it
+   must never drive behaviour. Resolve APIs through `FoundryCompat`.
+4. **Deprecated globals are reached namespace-first** so Foundry's own
+   compatibility warnings stay quiet.
+
+### 🧪 IV. Testing Standards
+
+Tests exist to catch regressions, not to be green.
 
 1. **Every behavioural change ships with a test.** Bug fixes start with a test
    that fails before the fix.
 2. **Test the contract, not the implementation.** Mocks execute predicates
    (`game.packs.filter = vi.fn(pred => packs.filter(pred))`), never return
    canned data that bypasses the logic under test.
-3. **Both compatibility paths are tested.** Anything routed through
+3. **Cover critical workflows and failure paths**: scan → preview → replace,
+   cancelled dialogs, missing compendiums, failed imports, network timeouts.
+4. **Both compatibility paths are tested.** Anything routed through
    `FoundryCompat` needs a test with the modern API present *and* absent.
-4. **Coverage never regresses.** Currently 232 tests; a PR that lowers the
+5. **Coverage never regresses.** Currently 257 tests; a PR that lowers the
    count needs an explicit justification in the CHANGELOG.
-5. **Cache-clearing in `beforeEach`.** Static caches leak between tests; clear
+6. **Cache-clearing in `beforeEach`.** Static caches leak between tests; clear
    every cache the test touches.
 
-### 🎯 III. User Experience Consistency
+### 🐛 V. Automated Debugging & Validation
 
-1. **All user-facing text goes through `game.i18n`.** No hardcoded strings —
-   CI fails on a key used in source but missing from `lang/en.json`.
-2. **Key naming is `NPC_REPLACER.<Category>.<Key>`.** No exceptions.
-3. **Destructive actions are always previewed.** The dry-run dialog is not
-   optional; it lists what will change before anything changes.
-4. **Every long operation reports progress** through `ProgressReporter`.
-5. **Every failure the user can act on produces a notification**; everything
-   else goes to the log at `debug` level.
-6. **The GM can always override automatic behaviour.** Auto-detection is a
-   convenience, never a cage — see the `additionalSources` setting.
+1. **Reproduce, find the root cause, then fix.** A fix without an understood
+   cause is a guess; the reproducing test stays in the suite so the failure
+   cannot recur.
+2. **`tools/validate-manifest.mjs` is the source of truth** for manifest
+   correctness: referenced files exist, i18n keys resolve, templates resolve,
+   the download URL matches the version, and `compatibility.maximum` is never
+   set. A recurring class of mistake becomes a new validator check.
+3. **Debug surface stays available**: `window.NPCTokenReplacer` exposes the
+   debug API, and `Logger.debug` output is gated behind a flag, never removed.
+4. **Diagnostics record the "why"**: detection logs the tier and priority that
+   led to each decision, so a misclassification is diagnosable from the console
+   alone.
 
-### ⚡ IV. Performance Requirements
+### ✅ VI. Pre-Commit Gate
+
+1. **`npm run check` passes before every commit**: lint → manifest/i18n/template
+   validation → tests. This project has no build or type-check step (plain ES
+   modules, no TypeScript) and no separate formatter — ESLint is the style
+   gate (`npm run lint:fix` for auto-fixable issues). If a formatter, type
+   check or build step is added, it joins `npm run check`.
+2. **Fix failures, never bypass them.** No `--no-verify`, no `eslint-disable`
+   without a reason comment, no skipped or `.only` tests left behind.
+3. **Secrets are scanned before commit** (gitleaks pre-commit hook where
+   installed).
+
+### 🔄 VII. CI/CD
+
+1. **CI enforces what the pre-commit gate checks**: lint, validation, tests on
+   every supported Node version, plus a package smoke test. Nothing merges to
+   `main` red.
+2. **Releases are reproducible from a single trigger.** The Release workflow
+   bumps, tags, builds, verifies, publishes to GitHub and announces to the
+   Foundry package registry.
+3. **Nothing is published that was not validated** — the manifest validator
+   runs against the exact version being shipped.
+4. **The pipeline maintains itself**: Dependabot updates actions and dev
+   dependencies; the compatibility watch opens a PR when Foundry ships a new
+   generation.
+5. **A workflow never fails for a reason outside its job.** Network lookups
+   degrade to a no-op; `set -euo pipefail` traps are checked for `&&`
+   short-circuit bugs.
+
+### ⚡ VIII. Performance
+
+Measure first; optimise only a verified bottleneck, and never at the cost of
+correctness or readability.
 
 1. **Index once, reuse.** Compendium indexes, wildcard resolutions, actor
    lookups and compendium documents are cached; caches are explicitly bounded
@@ -71,83 +139,73 @@ principle, say so, propose the compliant alternative, and only then proceed.
 5. **Prefer O(1) lookups over scans**: name matching goes through prebuilt
    `Map` indexes, never a linear search over the full index.
 
-### 🔍 V. Automatic Debugging & Validation
+### 🎯 IX. User Experience Consistency
 
-1. **`npm run check` is the gate**: lint → manifest/i18n/template validation →
-   tests. It must pass locally before pushing.
-2. **`tools/validate-manifest.mjs` is the source of truth** for manifest
-   correctness: referenced files exist, i18n keys resolve, templates resolve,
-   the download URL matches the version, and `compatibility.maximum` is never
-   set.
-3. **Debug surface stays available**: `window.NPCTokenReplacer` exposes the
-   debug API, and `Logger.debug` output is gated behind a flag, never removed.
-4. **Diagnostics record the "why"**: detection logs the tier and priority that
-   led to each decision, so a misclassification is diagnosable from the console
-   alone.
-
-### 📚 VI. Research Before Implementation
-
-1. **Verify Foundry and system APIs against current documentation** before
-   using them — never from memory. Foundry's API moves every generation.
-2. **Record the finding, not just the code.** A version-specific behaviour gets
-   a comment naming the generation and the deprecation horizon.
-3. **Feature-detect, never version-check.** `game.version` may be logged; it
-   must never drive behaviour. Resolve APIs through `FoundryCompat`.
-4. **Deprecated globals are reached namespace-first** so Foundry's own
-   compatibility warnings stay quiet.
-
-### 📝 VII. Documentation
-
-1. **User-facing changes update `README.md`**; architectural changes update
-   `CLAUDE.md` and `docs/`.
-2. **Every release updates `CHANGELOG.md`** under Keep a Changelog headings.
-3. **Docs state the current truth.** Delete stale statements rather than
-   layering corrections on top.
-4. **Chapter icons are consistent** across `README.md`, `CLAUDE.md` and
-   `docs/` — the same concept always carries the same icon (see the icon
-   legend below).
-
-### 🧹 VIII. Repository Hygiene
-
-1. **Only durable artifacts are tracked.** Session state, scan output, coverage
-   reports and build output are gitignored.
-2. **One config file per tool.** Duplicate or dead configuration is deleted.
-3. **Secrets never enter the repository** — not in code, not in fixtures, not
-   in tracked config.
-4. **`releases/` is build output**: never edited by hand.
-
-### 🔄 IX. CI/CD
-
-1. **CI must be green on `develop` before a release** and runs lint,
-   validation, tests on every supported Node version, plus a package smoke test.
-2. **Releases are reproducible from a single trigger.** The Release workflow
-   bumps, tags, builds, verifies, publishes to GitHub and announces to the
-   Foundry package registry.
-3. **The pipeline maintains itself**: Dependabot updates actions and dev
-   dependencies; the compatibility watch opens a PR when Foundry ships a new
-   generation.
-4. **A workflow never fails for a reason outside its job.** Network lookups
-   degrade to a no-op; `set -euo pipefail` traps are checked for `&&`
-   short-circuit bugs.
-5. **Nothing is published that was not validated** — the manifest validator
-   runs against the exact version being shipped.
+1. **All user-facing text goes through `game.i18n`.** No hardcoded strings —
+   CI fails on a key used in source but missing from `lang/en.json`.
+2. **Key naming is `NPC_REPLACER.<Category>.<Key>`.** No exceptions; the same
+   concept uses the same term in every string, dialog and doc.
+3. **Destructive actions are always previewed.** The dry-run dialog is not
+   optional; it lists what will change before anything changes.
+4. **Every long operation reports progress** through `ProgressReporter`.
+5. **Every failure the user can act on produces a notification**; everything
+   else goes to the log at `debug` level.
+6. **The GM can always override automatic behaviour.** Auto-detection is a
+   convenience, never a cage — see the `additionalSources` setting.
 
 ### 🤖 X. Subagent Use
 
-1. **Delegate breadth, keep depth.** Use subagents for wide read-only sweeps
-   across many files where only the conclusion matters; do focused edits
-   directly.
-2. **One agent per independent question**, launched in parallel — never a chain
-   of agents for a task a single search answers.
-3. **Never delegate a decision.** Agents gather evidence; the decision, the
+1. **Delegate breadth, keep depth.** Use subagents for clearly scoped,
+   read-mostly sweeps across many files where only the conclusion matters; do
+   focused edits directly.
+2. **Brief them fully.** Each agent gets an explicit responsibility, the files
+   to read, what is already ruled out, and the shape of the answer expected.
+3. **One agent per independent question**, launched in parallel — never a chain
+   of agents for a task a single search answers, and never one for a single
+   known lookup.
+4. **Never delegate a decision.** Agents gather evidence; the decision, the
    edit and the responsibility stay in the main thread.
-4. **Verify agent findings before acting** on them; a confident report is not
+5. **Verify agent findings before acting** on them; a confident report is not
    evidence.
-5. **Never spawn an agent for a single known lookup** — read the file.
 
-### 🎨 XI. Icon Legend
+### 🧰 XI. Plugins & Skills
 
-The same concept carries the same icon everywhere it appears:
+1. **Use Superpowers and Impeccable skills wherever they are installed and fit
+   the task** — e.g. brainstorming/writing-plans before new features,
+   test-driven-development for behaviour changes, systematic-debugging for
+   failures, verification-before-completion before claiming done, and
+   Impeccable's design skills for UI and template work.
+2. **The skill serves the constitution, not the reverse.** Where a skill's
+   default conflicts with a principle here, this file wins.
+
+### 📝 XII. Documentation
+
+1. **Docs state the current truth.** Technical docs (`CLAUDE.md`, `docs/`) and
+   user docs (`README.md`, `README.it.md`) are updated in the same change that
+   alters implementation, configuration, workflow or a known limitation.
+   Delete stale statements rather than layering corrections on top.
+2. **User-facing changes update both READMEs**; the parity check keeps their
+   structure aligned.
+3. **Known limitations are written down**, not left for users to discover.
+
+### 📋 XIII. Project Ledgers
+
+`TODO.md`, `SECURITY.md` and `CHANGELOG.md` stay short, scannable and easy to
+update. Each keeps its own purpose — no file duplicates another.
+
+1. **`TODO.md`** — open work only, as a checklist (`- [ ]`) grouped by priority,
+   each item linking to the file, issue or PR it concerns. Done items are
+   removed (their record lives in the CHANGELOG), not left ticked forever.
+2. **`SECURITY.md`** — supported versions, how to report a vulnerability, and a
+   checklist of the module's security-relevant surfaces (HTML escaping,
+   network probes, secrets handling) with their current status.
+3. **`CHANGELOG.md`** — every release, under Keep a Changelog headings; work in
+   progress accumulates under `[Unreleased]`.
+
+### 🎨 XIV. Icon Consistency
+
+The same concept carries the same icon in `README.md`, `README.it.md`,
+`CLAUDE.md` and `docs/`:
 
 | Icon | Concept |
 |------|---------|
@@ -161,8 +219,23 @@ The same concept carries the same icon everywhere it appears:
 | 🧪 | Testing |
 | 🔄 | CI/CD, releases, automation |
 | 🛡️ | Compatibility and version policy |
+| 🔐 | Security |
 | 🐛 | Troubleshooting and debugging |
 | 📜 | Principles, licence, credits |
+
+### 🧹 XV. Repository Hygiene & Cleanup
+
+1. **Clean up regularly.** Each release cycle, look for dead code, unused
+   exports, unused dev dependencies, obsolete files and duplicate
+   implementations, and remove them.
+2. **Cleanup must be proven safe**: `npm run check` passes before and after,
+   and test count only drops with a CHANGELOG justification.
+3. **Only durable artifacts are tracked.** Session state, scan output, coverage
+   reports and build output are gitignored.
+4. **One config file per tool.** Duplicate or dead configuration is deleted.
+5. **Secrets never enter the repository** — not in code, not in fixtures, not
+   in tracked config.
+6. **`releases/` is build output**: never edited by hand.
 
 ---
 
@@ -317,14 +390,17 @@ graph TD
 
 **Name Matching** (`NameMatcher.findMatch`): Exact match → variant transforms (removes prefixes/suffixes) → partial word matching
 
-**Token Replacement** (`TokenReplacer.replaceToken`): Handles wildcard token art paths (`*.webp`), imports actors to world, creates tokens with preserved properties
+**Token Replacement** (`TokenReplacer.replaceToken`): Handles wildcard token art paths (`*.webp`), resolves the world actor, creates tokens with preserved properties on the token's own scene (`tokenDoc.parent`, never `canvas.scene` — the preview is non-modal).
+
+**World actor resolution** (`#getOrImportWorldActor`), in order: an actor already imported from the same compendium entry → a D&D Beyond Importer actor with the same name, overwritten in place via `update(data, {diff: false, recursive: false})` keeping folder/ownership/sort (setting `overwriteImportedActors`, listed in the preview) → a fresh import into the module folder.
 
 **Caches** (class private static fields):
 - `CompendiumManager.#indexCache`: Combined monster index from all enabled compendiums
 - `CompendiumManager.#wotcCompendiumsCache`: Detected WotC compendiums
 - `FolderManager.#importFolderCache`: Actor folder for imports
 - `WildcardResolver.#variantCache`: Resolved wildcard paths
-- `TokenReplacer.#actorLookup`: Session-scoped UUID→world Actor map (prevents duplicate imports)
+- `TokenReplacer.#actorLookup`: Session-scoped UUID→world Actor map (prevents duplicate imports); keyed by `flags.npc-token-replacer.sourceUuid`, then `_stats.compendiumSource`
+- `TokenReplacer.#importedActorsByName`: Session-scoped name→world Actor map of D&D Beyond Importer monsters (`npc` + `flags.ddbimporter.id`) not yet overwritten
 - `TokenReplacer.#compendiumDocCache`: LRU cache for `pack.getDocument()` results (max 100)
 - `NPCTokenReplacerController.#isProcessing`: Execution lock
 - `TokenReplacer.#sequentialCounter`: Token variant counter

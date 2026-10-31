@@ -7,7 +7,7 @@ A Foundry VTT module that automatically replaces NPC tokens in your scene with o
 ## ✨ Features
 
 - **One-Click Replacement**: Adds a button to the Token Controls toolbar for easy access
-- **Automatic Compendium Detection**: Finds every installed official D&D source from package signals - the system SRD, any `dnd-` module, anything authored by Wizards of the Coast, and premium D&D content. There is no list to maintain, so books released after this module still work.
+- **Automatic Compendium Detection**: Trusts an exact whitelist of the packages Wizards of the Coast publishes on Foundry, plus the system SRD. Books released after this version are still detected from package signals (Wizards of the Coast authorship, premium D&D content) and offered in the picker, without being trusted silently.
 - **Multi-Compendium Support**: Search across multiple official D&D compendiums simultaneously
 - **Smart Priority System**: Prefers adventure/expansion creatures over Monster Manual over SRD
 - **Configurable Compendium Selection**: Read every official source (default), restrict to core rulebooks, include premium third-party content, or pick compendiums one by one
@@ -18,6 +18,7 @@ A Foundry VTT module that automatically replaces NPC tokens in your scene with o
 - **Smart Name Matching**: Handles variations in creature names (e.g., "Goblin Warrior" matches "Goblin")
 - **Token Variation Mode**: Choose how to handle multiple token art variations (None/Sequential/Random)
 - **Folder Organization**: Automatically organizes imported monsters into folders
+- **D&D Beyond Importer Aware**: Creatures already imported by D&D Beyond Importer are overwritten in place with the official version - same folder, same ownership, no duplicates - and listed in the preview first
 
 ## 📚 Supported Official D&D Content
 
@@ -157,6 +158,27 @@ groups and vehicles in those compendiums are skipped.
 - **With selected tokens**: Only the selected NPC tokens will be replaced
 - **Without selection**: All NPC tokens in the scene will be replaced
 
+### 🎯 Macros
+
+The module exposes its API as `NPCTokenReplacer`, so a one-line **Script** macro
+runs the full workflow (preview → confirm → replace) from the hotbar or a key
+binding. Because the logic stays in the module, the macro is updated with it.
+
+```js
+// Replace NPC tokens (same as the toolbar button)
+NPCTokenReplacer.replaceNPCTokens();
+```
+
+To switch compendium selection from a macro (GM only), write the same setting
+the settings form saves, then clear the cache so the next run re-indexes:
+
+```js
+// "default" (official), "core" (SRD + rulebooks), "all" (everything detected),
+// or a list of pack ids — NPCTokenReplacer.detectWOTCCompendiums().map(p => p.collection) lists them
+await game.settings.set("npc-token-replacer", "enabledCompendiums", JSON.stringify(["all"]));
+NPCTokenReplacer.clearCache();
+```
+
 ## 🎯 Token Properties Preserved
 
 When replacing tokens, the following properties are preserved from the original token:
@@ -182,6 +204,7 @@ Access the module settings via **Game Settings** > **Configure Settings** > **Mo
 | Preview Dialog Timeout | 1-30 minutes (default: 5) | How long to wait before auto-closing the preview dialog |
 | HTTP Timeout | 1-30 seconds (default: 5) | Timeout for network requests when resolving wildcard token paths |
 | Additional Compendium Sources | Comma-separated ids | Package or compendium ids to treat as official creature sources. Only needed for content the module cannot recognise on its own. |
+| Overwrite D&D Beyond Imports | On/Off (default: On) | Overwrite actors already imported by D&D Beyond Importer in place with the official compendium version instead of importing a duplicate |
 | Configure Compendiums | Button | Opens dialog to select which compendiums to use |
 
 ### ⚙️ Token Variation Mode
@@ -300,6 +323,7 @@ and opens a pull request bumping the verified generation.
 - Requires at least one official D&D module with Actor compendiums
 - Custom/homebrew creatures without official compendium equivalents will be skipped
 - Token art from the compendium will replace any custom token art
+- Overwriting a D&D Beyond import replaces its D&D Beyond data and any manual edits on that actor; turn off **Overwrite D&D Beyond Imports** to keep them
 
 ## 🧩 Architecture
 
@@ -370,7 +394,7 @@ A global debug API is exposed via `window.NPCTokenReplacer` for console access.
 
 | Command | Purpose |
 |---------|---------|
-| `npm test` | Run the unit suite (232 tests) |
+| `npm test` | Run the unit suite (257 tests) |
 | `npm run lint` | ESLint over `scripts/`, `tools/` and `tests/` |
 | `npm run validate` | Verify `module.json`, referenced files, i18n keys and template paths |
 | `npm run check` | All three, in order |

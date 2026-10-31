@@ -18,6 +18,7 @@ Un modulo per Foundry VTT che sostituisce automaticamente i token PNG della scen
 - **Confronto nomi intelligente**: gestisce le varianti dei nomi (es. "Goblin Warrior" corrisponde a "Goblin")
 - **Modalità variazione token**: scegli come gestire più varianti grafiche dello stesso token (Nessuna/Sequenziale/Casuale)
 - **Organizzazione in cartelle**: i mostri importati vengono ordinati automaticamente in cartelle
+- **Compatibile con D&D Beyond Importer**: le creature già importate da D&D Beyond Importer vengono sovrascritte sul posto con la versione ufficiale — stessa cartella, stessi permessi, nessun duplicato — e prima elencate nell'anteprima
 
 ## 📚 Contenuti D&D ufficiali supportati
 
@@ -156,6 +157,29 @@ giocanti, gruppi e veicoli presenti in quei compendi vengono ignorati.
 - **Con token selezionati**: vengono sostituiti solo i PNG selezionati
 - **Senza selezione**: vengono sostituiti tutti i PNG della scena
 
+### 🎯 Macro
+
+Il modulo espone la propria API come `NPCTokenReplacer`, quindi una macro di tipo
+**Script** di una riga avvia l'intero flusso (anteprima → conferma → sostituzione)
+dalla hotbar o da una scorciatoia. La logica resta nel modulo, quindi la macro si
+aggiorna insieme a esso.
+
+```js
+// Sostituisci i token PNG (come il pulsante nella barra)
+NPCTokenReplacer.replaceNPCTokens();
+```
+
+Per cambiare la selezione dei compendi da una macro (solo GM), scrivi la stessa
+impostazione salvata dalla finestra delle impostazioni, poi svuota la cache così
+la prossima esecuzione ricostruisce l'indice:
+
+```js
+// "default" (ufficiali), "core" (SRD + manuali), "all" (tutto il rilevato),
+// oppure una lista di id — NPCTokenReplacer.detectWOTCCompendiums().map(p => p.collection) li elenca
+await game.settings.set("npc-token-replacer", "enabledCompendiums", JSON.stringify(["all"]));
+NPCTokenReplacer.clearCache();
+```
+
 ## 🎯 Proprietà del token preservate
 
 Durante la sostituzione queste proprietà vengono mantenute dal token originale:
@@ -181,6 +205,7 @@ Raggiungibili da **Impostazioni di Gioco** > **Configura Impostazioni** > **Impo
 | Timeout finestra di anteprima | 1-30 minuti (default: 5) | Quanto attendere prima di chiudere automaticamente l'anteprima |
 | Timeout HTTP | 1-30 secondi (default: 5) | Timeout delle richieste di rete per risolvere i percorsi wildcard |
 | Sorgenti compendio aggiuntive | Id separati da virgola | Id di pacchetti o compendi da trattare come sorgenti ufficiali. Serve solo per contenuti che il modulo non riesce a riconoscere da solo. |
+| Sovrascrivi gli import di D&D Beyond | Sì/No (default: Sì) | Sovrascrive sul posto con la versione ufficiale gli attori già importati da D&D Beyond Importer invece di importarne un duplicato |
 | Configura compendi | Pulsante | Apre la finestra per scegliere quali compendi usare |
 
 ### ⚙️ Modalità variazione token
@@ -308,6 +333,7 @@ verificata.
 - Richiede almeno un modulo D&D ufficiale con compendi Actor
 - Le creature custom o homebrew senza equivalente ufficiale vengono saltate
 - La grafica del compendio sostituisce qualsiasi grafica personalizzata del token
+- Sovrascrivere un import di D&D Beyond sostituisce i suoi dati D&D Beyond e le modifiche manuali a quell'attore; disattiva **Sovrascrivi gli import di D&D Beyond** per conservarli
 
 ## 🧩 Architettura
 
@@ -324,7 +350,7 @@ Documentazione tecnica di supporto:
 
 | Comando | Scopo |
 |---------|-------|
-| `npm test` | Esegue la suite di test (232 test) |
+| `npm test` | Esegue la suite di test (257 test) |
 | `npm run lint` | ESLint su `scripts/`, `tools/` e `tests/` |
 | `npm run validate` | Verifica `module.json`, i file referenziati, le chiavi i18n e i percorsi dei template |
 | `npm run check` | Tutti e tre, in ordine |
