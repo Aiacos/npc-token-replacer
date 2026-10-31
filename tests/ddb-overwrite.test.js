@@ -66,6 +66,7 @@ describe("TokenReplacer — overwrite D&D Beyond imports in place", () => {
   beforeEach(() => {
     vi.restoreAllMocks();
     TokenReplacer.clearActorLookup();
+    CompendiumManager.clearCache();
     pack.getDocument = vi.fn().mockResolvedValue(compendiumActor);
     // fromCompendium returns fresh compendium data, deliberately without folder/ownership
     game.actors.fromCompendium = vi.fn(() => ({
@@ -232,6 +233,8 @@ describe("Preview — overwrites are listed before anything changes", () => {
   beforeEach(() => {
     vi.restoreAllMocks();
     TokenReplacer.clearActorLookup();
+    // findMatch prefers a cached index map over the fixture index
+    CompendiumManager.clearCache();
     setOverwriteSetting(true);
     game.i18n.localize = vi.fn(key => key);
     game.i18n.format = vi.fn((key, data) => `${key} ${JSON.stringify(data)}`);
