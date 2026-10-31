@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
+import { PreviewDialog } from "../scripts/lib/preview-dialog.js";
 import { ActorImporter } from "../scripts/lib/actor-importer.js";
 import { NPCTokenReplacerController, TokenReplacer } from "../scripts/main.js";
 import { CompendiumManager } from "../scripts/lib/compendium-manager.js";
@@ -393,7 +394,7 @@ describe("ERR-02 — Failure classification via replaceNPCTokens", () => {
     });
 
     // Mock showPreviewDialog to auto-confirm
-    const dialogSpy = vi.spyOn(NPCTokenReplacerController, "showPreviewDialog").mockResolvedValue(true);
+    const dialogSpy = vi.spyOn(PreviewDialog, "confirm").mockResolvedValue(true);
 
     // Mock TokenReplacer.replaceToken to throw an import error
     const replaceSpy = vi.spyOn(TokenReplacer, "replaceToken")
@@ -442,7 +443,7 @@ describe("ERR-02 — Failure classification via replaceNPCTokens", () => {
       isSelection: false
     });
 
-    const dialogSpy = vi.spyOn(NPCTokenReplacerController, "showPreviewDialog").mockResolvedValue(true);
+    const dialogSpy = vi.spyOn(PreviewDialog, "confirm").mockResolvedValue(true);
 
     // Mock TokenReplacer.replaceToken to throw a creation error (no "import" keyword)
     const replaceSpy = vi.spyOn(TokenReplacer, "replaceToken")
@@ -485,7 +486,7 @@ describe("ERR-02 — Failure classification via replaceNPCTokens", () => {
       isSelection: false
     });
 
-    const dialogSpy = vi.spyOn(NPCTokenReplacerController, "showPreviewDialog").mockResolvedValue(true);
+    const dialogSpy = vi.spyOn(PreviewDialog, "confirm").mockResolvedValue(true);
 
     // First token: import error; Second token: creation error
     const replaceSpy = vi.spyOn(TokenReplacer, "replaceToken")
@@ -540,7 +541,7 @@ describe("replaceNPCTokens loop bookkeeping", () => {
     game.settings.get = vi.fn().mockReturnValue('["all"]');
     await CompendiumManager.loadMonsterIndex(true);
     vi.spyOn(CompendiumManager, "detectWOTCCompendiums").mockReturnValue([pack]);
-    vi.spyOn(NPCTokenReplacerController, "showPreviewDialog").mockResolvedValue(true);
+    vi.spyOn(PreviewDialog, "confirm").mockResolvedValue(true);
   });
 
   const runWith = async (tokens) => {

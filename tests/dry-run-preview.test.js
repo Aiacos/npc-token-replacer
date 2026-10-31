@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
+import { PreviewDialog } from "../scripts/lib/preview-dialog.js";
 import { ActorImporter } from "../scripts/lib/actor-importer.js";
 import { NPCTokenReplacerController, TokenReplacer } from "../scripts/main.js";
 import { CompendiumManager } from "../scripts/lib/compendium-manager.js";
@@ -44,14 +45,14 @@ describe("NPCTokenReplacerController.computeMatches", () => {
     });
   });
 
-  it("returns array with {tokenDoc, creatureName, match, overwrite} for each token", async () => {
+  it("returns array with {tokenDoc, scene, creatureName, match, overwrite} for each token", async () => {
     const progress = createMockProgress();
     const results = await NPCTokenReplacerController.computeMatches(mockTokens, mockIndex, progress);
 
     expect(results).toHaveLength(3);
-    expect(results[0]).toEqual({ tokenDoc: mockTokens[0], creatureName: "Goblin", match: mockMatchGoblin, overwrite: null });
-    expect(results[1]).toEqual({ tokenDoc: mockTokens[1], creatureName: "Orc", match: mockMatchOrc, overwrite: null });
-    expect(results[2]).toEqual({ tokenDoc: mockTokens[2], creatureName: "Unknown Beast", match: null, overwrite: null });
+    expect(results[0]).toEqual({ tokenDoc: mockTokens[0], scene: TokenReplacer.sceneOf(mockTokens[0]), creatureName: "Goblin", match: mockMatchGoblin, overwrite: null });
+    expect(results[1]).toEqual({ tokenDoc: mockTokens[1], scene: TokenReplacer.sceneOf(mockTokens[1]), creatureName: "Orc", match: mockMatchOrc, overwrite: null });
+    expect(results[2]).toEqual({ tokenDoc: mockTokens[2], scene: TokenReplacer.sceneOf(mockTokens[2]), creatureName: "Unknown Beast", match: null, overwrite: null });
   });
 
   it("calls NameMatcher.findMatch once per token (no double-matching)", async () => {
@@ -129,7 +130,7 @@ function createMatchResults({ matched = true, unmatched = true, htmlChars = fals
 // ---------------------------------------------------------------------------
 // Tests for showPreviewDialog
 // ---------------------------------------------------------------------------
-describe("NPCTokenReplacerController.showPreviewDialog", () => {
+describe("PreviewDialog.confirm", () => {
   let capturedOptions;
 
   beforeEach(() => {
@@ -149,7 +150,7 @@ describe("NPCTokenReplacerController.showPreviewDialog", () => {
   });
 
   it("renders a table with Token Name, Scene, Will Match As, Source Compendium columns", async () => {
-    await NPCTokenReplacerController.showPreviewDialog(createMatchResults());
+    await PreviewDialog.confirm(createMatchResults());
 
     expect(capturedOptions).toBeDefined();
     const content = capturedOptions.content;
@@ -171,7 +172,7 @@ describe("NPCTokenReplacerController.showPreviewDialog", () => {
       { tokenDoc: { id: "t1" }, creatureName: "Goblin", match: { entry: { name: "Goblin" }, pack: mockPackLabel } }
     ];
 
-    await NPCTokenReplacerController.showPreviewDialog(results);
+    await PreviewDialog.confirm(results);
     const content = capturedOptions.content;
 
     // Goblin (matched) should appear before Unknown Beast (unmatched)
@@ -181,7 +182,7 @@ describe("NPCTokenReplacerController.showPreviewDialog", () => {
   });
 
   it("unmatched tokens show 'No match found' text and em-dash for source", async () => {
-    await NPCTokenReplacerController.showPreviewDialog(createMatchResults());
+    await PreviewDialog.confirm(createMatchResults());
 
     const content = capturedOptions.content;
     // Mock i18n.localize returns the key
@@ -190,7 +191,7 @@ describe("NPCTokenReplacerController.showPreviewDialog", () => {
   });
 
   it("HTML-escapes all token names and creature names", async () => {
-    await NPCTokenReplacerController.showPreviewDialog(createMatchResults({ htmlChars: true }));
+    await PreviewDialog.confirm(createMatchResults({ htmlChars: true }));
 
     const content = capturedOptions.content;
     // Raw HTML should NOT appear
@@ -206,7 +207,7 @@ describe("NPCTokenReplacerController.showPreviewDialog", () => {
   it("summary line shows matched/total counts via i18n.format", async () => {
     const formatSpy = vi.spyOn(game.i18n, "format");
     const results = createMatchResults(); // 2 matched, 1 unmatched
-    await NPCTokenReplacerController.showPreviewDialog(results);
+    await PreviewDialog.confirm(results);
 
     // Verify i18n.format was called with correct key and counts
     expect(formatSpy).toHaveBeenCalledWith("NPC_REPLACER.PreviewSummary", {
@@ -219,7 +220,7 @@ describe("NPCTokenReplacerController.showPreviewDialog", () => {
   it("disables the Replace button when all tokens are unmatched", async () => {
     const allUnmatched = createMatchResults({ matched: false, unmatched: true });
 
-    await NPCTokenReplacerController.showPreviewDialog(allUnmatched);
+    await PreviewDialog.confirm(allUnmatched);
 
     // When all unmatched, a render callback should be provided
     expect(capturedOptions.render).toBeDefined();
@@ -241,7 +242,7 @@ describe("NPCTokenReplacerController.showPreviewDialog", () => {
 
   it("does NOT provide render callback when some tokens are matched", async () => {
     const someMatched = createMatchResults({ matched: true, unmatched: true });
-    await NPCTokenReplacerController.showPreviewDialog(someMatched);
+    await PreviewDialog.confirm(someMatched);
 
     // render should be undefined when there are matches
     expect(capturedOptions.render).toBeUndefined();
@@ -254,7 +255,7 @@ describe("NPCTokenReplacerController.showPreviewDialog", () => {
       this.close = vi.fn();
     };
 
-    const result = await NPCTokenReplacerController.showPreviewDialog(createMatchResults());
+    const result = await PreviewDialog.confirm(createMatchResults());
     expect(result).toBe(true);
   });
 
@@ -265,7 +266,7 @@ describe("NPCTokenReplacerController.showPreviewDialog", () => {
       this.close = vi.fn();
     };
 
-    const result = await NPCTokenReplacerController.showPreviewDialog(createMatchResults());
+    const result = await PreviewDialog.confirm(createMatchResults());
     expect(result).toBe(false);
   });
 
@@ -276,7 +277,7 @@ describe("NPCTokenReplacerController.showPreviewDialog", () => {
       this.close = vi.fn();
     };
 
-    const result = await NPCTokenReplacerController.showPreviewDialog(createMatchResults());
+    const result = await PreviewDialog.confirm(createMatchResults());
     expect(result).toBe(false);
   });
 });
@@ -348,7 +349,7 @@ describe("replaceNPCTokens integration with preview flow", () => {
     });
 
     // Mock showPreviewDialog to auto-confirm
-    showPreviewSpy = vi.spyOn(NPCTokenReplacerController, "showPreviewDialog").mockResolvedValue(true);
+    showPreviewSpy = vi.spyOn(PreviewDialog, "confirm").mockResolvedValue(true);
 
     // Mock replaceToken to succeed
     replaceTokenSpy = vi.spyOn(TokenReplacer, "replaceToken").mockResolvedValue();

@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
+import { PreviewDialog } from "../scripts/lib/preview-dialog.js";
 import { ActorImporter } from "../scripts/lib/actor-importer.js";
 import { TokenReplacer, NPCTokenReplacerController } from "../scripts/main.js";
 import { CompendiumManager } from "../scripts/lib/compendium-manager.js";
@@ -125,7 +126,7 @@ describe("A selection scopes the D&D Beyond actor pass too", () => {
     const scene = makeScene("cave", [{ tid: "t1", name: "Wolf", actorId: "ddb-wolf" }]);
     game.scenes = { contents: [scene] };
     canvas.tokens.controlled = [{ document: scene.tokens.contents[0] }];
-    const preview = vi.spyOn(NPCTokenReplacerController, "showPreviewDialog").mockResolvedValue(false);
+    const preview = vi.spyOn(PreviewDialog, "confirm").mockResolvedValue(false);
 
     await NPCTokenReplacerController.replaceNPCTokens();
 
@@ -141,7 +142,7 @@ describe("Run lifecycle", () => {
     const scene = makeScene("cave", [{ tid: "t1", name: "Goblin" }]);
     game.scenes = { contents: [scene] };
     const clearLookup = vi.spyOn(TokenReplacer, "clearActorLookup");
-    vi.spyOn(NPCTokenReplacerController, "showPreviewDialog").mockImplementation(async () => {
+    vi.spyOn(PreviewDialog, "confirm").mockImplementation(async () => {
       NPCTokenReplacerController.clearCache();
       expect(clearLookup).not.toHaveBeenCalled();
       return false;

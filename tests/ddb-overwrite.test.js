@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
+import { PreviewDialog } from "../scripts/lib/preview-dialog.js";
 import { ActorImporter } from "../scripts/lib/actor-importer.js";
 import { TokenReplacer, NPCTokenReplacerController } from "../scripts/main.js";
 import { CompendiumManager } from "../scripts/lib/compendium-manager.js";
@@ -262,7 +263,7 @@ describe("Preview — overwrites are listed before anything changes", () => {
       match: { entry, pack }, overwrite: ddbActor()
     }];
 
-    await NPCTokenReplacerController.showPreviewDialog(results);
+    await PreviewDialog.confirm(results);
 
     const { content } = confirm.mock.calls[0][0];
     expect(content).toContain("NPC_REPLACER.PreviewOverwriteSummary");
@@ -302,7 +303,7 @@ describe("One button — every D&D Beyond actor in the world", () => {
     mmPack = indexedPack([{ name: "Goblin", _id: "goblin" }, { name: "Owlbear", _id: "owlbear" }]);
     game.packs.filter = vi.fn(pred => [mmPack].filter(pred));
     vi.spyOn(TokenReplacer, "getNPCTokensToProcess").mockReturnValue({ tokens: [], isSelection: false });
-    confirmSpy = vi.spyOn(NPCTokenReplacerController, "showPreviewDialog").mockResolvedValue(true);
+    confirmSpy = vi.spyOn(PreviewDialog, "confirm").mockResolvedValue(true);
   });
 
   it("overwrites DDB actors that are not on the scene, even with an empty scene", async () => {
@@ -414,7 +415,7 @@ describe("Preview — D&D Beyond actors section", () => {
       { actor: ddbActor({ id: "b", name: "Ddb <Only>" }), match: null }
     ];
 
-    await NPCTokenReplacerController.showPreviewDialog([], plan);
+    await PreviewDialog.confirm([], plan);
 
     const { content, yesDisabled } = confirm.mock.calls[0][0];
     expect(content).toContain("NPC_REPLACER.PreviewActorsTitle");

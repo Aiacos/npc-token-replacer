@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
+import { PreviewDialog } from "../scripts/lib/preview-dialog.js";
 import { TokenReplacer, NPCTokenReplacerController } from "../scripts/main.js";
 import { CompendiumManager } from "../scripts/lib/compendium-manager.js";
 import { FolderManager } from "../scripts/lib/folder-manager.js";
@@ -93,7 +94,7 @@ describe("End to end — two scenes, one D&D Beyond goblin", () => {
     const cave = scene("cave", ["t1", "t2"]);
     const castle = scene("castle", ["t1"]);
     game.scenes = { contents: [cave, castle] };
-    vi.spyOn(NPCTokenReplacerController, "showPreviewDialog").mockResolvedValue(true);
+    vi.spyOn(PreviewDialog, "confirm").mockResolvedValue(true);
 
     await NPCTokenReplacerController.replaceNPCTokens();
 
@@ -126,7 +127,7 @@ describe("The replacement lock", () => {
     game.actors[Symbol.iterator] = function* () {};
     game.scenes = { contents: [scene("cave", ["t1"])] };
     let answer;
-    vi.spyOn(NPCTokenReplacerController, "showPreviewDialog").mockImplementation(() => new Promise(r => { answer = r; }));
+    vi.spyOn(PreviewDialog, "confirm").mockImplementation(() => new Promise(r => { answer = r; }));
 
     const first = NPCTokenReplacerController.replaceNPCTokens();
     await vi.waitFor(() => expect(answer).toBeTypeOf("function"));
@@ -136,7 +137,7 @@ describe("The replacement lock", () => {
     answer(false);
     await first;
     ui.notifications.warn.mockClear();
-    NPCTokenReplacerController.showPreviewDialog.mockResolvedValue(false);
+    PreviewDialog.confirm.mockResolvedValue(false);
     await NPCTokenReplacerController.replaceNPCTokens();
     expect(ui.notifications.warn).not.toHaveBeenCalledWith("NPC_REPLACER.AlreadyProcessing");
   });

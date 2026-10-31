@@ -96,8 +96,11 @@ const collectFiles = async (directory, extensions) => {
     .map(entry => path.join(entry.parentPath ?? entry.path, entry.name));
 };
 
-// Notifications localize their own key when called with {localize: true}
-const KEY_PATTERN = /(?:localize|format|notifications\.(?:info|warn|error|notify))\(\s*["'`](NPC_REPLACER\.[^"'`]+)["'`]/g;
+// Any complete key written as a string literal counts as used: keys reach
+// game.i18n directly, through notifications ({localize: true}) or through small
+// helpers such as PreviewDialog's. Keys built at runtime (`NPC_REPLACER.Tier.${tier}`)
+// are not complete literals and are checked by a unit test instead.
+const KEY_PATTERN = /["'`](NPC_REPLACER\.[A-Za-z0-9_.]*[A-Za-z0-9_])["'`]/g;
 const TEMPLATE_KEY_PATTERN = /localize\s+"(NPC_REPLACER\.[^"]+)"/g;
 
 const usedKeys = new Set();

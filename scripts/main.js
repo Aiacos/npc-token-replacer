@@ -17,6 +17,7 @@ import { FolderManager } from "./lib/folder-manager.js";
 import { CompendiumManager } from "./lib/compendium-manager.js";
 import { CompendiumDocs } from "./lib/compendium-docs.js";
 import { ActorImporter } from "./lib/actor-importer.js";
+import { PreviewDialog } from "./lib/preview-dialog.js";
 
 /**
  * Handles token replacement: extract properties, import actors, create new tokens.
@@ -274,136 +275,6 @@ class NPCTokenReplacerController {
     return true;
   }
 
-  /** Show 3-column preview dialog (Token | Match | Source). Returns true if user confirms. */
-  static async showPreviewDialog(matchResults, actorPlan = [], skipped = { replaced: 0, inCombat: 0 }) {
-    const matched = matchResults.filter(r => r.match !== null);
-    const unmatched = matchResults.filter(r => r.match === null);
-    const sorted = [...matched, ...unmatched];
-
-    const noMatchText = escapeHtml(game.i18n.localize("NPC_REPLACER.PreviewNoMatch"));
-
-    const rows = [];
-    for (const result of sorted) {
-      if (result.match) {
-        const overwriteNote = result.overwrite
-          ? `<br><small class="npc-replacer-overwrite">${escapeHtml(game.i18n.format("NPC_REPLACER.PreviewOverwrites", { name: result.overwrite.name }))}</small>`
-          : "";
-        rows.push(`<tr>
-          <td>${escapeHtml(result.creatureName)}</td>
-          <td>${escapeHtml(TokenReplacer.sceneOf(result.tokenDoc)?.name ?? "")}</td>
-          <td>${escapeHtml(result.match.entry.name)}${overwriteNote}</td>
-          <td>${escapeHtml(result.match.pack.metadata.label)}</td>
-        </tr>`);
-      } else {
-        rows.push(`<tr>
-          <td>${escapeHtml(result.creatureName)}</td>
-          <td>${escapeHtml(TokenReplacer.sceneOf(result.tokenDoc)?.name ?? "")}</td>
-          <td class="npc-replacer-no-match">${noMatchText}</td>
-          <td>&mdash;</td>
-        </tr>`);
-      }
-    }
-    const rowsHtml = rows.join("");
-
-    const sceneCount = new Set(matchResults.map(r => TokenReplacer.sceneOf(r.tokenDoc)?.id)).size;
-    const summary = escapeHtml(game.i18n.format("NPC_REPLACER.PreviewSummary", {
-      scenes: sceneCount,
-      matched: matched.length,
-      total: matchResults.length
-    }));
-
-    // One actor can back many tokens, and appear in both lists; count each overwrite once
-    const plannedActors = actorPlan.filter(p => p.match);
-    const overwriteCount = new Set([
-      ...matched.filter(r => r.overwrite).map(r => r.overwrite.id),
-      ...plannedActors.map(p => p.actor.id)
-    ]).size;
-    const overwriteSummary = overwriteCount > 0
-      ? `<p class="npc-replacer-overwrite-summary"><i class="fas fa-triangle-exclamation"></i> ${escapeHtml(game.i18n.format("NPC_REPLACER.PreviewOverwriteSummary", { count: overwriteCount }))}</p>`
-      : "";
-
-    const actorRows = actorPlan.map(({ actor, match }) => match
-      ? `<tr><td>${escapeHtml(actor.name)}</td><td>${escapeHtml(match.entry.name)}</td><td>${escapeHtml(match.pack.metadata.label)}</td></tr>`
-      : `<tr><td>${escapeHtml(actor.name)}</td><td class="npc-replacer-no-match">${escapeHtml(game.i18n.localize("NPC_REPLACER.PreviewActorUnchanged"))}</td><td>&mdash;</td></tr>`
-    ).join("");
-    const actorSection = actorPlan.length === 0 ? "" : `
-      <h4>${escapeHtml(game.i18n.localize("NPC_REPLACER.PreviewActorsTitle"))}</h4>
-      <div class="npc-replacer-preview-table-container">
-        <table class="npc-replacer-preview-table">
-          <thead>
-            <tr>
-              <th>${escapeHtml(game.i18n.localize("NPC_REPLACER.PreviewColActor"))}</th>
-              <th>${escapeHtml(game.i18n.localize("NPC_REPLACER.PreviewColMatch"))}</th>
-              <th>${escapeHtml(game.i18n.localize("NPC_REPLACER.PreviewColSource"))}</th>
-            </tr>
-          </thead>
-          <tbody>${actorRows}</tbody>
-        </table>
-      </div>`;
-
-    // With an empty scene the button only updates actors: skip the token table
-    const tokenSection = matchResults.length === 0 ? "" : `
-      <p>${summary}</p>
-      <div class="npc-replacer-preview-table-container">
-        <table class="npc-replacer-preview-table">
-          <thead>
-            <tr>
-              <th>${escapeHtml(game.i18n.localize("NPC_REPLACER.PreviewColToken"))}</th>
-              <th>${escapeHtml(game.i18n.localize("NPC_REPLACER.PreviewColScene"))}</th>
-              <th>${escapeHtml(game.i18n.localize("NPC_REPLACER.PreviewColMatch"))}</th>
-              <th>${escapeHtml(game.i18n.localize("NPC_REPLACER.PreviewColSource"))}</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${rowsHtml}
-          </tbody>
-        </table>
-      </div>`;
-
-    const skippedNote = skipped.replaced || skipped.inCombat
-      ? `<p class="hint">${escapeHtml(game.i18n.format("NPC_REPLACER.TokensSkipped", skipped))}</p>`
-      : "";
-
-    const content = `
-      ${overwriteSummary}
-      ${skippedNote}
-      ${tokenSection}
-      ${actorSection}`;
-
-    let dialogTimeoutMinutes = 5;
-    try {
-      const value = game.settings.get(MODULE_ID, "dialogTimeout");
-      if (Number.isFinite(value) && value > 0) dialogTimeoutMinutes = value;
-    } catch (error) {
-      Logger.debug(`dialogTimeout setting not available, using default ${dialogTimeoutMinutes}min: ${error.message}`);
-    }
-    const DIALOG_TIMEOUT_MS = dialogTimeoutMinutes * 60 * 1000;
-
-    let timeoutId;
-    const { answer, close } = FoundryCompat.confirmDialog({
-      title: game.i18n.localize("NPC_REPLACER.PreviewTitle"),
-      content,
-      yesLabel: game.i18n.localize("NPC_REPLACER.ConfirmYes"),
-      noLabel: game.i18n.localize("NPC_REPLACER.ConfirmNo"),
-      // Nothing to replace: the confirm button stays unusable
-      yesDisabled: matched.length === 0 && plannedActors.length === 0
-    });
-
-    try {
-      const timeoutPromise = new Promise(resolve => {
-        timeoutId = setTimeout(() => {
-          ui.notifications.warn(game.i18n.localize("NPC_REPLACER.DialogTimeout"));
-          close();
-          resolve(false);
-        }, DIALOG_TIMEOUT_MS);
-      });
-
-      return await Promise.race([answer, timeoutPromise]);
-    } finally {
-      clearTimeout(timeoutId);
-    }
-  }
-
   /** Display result notifications and log replacement summary. */
   static #reportResults(replaced, notFound, importFailed, creationFailed, deleteFailed = []) {
     const totalErrors = importFailed.length + creationFailed.length;
@@ -556,7 +427,7 @@ class NPCTokenReplacerController {
         }
       }
 
-      const confirmed = await NPCTokenReplacerController.showPreviewDialog(matchResults, actorPlan, skipped);
+      const confirmed = await PreviewDialog.confirm(matchResults, actorPlan, skipped);
       if (!confirmed) {
         Logger.log("Token replacement cancelled by user");
         return;
@@ -673,7 +544,7 @@ class NPCTokenReplacerController {
       const creatureName = tokenDoc.actor?.name || tokenDoc.name;
       const match = NameMatcher.findMatch(creatureName, index);
       const overwrite = match ? ActorImporter.findOverwriteTarget(match.entry, match.pack) : null;
-      results.push({ tokenDoc, creatureName, match, overwrite });
+      results.push({ tokenDoc, scene: TokenReplacer.sceneOf(tokenDoc), creatureName, match, overwrite });
 
       progress.update(i + 1, game.i18n.format("NPC_REPLACER.ProgressUpdate", {
         current: i + 1,
