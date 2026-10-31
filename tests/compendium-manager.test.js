@@ -181,6 +181,20 @@ describe("CompendiumManager", () => {
       expect(result).not.toContain(adventurePack);
     });
 
+    // "core" is the conservative mode (and the fallback when the setting is
+    // unreadable): it must never pull in content that "default" would exclude
+    it('"core" mode never includes non-official packs that happen to classify as CORE', () => {
+      const manualPack = createMockPack("homebrew-monsters", "Homebrew");
+      mockPacks = [corePack, manualPack];
+      game.modules.get = vi.fn(id => (id === "homebrew-monsters" ? { id, packs: [{ type: "Actor" }] } : undefined));
+      game.settings.get = vi.fn((ns, key) => ({ enabledCompendiums: '["core"]', additionalSources: "homebrew-monsters" })[key]);
+
+      const result = CompendiumManager.getEnabledCompendiums();
+
+      expect(result).toContain(corePack);
+      expect(result).not.toContain(manualPack);
+    });
+
     it('"all" mode includes every detected compendium', () => {
       game.settings.get = vi.fn().mockReturnValue('["all"]');
       const result = CompendiumManager.getEnabledCompendiums();

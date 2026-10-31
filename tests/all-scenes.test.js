@@ -9,13 +9,13 @@ import { FoundryCompat } from "../scripts/lib/foundry-compat.js";
 
 const npc = (id, name, scene) => ({
   id, name, parent: scene, uuid: `Scene.${scene.id}.Token.${id}`,
-  actor: { name, type: "npc" }
+  actorId: `actor-${name}`, actor: { name, type: "npc" }
 });
 
 function makeScene(id, name, tokenSpecs) {
   const scene = { id, name, tokens: null };
   const tokens = tokenSpecs.map(([tid, tname, type = "npc"]) =>
-    type === "npc" ? npc(tid, tname, scene) : { id: tid, name: tname, parent: scene, uuid: `Scene.${id}.Token.${tid}`, actor: { name: tname, type } });
+    type === "npc" ? npc(tid, tname, scene) : { id: tid, name: tname, parent: scene, uuid: `Scene.${id}.Token.${tid}`, actorId: `actor-${tname}`, actor: { name: tname, type } });
   scene.tokens = { contents: tokens, has: vi.fn(tid => tokens.some(t => t.id === tid)) };
   return scene;
 }

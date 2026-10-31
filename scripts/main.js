@@ -275,6 +275,16 @@ class CompendiumManager {
       ?? SourceDetector.classify(pack).label;
   }
 
+  /**
+   * The conservative "core" set (also the fallback for an unreadable setting):
+   * official SRD and rulebooks only. Priority alone is not enough, because
+   * opt-in tiers without Adventure/Scene packs also classify as CORE.
+   */
+  static #isCoreSource(pack) {
+    return CompendiumManager.getCompendiumPriority(pack) <= SourceDetector.PRIORITY.CORE
+      && CompendiumManager.isOfficialSource(pack);
+  }
+
   /** True for first-party D&D content: system SRD, whitelisted or verified WotC book. */
   static isOfficialSource(pack) {
     return CompendiumManager.#classifications.get(pack?.collection)?.official
@@ -301,7 +311,7 @@ class CompendiumManager {
       Logger.warn(`Failed to retrieve enabledCompendiums setting (${e.name}: ${e.message})`);
       ui.notifications.error(game.i18n.localize("NPC_REPLACER.ErrorSettingsRetrieve"));
       // Reading the setting failed: stay conservative rather than silently widening scope
-      const result = allPacks.filter(pack => CompendiumManager.getCompendiumPriority(pack) <= CompendiumManager.CORE_MAX_PRIORITY);
+      const result = allPacks.filter(pack => CompendiumManager.#isCoreSource(pack));
       CompendiumManager.#enabledPacksCache = Object.freeze(result);
       return CompendiumManager.#enabledPacksCache;
     }
@@ -324,7 +334,7 @@ class CompendiumManager {
       Logger.log("Using all detected compendiums");
       result = allPacks;
     } else if (enabledPackIds.includes("core")) {
-      result = allPacks.filter(pack => CompendiumManager.getCompendiumPriority(pack) <= CompendiumManager.CORE_MAX_PRIORITY);
+      result = allPacks.filter(pack => CompendiumManager.#isCoreSource(pack));
       Logger.log(`Using core compendiums (SRD + rulebooks): ${result.map(p => p.metadata.label).join(", ")}`);
     } else if (enabledPackIds.includes("default")) {
       result = allPacks.filter(pack => CompendiumManager.isOfficialSource(pack));
@@ -394,7 +404,7 @@ class CompendiumManager {
           error: result.reason?.message || String(result.reason)
         });
         Logger.error(`Failed to load index from ${pack.collection}`, result.reason);
-        ui.notifications.error(game.i18n.format("NPC_REPLACER.ErrorCompendiumLoad", { name: pack.metadata.label }));
+        ui.notifications.error(game.i18n.format("NPC_REPLACER.ErrorCompendiumLoad", { name: escapeHtml(pack.metadata.label) }));
         continue;
       }
 
@@ -498,6 +508,8 @@ class TokenReplacer {
   static #actorLookup = null;
   /** normalizedName -> world actor imported by D&D Beyond Importer, not yet overwritten. */
   static #importedActorsByName = null;
+  /** Flag scopes written by D&D Beyond Importer, dropped when an actor is overwritten. */
+  static #DDB_FLAG_SCOPES = Object.freeze(["ddbimporter", "monsterMunch"]);
   /** Every D&D Beyond Importer actor not yet overwritten, in world order. */
   static #importedActors = null;
   static #compendiumDocCache = new Map();
@@ -576,7 +588,11 @@ class TokenReplacer {
     data.folder = target.folder?.id ?? null;
     data.ownership = target.ownership;
     data.sort = target.sort;
-    data.flags = { ...(data.flags ?? {}), [MODULE_ID]: { sourceUuid: compendiumActor.uuid } };
+    // Drop the D&D Beyond Importer flags (the actor no longer is a DDB import),
+    // keep every other module's flags and the sheet choice
+    const kept = { ...(target.flags ?? {}) };
+    for (const key of TokenReplacer.#DDB_FLAG_SCOPES) delete kept[key];
+    data.flags = { ...kept, ...(data.flags ?? {}), [MODULE_ID]: { sourceUuid: compendiumActor.uuid } };
     await target.update(data, { diff: false, recursive: false });
     return target;
   }
@@ -675,6 +691,7 @@ class TokenReplacer {
    * (sceneOf), so scenes that are not open are handled too.
    */
   static getNPCTokensToProcess() {
+    const none = { replaced: 0, inCombat: 0 };
     const selectedTokens = canvas?.tokens?.controlled ?? [];
 
     if (selectedTokens.length > 0) {
@@ -684,16 +701,35 @@ class TokenReplacer {
 
       if (selectedNPCs.length > 0) {
         Logger.log(`Using ${selectedNPCs.length} selected NPC token(s) out of ${selectedTokens.length} selected`);
-        return { tokens: selectedNPCs, isSelection: true };
+        return { tokens: selectedNPCs, isSelection: true, skipped: none };
       }
 
       Logger.log("Selected tokens contain no NPCs");
-      return { tokens: [], isSelection: true };
+      return { tokens: [], isSelection: true, skipped: none };
     }
 
-    const npcTokens = (game.scenes?.contents ?? [])
-      .flatMap(scene => scene.tokens.contents.filter(TokenReplacer.#isNPCToken));
-    return { tokens: npcTokens, isSelection: false };
+    // A world-wide run leaves alone tokens this module already created (re-creating
+    // them would reset hit points and conditions) and tokens in an encounter
+    // (deleting a token removes its combatant). Selecting them forces a run.
+    const inCombat = new Set();
+    for (const combat of game.combats?.contents ?? []) {
+      for (const combatant of combat.combatants?.contents ?? []) inCombat.add(`${combatant.sceneId}.${combatant.tokenId}`);
+    }
+    const skipped = { replaced: 0, inCombat: 0 };
+    const npcTokens = [];
+    for (const scene of game.scenes?.contents ?? []) {
+      for (const token of scene.tokens.contents) {
+        // actorId first: reading .actor builds a synthetic actor for unlinked tokens
+        if (!token.actorId || !TokenReplacer.#isNPCToken(token)) continue;
+        if (token.flags?.[MODULE_ID]?.replaced) skipped.replaced++;
+        else if (inCombat.has(`${scene.id}.${token.id}`)) skipped.inCombat++;
+        else npcTokens.push(token);
+      }
+    }
+    if (skipped.replaced || skipped.inCombat) {
+      Logger.log(`Skipped ${skipped.replaced} already-replaced token(s) and ${skipped.inCombat} in an encounter`);
+    }
+    return { tokens: npcTokens, isSelection: false, skipped };
   }
 
   /** Convenience: get all scene NPC tokens (ignores selection). */
@@ -775,7 +811,7 @@ class TokenReplacer {
 
     if (result.resolvedPath === "icons/svg/mystery-man.svg") {
       Logger.warn(`No token art variants found for "${creatureName}" — using placeholder`);
-      ui.notifications.warn(game.i18n.format("NPC_REPLACER.WildcardFallback", { name: creatureName }));
+      ui.notifications.warn(game.i18n.format("NPC_REPLACER.WildcardFallback", { name: escapeHtml(creatureName) }));
     } else {
       Logger.log(`Resolved wildcard for ${creatureName}: ${result.resolvedPath}`);
     }
@@ -790,7 +826,7 @@ class TokenReplacer {
   ]);
 
   /** Merge compendium token identity with preserved properties from original. */
-  static #prepareNewTokenData(prototypeToken, originalProps, worldActorId) {
+  static #prepareNewTokenData(prototypeToken, originalProps, worldActorId, compendiumUuid) {
     const newData = {};
     for (const prop of TokenReplacer.#COMPENDIUM_TOKEN_FIELDS) {
       if (prop in prototypeToken) newData[prop] = prototypeToken[prop];
@@ -800,6 +836,8 @@ class TokenReplacer {
     }
     newData.actorId = worldActorId;
     newData.actorLink = prototypeToken.actorLink ?? false;
+    // Lets a later world-wide run recognise tokens it already replaced
+    newData.flags = { [MODULE_ID]: { replaced: true, sourceUuid: compendiumUuid } };
     return newData;
   }
 
@@ -846,7 +884,7 @@ class TokenReplacer {
       await TokenReplacer.#resolveWildcardTexture(prototypeToken, compendiumActor, compendiumEntry.name);
     }
 
-    const newTokenData = TokenReplacer.#prepareNewTokenData(prototypeToken, originalProps, worldActor.id);
+    const newTokenData = TokenReplacer.#prepareNewTokenData(prototypeToken, originalProps, worldActor.id, compendiumActor.uuid);
     const scene = TokenReplacer.sceneOf(tokenDoc);
 
     // Create new token first, then delete old — avoids data loss if creation fails
@@ -886,6 +924,7 @@ class TokenReplacer {
  */
 class NPCTokenReplacerController {
   static #isProcessing = false;
+  static #clearPending = false;
 
   static isProcessing() {
     return NPCTokenReplacerController.#isProcessing;
@@ -908,7 +947,7 @@ class NPCTokenReplacerController {
   }
 
   /** Show 3-column preview dialog (Token | Match | Source). Returns true if user confirms. */
-  static async showPreviewDialog(matchResults, actorPlan = []) {
+  static async showPreviewDialog(matchResults, actorPlan = [], skipped = { replaced: 0, inCombat: 0 }) {
     const matched = matchResults.filter(r => r.match !== null);
     const unmatched = matchResults.filter(r => r.match === null);
     const sorted = [...matched, ...unmatched];
@@ -993,8 +1032,13 @@ class NPCTokenReplacerController {
         </table>
       </div>`;
 
+    const skippedNote = skipped.replaced || skipped.inCombat
+      ? `<p class="hint">${escapeHtml(game.i18n.format("NPC_REPLACER.TokensSkipped", skipped))}</p>`
+      : "";
+
     const content = `
       ${overwriteSummary}
+      ${skippedNote}
       ${tokenSection}
       ${actorSection}`;
 
@@ -1067,9 +1111,10 @@ class NPCTokenReplacerController {
    * Pair every D&D Beyond actor in the world with its official version, by
    * exact normalized name only: overwriting is destructive, so a variant
    * ("Goblin Warrior" -> "Goblin") is never applied to a whole actor.
+   * @param {Set<string>|null} scopeActorIds when the GM selected tokens, only their actors
    * @returns {{actor: Actor, match: {entry, pack}|null}[]} unmatched actors are kept, for the preview
    */
-  static planActorOverwrites() {
+  static planActorOverwrites(scopeActorIds = null) {
     if (!TokenReplacer.overwriteAllowed()) return [];
     // An overwrite tags the actor as official for good; against an index that is
     // missing a pack it could lock in a lower-priority version. Tokens are only
@@ -1079,7 +1124,9 @@ class NPCTokenReplacerController {
       return [];
     }
     const indexMap = CompendiumManager.getIndexMap();
-    return TokenReplacer.getImportedActors().map(actor => ({
+    return TokenReplacer.getImportedActors()
+      .filter(actor => !scopeActorIds || scopeActorIds.has(actor.id))
+      .map(actor => ({
       actor,
       match: NameMatcher.selectBestMatch(indexMap?.get(NameMatcher.normalizeName(actor.name)) ?? [])
     }));
@@ -1148,18 +1195,23 @@ class NPCTokenReplacerController {
         return;
       }
 
-      const { tokens: npcTokens, isSelection } = TokenReplacer.getNPCTokensToProcess();
+      const { tokens: npcTokens, isSelection, skipped = { replaced: 0, inCombat: 0 } } = TokenReplacer.getNPCTokensToProcess();
 
       // Built before matching so the preview can list actors that will be overwritten
       TokenReplacer.buildActorLookup();
-      // The same button also brings every D&D Beyond actor in the world up to date
-      const actorPlan = NPCTokenReplacerController.planActorOverwrites();
+      // The same button also brings D&D Beyond actors up to date: every one in the
+      // world, or only those behind the selected tokens
+      const scope = isSelection ? new Set(npcTokens.map(token => token.actorId)) : null;
+      const actorPlan = NPCTokenReplacerController.planActorOverwrites(scope);
 
       if (npcTokens.length === 0 && !actorPlan.some(p => p.match)) {
-        const message = isSelection
-          ? game.i18n.localize("NPC_REPLACER.NoSelectedNPCs")
-          : game.i18n.localize("NPC_REPLACER.NoTokens");
-        ui.notifications.info(message);
+        if (skipped.replaced || skipped.inCombat) {
+          ui.notifications.info(game.i18n.format("NPC_REPLACER.TokensSkipped", skipped));
+        } else if (isSelection) {
+          ui.notifications.info(game.i18n.localize("NPC_REPLACER.NoSelectedNPCs"));
+        } else {
+          ui.notifications.info(game.i18n.localize("NPC_REPLACER.NoTokens"));
+        }
         return;
       }
 
@@ -1176,7 +1228,7 @@ class NPCTokenReplacerController {
         }
       }
 
-      const confirmed = await NPCTokenReplacerController.showPreviewDialog(matchResults, actorPlan);
+      const confirmed = await NPCTokenReplacerController.showPreviewDialog(matchResults, actorPlan, skipped);
       if (!confirmed) {
         Logger.log("Token replacement cancelled by user");
         return;
@@ -1251,13 +1303,31 @@ class NPCTokenReplacerController {
       }
 
       NPCTokenReplacerController.#reportResults(replaced, notFoundNames, importFailed, creationFailed, deleteFailed);
+    } catch (error) {
+      // A rejected click handler would vanish into the console; the GM must know
+      Logger.error("Token replacement failed unexpectedly", error);
+      ui.notifications.error(game.i18n.localize("NPC_REPLACER.ErrorUnexpected"));
     } finally {
       TokenReplacer.clearActorLookup();
       NPCTokenReplacerController.#isProcessing = false;
+      if (NPCTokenReplacerController.#clearPending) {
+        NPCTokenReplacerController.#clearPending = false;
+        NPCTokenReplacerController.clearCache();
+      }
     }
   }
 
+  /**
+   * Clear every cache. While a run is in progress (the non-modal preview can be
+   * open for minutes, and saving a setting calls this) the clear is deferred to
+   * the end of the run, or the run would lose its actor lookup and index.
+   */
   static clearCache() {
+    if (NPCTokenReplacerController.#isProcessing) {
+      NPCTokenReplacerController.#clearPending = true;
+      Logger.log("Cache clear deferred until the running replacement finishes");
+      return;
+    }
     CompendiumManager.clearCache();
     FolderManager.clearCache();
     WildcardResolver.clearCache();
@@ -1292,6 +1362,8 @@ class NPCTokenReplacerController {
   /** Detect compendiums and pre-cache monster index. Called from ready hook. */
   static async initialize() {
     Logger.log("NPC Token Replacer is ready");
+    // Only the GM can replace tokens; players would index thousands of entries for nothing
+    if (!game.user?.isGM) return;
 
     // Detect available WOTC compendiums
     const wotcPacks = CompendiumManager.detectWOTCCompendiums();
@@ -1341,9 +1413,9 @@ class NPCTokenReplacerController {
       const tier = CompendiumManager.getSourceTier(pack);
       const packageName = pack.metadata.packageName;
       if (notified.has(packageName)) continue;
-      if (tier === SourceDetector.TIER.VERIFIED) {
+      if (tier === SourceDetector.TIER.VERIFIED && inUse.has(pack.collection)) {
         enabled.set(packageName, CompendiumManager.getSourceLabel(pack));
-      } else if (tier === SourceDetector.TIER.PUBLISHER && !inUse.has(pack.collection)) {
+      } else if ((tier === SourceDetector.TIER.VERIFIED || tier === SourceDetector.TIER.PUBLISHER) && !inUse.has(pack.collection)) {
         waiting.set(packageName, CompendiumManager.getSourceLabel(pack));
       }
     }

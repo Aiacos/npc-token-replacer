@@ -119,6 +119,21 @@ describe("TokenReplacer — overwrite D&D Beyond imports in place", () => {
     expect(game.actors.importFromCompendium).not.toHaveBeenCalled();
   });
 
+  it("keeps other modules' flags but drops the D&D Beyond ones when overwriting", async () => {
+    const ddb = ddbActor({ flags: { ddbimporter: { id: 1 }, monsterMunch: { x: 1 }, core: { sheetClass: "dnd5e.NPCActorSheet" }, "token-attacher": { a: 1 } } });
+    setWorldActors([ddb]);
+    TokenReplacer.buildActorLookup();
+
+    await TokenReplacer.replaceToken(tokenDoc(), entry, pack);
+
+    const { flags } = ddb.update.mock.calls[0][0];
+    expect(flags).not.toHaveProperty("ddbimporter");
+    expect(flags).not.toHaveProperty("monsterMunch");
+    expect(flags.core).toEqual({ sheetClass: "dnd5e.NPCActorSheet" });
+    expect(flags["token-attacher"]).toEqual({ a: 1 });
+    expect(flags["npc-token-replacer"].sourceUuid).toBe(COMPENDIUM_UUID);
+  });
+
   it("does not import a duplicate or create the module's import folder", async () => {
     setWorldActors([ddbActor()]);
     TokenReplacer.buildActorLookup();

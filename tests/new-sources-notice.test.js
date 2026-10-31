@@ -111,6 +111,16 @@ describe("NPCTokenReplacerController.notifyNewOfficialSources", () => {
     expect(ui.notifications.info.mock.calls[0][1].format.names).toBe("Verified Book");
   });
 
+  it("does not claim a verified book is in use when the GM's mode excludes it", async () => {
+    packs = [actorPack("dnd-monster-manual"), actorPack("dnd-verified-book")];
+    useSettings({ enabledCompendiums: '["dnd-monster-manual.monsters"]' });
+
+    await NPCTokenReplacerController.notifyNewOfficialSources();
+
+    expect(ui.notifications.info).toHaveBeenCalledTimes(1);
+    expect(ui.notifications.info.mock.calls[0][0]).toBe("NPC_REPLACER.NewOfficialSources");
+  });
+
   it("uses a verified new book in the default mode", () => {
     packs = [actorPack("dnd-monster-manual"), actorPack("dnd-verified-book")];
 

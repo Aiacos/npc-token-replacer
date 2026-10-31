@@ -147,6 +147,16 @@ describe("ERR-01 — CompendiumManager.loadMonsterIndex error notification", () 
     );
   });
 
+  it("escapes the pack label in the load-error notification", async () => {
+    const failingPack = createMockPack("dnd-monster-manual", "Monster <b>Manual</b>");
+    failingPack.getIndex = vi.fn().mockRejectedValue(new Error("x"));
+    mockPacks = [failingPack];
+
+    await CompendiumManager.loadMonsterIndex(true);
+
+    expect(game.i18n.format).toHaveBeenCalledWith("NPC_REPLACER.ErrorCompendiumLoad", { name: "Monster &lt;b&gt;Manual&lt;/b&gt;" });
+  });
+
   it("continues loading other packs when one fails", async () => {
     const failingPack = createMockPack("dnd-phandelver-below", "Phandelver");
     failingPack.getIndex = vi.fn().mockRejectedValue(new Error("Corrupt index"));
