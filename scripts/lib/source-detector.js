@@ -83,12 +83,6 @@ const KNOWN_MODULE_LABELS = Object.freeze({
   "dnd-deadfall": "Arcana Unleashed: Deadfall"
 });
 
-/**
- * @deprecated since 1.6.0 — prefix matching was removed because it captured
- * third-party modules. Retained only so external macros reading it keep working.
- */
-const WOTC_MODULE_PREFIXES = Object.freeze(["dnd-", "dnd5e"]);
-
 /** Publisher names that identify first-party D&D content. */
 const OFFICIAL_AUTHOR_PATTERN = /wizards of the coast|foundry gaming/i;
 
@@ -138,8 +132,6 @@ class SourceDetector {
   static get OFFICIAL_WOTC_PACKAGES() { return OFFICIAL_WOTC_PACKAGES; }
   static get KNOWN_MODULE_LABELS() { return KNOWN_MODULE_LABELS; }
   static get KNOWN_PRIORITIES() { return KNOWN_PRIORITIES; }
-  /** @deprecated see {@link WOTC_MODULE_PREFIXES} */
-  static get WOTC_MODULE_PREFIXES() { return WOTC_MODULE_PREFIXES; }
 
   /** Active system id, defaulting to dnd5e when the game object is unavailable. */
   static get #systemId() {
@@ -201,8 +193,7 @@ class SourceDetector {
       // Authorship alone can be typed into any manifest; a protected package is
       // distributed through Foundry's premium system, which a homebrew module is not
       tier = SourceDetector.#isPremiumForSystem(module) ? TIER.VERIFIED : TIER.PUBLISHER;
-    }
-    else if (SourceDetector.#isPremiumForSystem(module)) tier = TIER.PREMIUM;
+    } else if (SourceDetector.#isPremiumForSystem(module)) tier = TIER.PREMIUM;
     else if (manualIds && (manualIds.has(packageName) || manualIds.has(collection))) tier = TIER.MANUAL;
 
     return {
@@ -240,6 +231,5 @@ export {
   PRIORITY_LABELS,
   TIER,
   OFFICIAL_WOTC_PACKAGES,
-  KNOWN_MODULE_LABELS,
-  WOTC_MODULE_PREFIXES
+  KNOWN_MODULE_LABELS
 };

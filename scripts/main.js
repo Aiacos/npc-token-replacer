@@ -159,33 +159,10 @@ class CompendiumManager {
   /** packCollection -> classification returned by SourceDetector */
   static #classifications = new Map();
 
-  /** The 14 packages Wizards of the Coast publishes on Foundry VTT. */
-  static get OFFICIAL_WOTC_PACKAGES() { return SourceDetector.OFFICIAL_WOTC_PACKAGES; }
-
-  /** Human-readable book names for the official packages. */
-  static get KNOWN_MODULE_LABELS() { return SourceDetector.KNOWN_MODULE_LABELS; }
-
-  /**
-   * @deprecated since 1.6.0 — prefix matching was removed because it captured
-   * third-party modules. Use {@link OFFICIAL_WOTC_PACKAGES}.
-   */
-  static get WOTC_MODULE_PREFIXES() { return SourceDetector.WOTC_MODULE_PREFIXES; }
-
-  /**
-   * Optional priority refinements for packages we already know about.
-   * Classification is otherwise fully dynamic, so a newly released official
-   * book never needs an entry here.
-   */
-  static get COMPENDIUM_PRIORITIES() { return SourceDetector.KNOWN_PRIORITIES; }
-
-  static get PRIORITY_LABELS() { return SourceDetector.PRIORITY_LABELS; }
-
-  /** Highest priority still considered "core" content (SRD + rulebooks). */
-  static get CORE_MAX_PRIORITY() { return SourceDetector.PRIORITY.CORE; }
-
-  /** Get priority for a pack (higher = preferred). */
+  /** Get priority for a pack (higher = preferred). Uses the detection cache. */
   static getCompendiumPriority(pack) {
-    return SourceDetector.classify(pack).priority;
+    return CompendiumManager.#classifications.get(pack?.collection)?.priority
+      ?? SourceDetector.classify(pack).priority;
   }
 
   /**
@@ -255,7 +232,7 @@ class CompendiumManager {
     Logger.log(`Found ${detected.length} D&D Actor compendium(s):`);
     detected.forEach(pack => {
       const info = classifications.get(pack.collection);
-      const priorityLabel = CompendiumManager.PRIORITY_LABELS[info.priority] || "UNKNOWN";
+      const priorityLabel = SourceDetector.PRIORITY_LABELS[info.priority] || "UNKNOWN";
       Logger.log(`  - ${pack.collection} (${pack.metadata.label}) [package: ${info.packageName}, tier: ${info.tier}, priority: ${info.priority}-${priorityLabel}]`);
     });
 
@@ -409,7 +386,7 @@ class CompendiumManager {
       }
 
       const priority = CompendiumManager.getCompendiumPriority(pack);
-      const priorityLabel = CompendiumManager.PRIORITY_LABELS[priority] || "UNKNOWN";
+      const priorityLabel = SourceDetector.PRIORITY_LABELS[priority] || "UNKNOWN";
       let indexed = 0;
       for (const entry of pack.index.contents) {
         if (!CompendiumManager.isCreatureEntry(entry)) continue;
@@ -428,7 +405,7 @@ class CompendiumManager {
     }
 
     Logger.log(`Total: ${combinedIndex.length} entries from all compendiums`);
-    Logger.log("Priority order: Adventures (4) > Expansions (3) > Core Rulebooks (2) > SRD (1)");
+    Logger.log(`Priority order: ${Object.entries(SourceDetector.PRIORITY_LABELS).sort(([a], [b]) => b - a).map(([p, label]) => `${label} (${p})`).join(" > ")}`);
 
     const indexMap = new Map();
     const wordIndex = new Map();
@@ -437,11 +414,9 @@ class CompendiumManager {
       if (!indexMap.has(key)) indexMap.set(key, []);
       indexMap.get(key).push(item);
 
-      if (item.significantWords) {
-        for (const word of item.significantWords) {
-          if (!wordIndex.has(word)) wordIndex.set(word, []);
-          wordIndex.get(word).push(item);
-        }
+      for (const word of item.significantWords) {
+        if (!wordIndex.has(word)) wordIndex.set(word, []);
+        wordIndex.get(word).push(item);
       }
     }
 
@@ -449,17 +424,9 @@ class CompendiumManager {
 
     // A pack that failed to index is retried on the next run instead of being
     // missing until reload: serve this partial index once, but do not cache it.
-    if (CompendiumManager.#lastLoadErrors.length > 0) {
-      CompendiumManager.#indexCache = null;
-      CompendiumManager.#indexMap = indexMap;
-      CompendiumManager.#wordIndex = wordIndex;
-      return index;
-    }
-
-    CompendiumManager.#indexCache = index;
+    CompendiumManager.#indexCache = CompendiumManager.#lastLoadErrors.length > 0 ? null : index;
     CompendiumManager.#indexMap = indexMap;
     CompendiumManager.#wordIndex = wordIndex;
-
     return index;
   }
 
@@ -515,9 +482,9 @@ class TokenReplacer {
   static #compendiumDocCache = new Map();
   static #COMPENDIUM_DOC_CACHE_MAX = 100;
 
-  // TODO [MEDIUM] Compatibility: compendiumSource path may change in future dnd5e/Foundry versions.
-  // If this path changes, lookup produces an empty Map and every replacement re-imports actors,
-  // creating duplicates. Add a fallback matching by actor name + source compendium label.
+  // An actor counts as already imported from a compendium entry through, in order:
+  // this module's own tag (survives a core rename of compendiumSource), the v12+
+  // _stats.compendiumSource, or the pre-v12 flags.core.sourceId.
   static buildActorLookup() {
     TokenReplacer.#actorLookup = new Map();
     TokenReplacer.#importedActorsByName = new Map();
@@ -628,7 +595,7 @@ class TokenReplacer {
     }
   }
 
-  /** Compendium document for an index entry, through the bounded LRU cache. */
+  /** Compendium document for an index entry, through the bounded FIFO cache. */
   static async #loadCompendiumActor(compendiumEntry, pack) {
     const docCacheKey = `${pack.collection}|${compendiumEntry._id}`;
     let compendiumActor = TokenReplacer.#compendiumDocCache.get(docCacheKey);
@@ -664,9 +631,6 @@ class TokenReplacer {
   ]);
   static get PRESERVED_PROPERTIES() { return TokenReplacer.#PRESERVED_PROPERTIES; }
 
-  static getSequentialCounter() {
-    return TokenReplacer.#sequentialCounter;
-  }
 
   static resetCounter() {
     TokenReplacer.#sequentialCounter = 0;
@@ -926,9 +890,6 @@ class NPCTokenReplacerController {
   static #isProcessing = false;
   static #clearPending = false;
 
-  static isProcessing() {
-    return NPCTokenReplacerController.#isProcessing;
-  }
 
   /** Check GM status, active scene, and compendium availability. */
   static validatePrerequisites() {
@@ -1127,9 +1088,9 @@ class NPCTokenReplacerController {
     return TokenReplacer.getImportedActors()
       .filter(actor => !scopeActorIds || scopeActorIds.has(actor.id))
       .map(actor => ({
-      actor,
-      match: NameMatcher.selectBestMatch(indexMap?.get(NameMatcher.normalizeName(actor.name)) ?? [])
-    }));
+        actor,
+        match: NameMatcher.selectBestMatch(indexMap?.get(NameMatcher.normalizeName(actor.name)) ?? [])
+      }));
   }
 
   /** Overwrite every planned actor; one failure never stops the rest. */
