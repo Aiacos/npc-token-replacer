@@ -295,7 +295,7 @@ describe("CompendiumManager", () => {
 
   describe("static getters", () => {
 
-    it("OFFICIAL_WOTC_PACKAGES returns the 11 official WotC packages", () => {
+    it("OFFICIAL_WOTC_PACKAGES returns the 14 official WotC packages", () => {
       expect(CompendiumManager.OFFICIAL_WOTC_PACKAGES).toEqual([
         "dnd5e",
         "dnd-monster-manual",
@@ -307,7 +307,10 @@ describe("CompendiumManager", () => {
         "dnd-tomb-annihilation",
         "dnd-adventures-faerun",
         "dnd-heroes-faerun",
-        "dnd-heroes-borderlands"
+        "dnd-heroes-borderlands",
+        "dnd-ravenloft-horrors-within",
+        "dnd-arcana-unleashed",
+        "dnd-deadfall"
       ]);
     });
 
@@ -315,7 +318,7 @@ describe("CompendiumManager", () => {
       expect(CompendiumManager.WOTC_MODULE_PREFIXES).toEqual(["dnd-", "dnd5e"]);
     });
 
-    it("COMPENDIUM_PRIORITIES includes all 11 official WotC packages", () => {
+    it("COMPENDIUM_PRIORITIES includes all 14 official WotC packages", () => {
       const priorities = CompendiumManager.COMPENDIUM_PRIORITIES;
       expect(priorities["dnd5e"]).toBe(1);
       expect(priorities["dnd-tashas-cauldron"]).toBe(1);

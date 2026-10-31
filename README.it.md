@@ -22,7 +22,7 @@ Un modulo per Foundry VTT che sostituisce automaticamente i token PNG della scen
 
 ## 📚 Contenuti D&D ufficiali supportati
 
-Per impostazione predefinita il modulo si fida **esattamente degli 11 pacchetti
+Per impostazione predefinita il modulo si fida **esattamente dei 14 pacchetti
 ufficiali di Wizards of the Coast pubblicati su Foundry VTT** (vedi la
 [pagina creator di Foundry VTT](https://foundryvtt.com/creators/wizards-of-the-coast/)).
 Il prefisso dell'id di un pacchetto non basta mai da solo: `dnd-` e `ddb-` sono
@@ -49,7 +49,7 @@ community e i manuali storici mai portati su Foundry da WotC (Volo's, MToF,
 MPMM, Fizban's, Curse of Strahd, Icewind Dale, Descent into Avernus, ecc.) —
 sono deliberatamente esclusi dalla whitelist.
 
-Gli 11 pacchetti fidati, e la priorità a cui corrispondono:
+I 14 pacchetti fidati, e la priorità a cui corrispondono:
 
 ### Priorità 4 — AVVENTURA (massima: si preferiscono i token specifici dell'avventura)
 
@@ -60,11 +60,14 @@ Gli 11 pacchetti fidati, e la priorità a cui corrispondono:
 | `dnd-adventures-faerun` | Forgotten Realms: Adventures in Faerûn |
 | `dnd-heroes-faerun` | Forgotten Realms: Heroes of Faerûn |
 | `dnd-heroes-borderlands` | Heroes of the Borderlands |
+| `dnd-ravenloft-horrors-within` | Ravenloft: The Horrors Within |
+| `dnd-deadfall` | Arcana Unleashed: Deadfall |
 
 ### Priorità 3 — ESPANSIONE
 
 | ID modulo | Contenuto |
 |-----------|-----------|
+| `dnd-arcana-unleashed` | Arcana Unleashed |
 | `dnd-forge-artificer` | Eberron: Forge of the Artificer |
 
 ### Priorità 2 — BASE (edizioni 2024)
@@ -356,7 +359,7 @@ Documentazione tecnica di supporto:
 
 | Comando | Scopo |
 |---------|-------|
-| `npm test` | Esegue la suite di test (265 test) |
+| `npm test` | Esegue la suite di test (271 test) |
 | `npm run lint` | ESLint su `scripts/`, `tools/` e `tests/` |
 | `npm run validate` | Verifica `module.json`, i file referenziati, le chiavi i18n e i percorsi dei template |
 | `npm run check` | Tutti e tre, in ordine |

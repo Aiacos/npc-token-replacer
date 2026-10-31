@@ -143,7 +143,7 @@ describe("CompendiumSelectorModel", () => {
       root.innerHTML = `
         <input type="radio" name="mode" value="default">
         <input type="radio" name="mode" value="custom">
-        <div id="compendium-list"></div>`;
+        <div id="compendium-list"><input type="checkbox" name="packs" value="a"></div>`;
       root.querySelector(`input[value="${checkedValue}"]`).checked = true;
       return root;
     };
@@ -167,6 +167,29 @@ describe("CompendiumSelectorModel", () => {
       custom.checked = true;
       custom.dispatchEvent(new Event("change"));
       expect(root.querySelector("#compendium-list").classList.contains("disabled")).toBe(false);
+    });
+
+    // The list must stay scrollable outside custom mode, so it is made read-only
+    // by disabling the checkboxes, not by swallowing pointer events.
+    it("makes the checkboxes read-only outside custom mode, and editable in it", () => {
+      const root = buildForm("default");
+      CompendiumSelectorModel.attachModeListeners(root);
+      const box = root.querySelector('input[name="packs"]');
+      expect(box.disabled).toBe(true);
+
+      const custom = root.querySelector('input[value="custom"]');
+      custom.checked = true;
+      custom.dispatchEvent(new Event("change"));
+      expect(box.disabled).toBe(false);
+    });
+
+    it("never blocks pointer events on the list itself (it would stop wheel scrolling)", () => {
+      const css = readFileSync(resolve(process.cwd(), "styles/npc-token-replacer.css"), "utf8");
+      const rules = [...css.matchAll(/([^{}]*)\{([^}]*)\}/g)]
+        // Rules that target the list element itself (enabled or disabled), not its items
+        .filter(([, selector]) => selector.split(",").some(part => /\.compendium-list(\.disabled)?\s*$/.test(part.trim())));
+      expect(rules.length).toBeGreaterThan(0);
+      for (const [, , body] of rules) expect(body).not.toMatch(/pointer-events\s*:\s*none/);
     });
 
     it("does nothing when the list is absent", () => {

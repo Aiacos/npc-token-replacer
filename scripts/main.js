@@ -158,7 +158,7 @@ class CompendiumManager {
   /** packCollection -> classification returned by SourceDetector */
   static #classifications = new Map();
 
-  /** The 11 packages Wizards of the Coast publishes on Foundry VTT. */
+  /** The 14 packages Wizards of the Coast publishes on Foundry VTT. */
   static get OFFICIAL_WOTC_PACKAGES() { return SourceDetector.OFFICIAL_WOTC_PACKAGES; }
 
   /** Human-readable book names for the official packages. */

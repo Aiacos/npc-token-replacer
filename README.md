@@ -22,7 +22,7 @@ A Foundry VTT module that automatically replaces NPC tokens in your scene with o
 
 ## 📚 Supported Official D&D Content
 
-By default the module trusts **exactly the 11 official Wizards of the Coast
+By default the module trusts **exactly the 14 official Wizards of the Coast
 packages published on Foundry VTT** (see the
 [Foundry VTT creator page](https://foundryvtt.com/creators/wizards-of-the-coast/)).
 A package id prefix is never enough on its own — `dnd-` and `ddb-` are also used
@@ -49,7 +49,7 @@ legacy books that have never been ported to Foundry by WotC (Volo's, MToF,
 MPMM, Fizban's, Curse of Strahd, Icewind Dale, Descent into Avernus, etc.) —
 is deliberately excluded from the whitelist.
 
-The 11 trusted packages, and the priority each resolves to:
+The 14 trusted packages, and the priority each resolves to:
 
 ### Priority 4 — ADVENTURE (highest — adventure-specific tokens preferred)
 
@@ -60,11 +60,14 @@ The 11 trusted packages, and the priority each resolves to:
 | `dnd-adventures-faerun` | Forgotten Realms: Adventures in Faerûn |
 | `dnd-heroes-faerun` | Forgotten Realms: Heroes of Faerûn |
 | `dnd-heroes-borderlands` | Heroes of the Borderlands |
+| `dnd-ravenloft-horrors-within` | Ravenloft: The Horrors Within |
+| `dnd-deadfall` | Arcana Unleashed: Deadfall |
 
 ### Priority 3 — EXPANSION
 
 | Module ID | Content |
 |-----------|---------|
+| `dnd-arcana-unleashed` | Arcana Unleashed |
 | `dnd-forge-artificer` | Eberron: Forge of the Artificer |
 
 ### Priority 2 — CORE (2024 editions)
@@ -399,7 +402,7 @@ A global debug API is exposed via `window.NPCTokenReplacer` for console access.
 
 | Command | Purpose |
 |---------|---------|
-| `npm test` | Run the unit suite (265 tests) |
+| `npm test` | Run the unit suite (271 tests) |
 | `npm run lint` | ESLint over `scripts/`, `tools/` and `tests/` |
 | `npm run validate` | Verify `module.json`, referenced files, i18n keys and template paths |
 | `npm run check` | All three, in order |
