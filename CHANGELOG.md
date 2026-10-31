@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.8.7] - 2026-10-31
+
 A methodical review of the whole module (runtime, architecture, tests, docs and
 pipeline — four independent reviews, every finding verified before acting).
 
