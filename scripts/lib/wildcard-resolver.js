@@ -84,7 +84,8 @@ class WildcardResolver {
       const candidates = [];
       for (const variant of WildcardResolver.VARIANT_SUFFIXES) {
         for (const ext of extsToProbe) {
-          candidates.push(`${directory}/${baseName}${variant}${ext}`);
+          // A bare pattern ("specter-*.webp") stays relative; "/name" would hit the server root
+          candidates.push(`${directory ? `${directory}/` : ""}${baseName}${variant}${ext}`);
         }
       }
 
@@ -105,8 +106,10 @@ class WildcardResolver {
         }
       }
 
-      if (networkErrors > 0 && availableVariants.length === 0) {
-        Logger.warn(`All ${networkErrors} wildcard probe requests failed for ${wildcardPath} — skipping cache to allow retry`);
+      // Any network failure leaves the list possibly incomplete — don't cache it,
+      // or the missing variants stay missing for the whole session
+      if (networkErrors > 0) {
+        Logger.warn(`${networkErrors} wildcard probe request(s) failed for ${wildcardPath} — skipping cache to allow retry`);
         return availableVariants;
       }
 

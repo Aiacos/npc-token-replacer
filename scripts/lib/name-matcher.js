@@ -12,6 +12,20 @@ class NameMatcher {
 
   static get MIN_PARTIAL_LENGTH() { return 4; }
 
+  /** Short words that never tell two creatures apart. */
+  static #FILLER_WORDS = new Set(["a", "an", "and", "of", "the", "in", "on"]);
+
+  /**
+   * Words too short to count as significant (e.g. "rat", "hen", "elk") but
+   * that still distinguish creatures. Numbering ("Goblin 2") and filler
+   * words are excluded so they keep matching freely.
+   */
+  static #distinctiveShortWords(words) {
+    return words.filter(w => w.length < NameMatcher.MIN_PARTIAL_LENGTH
+      && !/^\p{N}+$/u.test(w)
+      && !NameMatcher.#FILLER_WORDS.has(w));
+  }
+
   /** Creature name prefixes to strip (young, adult, ancient, etc.) */
   static #PREFIX_PATTERN = /^(young|adult|ancient|elder|greater|lesser)\s+/;
   static get PREFIX_PATTERN() { return NameMatcher.#PREFIX_PATTERN; }
@@ -119,6 +133,10 @@ class NameMatcher {
         const requireExactWordCount = significantSearchWords.length === 1;
         // Build search word Set once — avoids per-entry Set allocation
         const searchWordSet = new Set(significantSearchWords);
+        // Short words drop out of the significant set, so "Giant Hen" and
+        // "Giant Rat" would both reduce to ["giant"]. They must agree exactly.
+        const allSearchWords = new Set(searchWords);
+        const searchShortWords = NameMatcher.#distinctiveShortWords(searchWords);
 
         // Use reverse word index to narrow candidates when available
         const wordIndex = _CompendiumManager?.getWordIndex() ?? null;
@@ -155,6 +173,10 @@ class NameMatcher {
           // Bidirectional check: search words must meet threshold AND
           // matched words must cover at least half of entry's significant words
           if (requireExactWordCount && sigWords.length > 1) return false;
+          const entryWords = (item.normalizedName || NameMatcher.normalizeName(item.entry.name)).split(" ");
+          const entryWordSet = new Set(entryWords);
+          if (searchShortWords.some(w => !entryWordSet.has(w))) return false;
+          if (NameMatcher.#distinctiveShortWords(entryWords).some(w => !allSearchWords.has(w))) return false;
           return matchingCount >= threshold
             && matchingCount / sigWords.length >= 0.5;
         });

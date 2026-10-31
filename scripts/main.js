@@ -123,7 +123,8 @@ class FolderManager {
       folder = await Folder.create({
         name: folderName,
         type: "Actor",
-        parent: parentFolder?.id || null,
+        // Folder documents store their parent in `folder`; `parent` is not a schema field
+        folder: parentFolder?.id ?? null,
         color: FolderManager.FOLDER_COLOR
       });
       Logger.log(`Created new folder: ${FolderManager.getFolderPath(folder)}`);
@@ -422,11 +423,22 @@ class CompendiumManager {
       }
     }
 
-    CompendiumManager.#indexCache = Object.freeze(combinedIndex);
+    const index = Object.freeze(combinedIndex);
+
+    // A pack that failed to index is retried on the next run instead of being
+    // missing until reload: serve this partial index once, but do not cache it.
+    if (CompendiumManager.#lastLoadErrors.length > 0) {
+      CompendiumManager.#indexCache = null;
+      CompendiumManager.#indexMap = indexMap;
+      CompendiumManager.#wordIndex = wordIndex;
+      return index;
+    }
+
+    CompendiumManager.#indexCache = index;
     CompendiumManager.#indexMap = indexMap;
     CompendiumManager.#wordIndex = wordIndex;
 
-    return CompendiumManager.#indexCache;
+    return index;
   }
 
   static clearCache() {
@@ -472,6 +484,8 @@ class TokenReplacer {
   static #variationMode = null;
   /** Session-scoped Map: compendium UUID -> world Actor */
   static #actorLookup = null;
+  /** normalizedName -> world actor imported by D&D Beyond Importer, not yet overwritten. */
+  static #importedActorsByName = null;
   static #compendiumDocCache = new Map();
   static #COMPENDIUM_DOC_CACHE_MAX = 100;
 
@@ -480,15 +494,73 @@ class TokenReplacer {
   // creating duplicates. Add a fallback matching by actor name + source compendium label.
   static buildActorLookup() {
     TokenReplacer.#actorLookup = new Map();
+    TokenReplacer.#importedActorsByName = new Map();
     for (const a of game.actors) {
-      const uuid = a._stats?.compendiumSource || a.flags?.core?.sourceId;
-      if (uuid) TokenReplacer.#actorLookup.set(uuid, a);
+      // Our own flag survives an in-place overwrite even if core stops writing compendiumSource
+      const uuid = a.flags?.[MODULE_ID]?.sourceUuid || a._stats?.compendiumSource || a.flags?.core?.sourceId;
+      if (uuid) {
+        TokenReplacer.#actorLookup.set(uuid, a);
+      } else if (TokenReplacer.isDdbImportedActor(a)) {
+        const key = NameMatcher.normalizeName(a.name);
+        if (!TokenReplacer.#importedActorsByName.has(key)) TokenReplacer.#importedActorsByName.set(key, a);
+      }
     }
-    Logger.debug(`Built actor lookup Map with ${TokenReplacer.#actorLookup.size} entries`);
+    Logger.debug(`Built actor lookup Map with ${TokenReplacer.#actorLookup.size} entries, ${TokenReplacer.#importedActorsByName.size} D&D Beyond imports`);
+  }
+
+  /**
+   * True for monsters created by D&D Beyond Importer. Mirrors the importer's own
+   * test (ddb-importer src/muncher/tools.ts): an "npc" carrying flags.ddbimporter.id.
+   */
+  static isDdbImportedActor(actor) {
+    return actor?.type === "npc" && actor.flags?.ddbimporter?.id !== undefined;
+  }
+
+  /** Whether the GM allows overwriting imported actors. Unreadable means no — it is destructive. */
+  static #overwriteAllowed() {
+    try {
+      return game.settings.get(MODULE_ID, "overwriteImportedActors") === true;
+    } catch (error) {
+      Logger.debug(`overwriteImportedActors unavailable, not overwriting: ${error.message}`);
+      return false;
+    }
+  }
+
+  /**
+   * The D&D Beyond import that replacing with this compendium entry would
+   * overwrite, or null. An actor already imported from the same entry wins,
+   * so a world never gets both overwritten and re-imported.
+   * Requires buildActorLookup() to have run.
+   */
+  static findOverwriteTarget(compendiumEntry, pack) {
+    if (!TokenReplacer.#importedActorsByName || !TokenReplacer.#overwriteAllowed()) return null;
+    const uuid = compendiumEntry.uuid ?? `Compendium.${pack.collection}.Actor.${compendiumEntry._id}`;
+    if (TokenReplacer.#actorLookup?.has(uuid)) return null;
+    const target = TokenReplacer.#importedActorsByName.get(NameMatcher.normalizeName(compendiumEntry.name));
+    // The lookup outlives the non-modal preview; skip actors deleted meanwhile
+    return target && game.actors.has(target.id) ? target : null;
+  }
+
+  /**
+   * Replace an existing world actor's data with the compendium version, keeping
+   * where it lives and who owns it. recursive:false replaces inner objects and
+   * embedded collections explicitly (DatabaseUpdateOperation, v13/v14) instead
+   * of merging DDB items with the official ones.
+   */
+  static async #overwriteActor(target, compendiumActor) {
+    const data = game.actors.fromCompendium(compendiumActor);
+    delete data._id;
+    data.folder = target.folder?.id ?? null;
+    data.ownership = target.ownership;
+    data.sort = target.sort;
+    data.flags = { ...(data.flags ?? {}), [MODULE_ID]: { sourceUuid: compendiumActor.uuid } };
+    await target.update(data, { diff: false, recursive: false });
+    return target;
   }
 
   static clearActorLookup() {
     TokenReplacer.#actorLookup = null;
+    TokenReplacer.#importedActorsByName = null;
     TokenReplacer.#variationMode = null;
     TokenReplacer.#compendiumDocCache.clear();
     Logger.debug("Actor lookup Map and variation mode cleared");
@@ -574,6 +646,15 @@ class TokenReplacer {
       return worldActor;
     }
 
+    const target = TokenReplacer.findOverwriteTarget(compendiumEntry, pack);
+    if (target) {
+      await TokenReplacer.#overwriteActor(target, compendiumActor);
+      TokenReplacer.#importedActorsByName.delete(NameMatcher.normalizeName(compendiumEntry.name));
+      TokenReplacer.#actorLookup.set(compendiumActor.uuid, target);
+      Logger.log(`Overwrote D&D Beyond actor "${target.name}" (id: ${target.id}) in place with "${compendiumActor.name}" from ${pack.metadata.label}`);
+      return target;
+    }
+
     const importFolder = await FolderManager.getOrCreateImportFolder();
     if (!importFolder) {
       Logger.warn(`Import folder unavailable — actor "${compendiumActor.name}" will be imported to the root folder`);
@@ -652,6 +733,16 @@ class TokenReplacer {
   }
 
   /**
+   * The scene that owns a token. The preview dialog is non-modal, so the GM can
+   * switch scenes between scan and confirm; mutating `canvas.scene` would then
+   * write to the wrong scene. Falls back to the viewed scene only for token
+   * stand-ins that carry no parent.
+   */
+  static sceneOf(tokenDoc) {
+    return tokenDoc.parent ?? canvas.scene;
+  }
+
+  /**
    * Replace a single token with its compendium version.
    * Imports actor if needed, resolves wildcards, creates new token, deletes old.
    * @throws {TokenReplacerError} with phase "import_failed", "creation_failed", or "delete_failed"
@@ -695,11 +786,12 @@ class TokenReplacer {
     }
 
     const newTokenData = TokenReplacer.#prepareNewTokenData(prototypeToken, originalProps, worldActor.id);
+    const scene = TokenReplacer.sceneOf(tokenDoc);
 
     // Create new token first, then delete old — avoids data loss if creation fails
     let newToken;
     try {
-      const createdTokens = await canvas.scene.createEmbeddedDocuments("Token", [newTokenData]);
+      const createdTokens = await scene.createEmbeddedDocuments("Token", [newTokenData]);
       newToken = createdTokens[0];
       if (!newToken) {
         throw new Error("createEmbeddedDocuments returned empty result");
@@ -709,10 +801,10 @@ class TokenReplacer {
     }
 
     try {
-      if (!canvas.scene.tokens.has(tokenDoc.id)) {
+      if (!scene.tokens.has(tokenDoc.id)) {
         Logger.warn(`Token "${originalName}" was already removed — skipping delete`);
       } else {
-        await canvas.scene.deleteEmbeddedDocuments("Token", [tokenDoc.id]);
+        await scene.deleteEmbeddedDocuments("Token", [tokenDoc.id]);
       }
     } catch (deleteError) {
       Logger.error(`Created new token but failed to delete old "${originalName}" — duplicate may exist`, deleteError);
@@ -770,9 +862,12 @@ class NPCTokenReplacerController {
     const rows = [];
     for (const result of sorted) {
       if (result.match) {
+        const overwriteNote = result.overwrite
+          ? `<br><small class="npc-replacer-overwrite">${escapeHtml(game.i18n.format("NPC_REPLACER.PreviewOverwrites", { name: result.overwrite.name }))}</small>`
+          : "";
         rows.push(`<tr>
           <td>${escapeHtml(result.creatureName)}</td>
-          <td>${escapeHtml(result.match.entry.name)}</td>
+          <td>${escapeHtml(result.match.entry.name)}${overwriteNote}</td>
           <td>${escapeHtml(result.match.pack.metadata.label)}</td>
         </tr>`);
       } else {
@@ -790,8 +885,15 @@ class NPCTokenReplacerController {
       total: matchResults.length
     }));
 
+    // One actor can back many tokens; count each overwrite once
+    const overwriteCount = new Set(matched.filter(r => r.overwrite).map(r => r.overwrite.id)).size;
+    const overwriteSummary = overwriteCount > 0
+      ? `<p class="npc-replacer-overwrite-summary"><i class="fas fa-triangle-exclamation"></i> ${escapeHtml(game.i18n.format("NPC_REPLACER.PreviewOverwriteSummary", { count: overwriteCount }))}</p>`
+      : "";
+
     const content = `
       <p>${summary}</p>
+      ${overwriteSummary}
       <div class="npc-replacer-preview-table-container">
         <table class="npc-replacer-preview-table">
           <thead>
@@ -912,6 +1014,9 @@ class NPCTokenReplacerController {
       const sourceDesc = isSelection ? "selected" : "in scene";
       Logger.log(`Found ${npcTokens.length} NPC tokens ${sourceDesc}`);
 
+      // Built before matching so the preview can list actors that will be overwritten
+      TokenReplacer.buildActorLookup();
+
       const scanProgress = new ProgressReporter();
       let matchResults;
       try {
@@ -927,7 +1032,6 @@ class NPCTokenReplacerController {
       }
 
       TokenReplacer.resetCounter();
-      TokenReplacer.buildActorLookup();
 
       const toReplace = matchResults.filter(r => r.match !== null);
       const notFoundNames = matchResults.filter(r => r.match === null).map(r => r.creatureName);
@@ -953,7 +1057,7 @@ class NPCTokenReplacerController {
             continue;
           }
 
-          if (!canvas.scene.tokens.has(tokenDoc.id)) {
+          if (!TokenReplacer.sceneOf(tokenDoc)?.tokens.has(tokenDoc.id)) {
             Logger.log(`Token "${tokenDoc.name}" no longer exists, skipping`);
             continue;
           }
@@ -976,7 +1080,8 @@ class NPCTokenReplacerController {
             }
           }
 
-          const processed = replaced + importFailed.length + creationFailed.length + deleteFailed.length;
+          // delete_failed tokens are already counted in `replaced`
+          const processed = replaced + importFailed.length + creationFailed.length;
           progress.update(processed,
             game.i18n.format("NPC_REPLACER.ProgressUpdate", {
               current: processed,
@@ -1012,7 +1117,8 @@ class NPCTokenReplacerController {
       const tokenDoc = tokens[i];
       const creatureName = tokenDoc.actor?.name || tokenDoc.name;
       const match = NameMatcher.findMatch(creatureName, index);
-      results.push({ tokenDoc, creatureName, match });
+      const overwrite = match ? TokenReplacer.findOverwriteTarget(match.entry, match.pack) : null;
+      results.push({ tokenDoc, creatureName, match, overwrite });
 
       progress.update(i + 1, game.i18n.format("NPC_REPLACER.ProgressUpdate", {
         current: i + 1,
@@ -1114,6 +1220,17 @@ function registerSettings() {
     default: 5
   });
 
+  // Actors already imported by D&D Beyond Importer are overwritten in place
+  // rather than duplicated; the GM can opt out.
+  game.settings.register(MODULE_ID, "overwriteImportedActors", {
+    name: game.i18n.localize("NPC_REPLACER.Settings.OverwriteImportedActors.Name"),
+    hint: game.i18n.localize("NPC_REPLACER.Settings.OverwriteImportedActors.Hint"),
+    scope: "world",
+    config: true,
+    type: Boolean,
+    default: true
+  });
+
   // Escape hatch: content the automatic signals cannot recognise (e.g. a future
   // official release under an unexpected package id) can be added by hand.
   game.settings.register(MODULE_ID, "additionalSources", {
@@ -1122,7 +1239,9 @@ function registerSettings() {
     scope: "world",
     config: true,
     type: String,
-    default: ""
+    default: "",
+    // Detection is cached; without this the override only applies after F5
+    onChange: () => NPCTokenReplacerController.clearCache()
   });
 
   const SelectorForm = buildCompendiumSelectorForm({
@@ -1217,4 +1336,4 @@ Hooks.once("ready", async () => {
 Hooks.on("getSceneControlButtons", registerControlButton);
 
 // Named exports for testing
-export { FolderManager, CompendiumManager, TokenReplacer, NPCTokenReplacerController, TokenReplacerError, registerControlButton };
+export { FolderManager, CompendiumManager, TokenReplacer, NPCTokenReplacerController, TokenReplacerError, registerControlButton, registerSettings };

@@ -42,14 +42,14 @@ describe("NPCTokenReplacerController.computeMatches", () => {
     });
   });
 
-  it("returns array with {tokenDoc, creatureName, match} for each token", async () => {
+  it("returns array with {tokenDoc, creatureName, match, overwrite} for each token", async () => {
     const progress = createMockProgress();
     const results = await NPCTokenReplacerController.computeMatches(mockTokens, mockIndex, progress);
 
     expect(results).toHaveLength(3);
-    expect(results[0]).toEqual({ tokenDoc: mockTokens[0], creatureName: "Goblin", match: mockMatchGoblin });
-    expect(results[1]).toEqual({ tokenDoc: mockTokens[1], creatureName: "Orc", match: mockMatchOrc });
-    expect(results[2]).toEqual({ tokenDoc: mockTokens[2], creatureName: "Unknown Beast", match: null });
+    expect(results[0]).toEqual({ tokenDoc: mockTokens[0], creatureName: "Goblin", match: mockMatchGoblin, overwrite: null });
+    expect(results[1]).toEqual({ tokenDoc: mockTokens[1], creatureName: "Orc", match: mockMatchOrc, overwrite: null });
+    expect(results[2]).toEqual({ tokenDoc: mockTokens[2], creatureName: "Unknown Beast", match: null, overwrite: null });
   });
 
   it("calls NameMatcher.findMatch once per token (no double-matching)", async () => {

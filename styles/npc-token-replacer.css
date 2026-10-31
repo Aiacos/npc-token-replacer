@@ -141,3 +141,9 @@
 .npc-replacer-no-match {
   color: var(--color-level-error, red);
 }
+
+/* Actors that will be overwritten in place are a destructive change: make them stand out */
+.npc-replacer-overwrite,
+.npc-replacer-overwrite-summary {
+  color: var(--color-level-warning, #c9a227);
+}

@@ -23,6 +23,8 @@
     "PreviewColMatch": "Sarà abbinato come",
     "PreviewColSource": "Compendio Sorgente",
     "PreviewNoMatch": "Nessuna corrispondenza trovata",
+    "PreviewOverwrites": "Sovrascrive sul posto l'attore D&D Beyond \"{name}\"",
+    "PreviewOverwriteSummary": "{count} attore/i importati da D&D Beyond Importer verranno sovrascritti sul posto con i dati ufficiali del compendio. Cartella e permessi restano; i dati D&D Beyond e le modifiche manuali vengono sostituiti.",
     "ConfirmYes": "Sostituisci Token",
     "ConfirmNo": "Annulla",
     "Settings": {
@@ -67,6 +69,10 @@
       "AdditionalSources": {
         "Name": "Sorgenti compendio aggiuntive",
         "Hint": "Id di pacchetti o compendi da trattare come sorgenti ufficiali di creature, separati da virgola. Serve solo per contenuti che il modulo non riesce a riconoscere da solo."
+      },
+      "OverwriteImportedActors": {
+        "Name": "Sovrascrivi gli import di D&D Beyond",
+        "Hint": "Se una creatura è già stata importata nel mondo da D&D Beyond Importer, sovrascrive quell'attore sul posto con la versione ufficiale del compendio (mantenendo cartella e permessi) invece di importarne un duplicato. Ogni sovrascrittura è elencata nell'anteprima prima di avvenire."
       }
     },
     "AlreadyProcessing": "Sostituzione già in corso. Attendi il completamento.",

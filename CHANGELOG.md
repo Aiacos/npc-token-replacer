@@ -7,7 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **D&D Beyond Importer imports are overwritten in place instead of duplicated.** When a creature already exists in the world as a D&D Beyond Importer monster (an `npc` carrying `flags.ddbimporter.id`, the importer's own test), replacing a token now overwrites that actor with the official compendium data — same id, folder, ownership and sort, so every token and link pointing at it follows — rather than importing a second copy into the module's folder. Uses `update(data, {diff: false, recursive: false})` so DDB items are replaced, not merged with the official ones. An actor already imported from the same compendium entry still wins, same-named homebrew actors are never touched, and overwritten actors are tagged (`flags.npc-token-replacer.sourceUuid`) so later runs reuse them.
+- **The preview lists every actor it will overwrite**, with a warning summary, before anything changes.
+- **Setting "Overwrite D&D Beyond Imports"** (world, default on). An unreadable setting falls back to *not* overwriting.
+- **`TODO.md` and `SECURITY.md`**, as required by the constitution. GitHub private vulnerability reporting is now enabled for the repository.
+- **Macro recipes** in both READMEs: a one-line macro for the full workflow and one to switch compendium selection.
+
+### Fixed
+- **The "Configure compendiums" settings button opened nothing on Foundry v13/v14.** `compendium-selector-body.hbs` rendered three top-level elements, and ApplicationV2's `HandlebarsApplicationMixin` requires every `PARTS` template to render exactly one root element, so `render()` threw before any window appeared. The part is now wrapped in a single `<section>`, and a test fails if any part template has more than one root.
+- **Replacements could land on the wrong scene.** The preview dialog is non-modal; switching scenes before confirming made every token skip silently, and switching during the run created tokens on the new scene while leaving the originals. All token mutations now target the token's own scene.
+- **The import folder was created at the root instead of inside an existing monster folder** — `Folder.create` was given `parent`, which is not a schema field; it is `folder`.
+- **A pack that failed to index stayed missing until reload.** A partial index is now used for that run but not cached, so the next run retries.
+- **"Additional Compendium Sources" needed a page reload** to take effect; changing it now clears the detection cache.
+- **Short words were ignored in partial name matching**, so "Giant Hen" could become "Giant Rat" and a bare "Giant" matched "Giant Rat". Short words (other than numbering and filler words) must now agree.
+- **A wildcard probe that partly failed on the network was cached**, hiding the missing variants for the session; it is now retried.
+- **A wildcard path with no directory** (`specter-*.webp`) was probed at the server root (`/specter-1.webp`).
+- **The progress bar double-counted tokens whose old copy could not be deleted** (it could show "5/4").
+- The English README still described package-id prefixes (`dnd-`) as a detection signal; they have not been one since 1.6.0.
+
 ### Changed
+- **Constitution in `CLAUDE.md` expanded to fifteen principles**: architecture-before-implementation, an explicit pre-commit gate, plugin/skill use, project ledgers (`TODO.md`, `SECURITY.md`, `CHANGELOG.md`) and scheduled repository cleanup join the existing rules; the icon legend gains 🔐 Security.
+- Tests: 232 → 257.
 - **`.planning/` brought current.** The planning workspace was last updated on 2026-03-06 and still described milestone v1.4: two milestones had shipped since without touching it, and the `codebase/` analyses cited line numbers in a `main.js` that has since been refactored from ~2000 lines to 1220 across 8 files. `STATE.md`, `PROJECT.md` and `ROADMAP.md` now describe v1.7.3; the seven `codebase/` documents were rewritten against the current source; `MILESTONES.md` and `RETROSPECTIVE.md` gained entries for v1.5–v1.6 and v1.7 rather than having their historical v1.4 entries edited.
 
 

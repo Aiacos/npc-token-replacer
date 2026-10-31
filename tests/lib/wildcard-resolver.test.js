@@ -218,3 +218,29 @@ describe("DEFAULT_TIMEOUT with httpTimeout setting", () => {
     expect(WildcardResolver.DEFAULT_TIMEOUT).toBe(5000);
   });
 });
+
+describe("resolveWildcardVariants - failure handling and path shapes", () => {
+  // Caching a list built while some probes timed out would hide those
+  // variants for the whole session.
+  it("does not cache a result when some probes failed on the network", async () => {
+    global.fetch = vi.fn(url => {
+      if (url.includes("specter-1.webp")) return Promise.resolve({ ok: true });
+      if (url.includes("specter-2.webp")) return Promise.reject(new Error("timeout"));
+      return Promise.resolve({ ok: false, status: 404 });
+    });
+
+    const first = await WildcardResolver.resolveWildcardVariants("tokens/specter-*.webp");
+    expect(first).toEqual(["tokens/specter-1.webp"]);
+    expect(WildcardResolver.getCacheSize()).toBe(0);
+  });
+
+  it("keeps a pattern without a directory relative instead of rooting it at /", async () => {
+    global.fetch = vi.fn(() => Promise.resolve({ ok: false, status: 404 }));
+
+    await WildcardResolver.resolveWildcardVariants("specter-*.webp");
+
+    const urls = global.fetch.mock.calls.map(([url]) => url);
+    expect(urls.length).toBeGreaterThan(0);
+    expect(urls.every(url => !url.startsWith("/"))).toBe(true);
+  });
+});
