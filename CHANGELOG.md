@@ -11,13 +11,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **One-time notification for new official books.** A book released after this version (Wizards of the Coast / Foundry Gaming authorship, not yet in the known list) was only reported in the browser console, so a GM had no way to learn it existed but was unused. The GM now gets a persistent notification naming each such book once per world, pointing to the compendium picker. Books already in use, whitelisted books and non-GM users are skipped; the list of announced books lives in a hidden world setting (`notifiedSources`), and an unreadable list keeps the notice quiet rather than repeating it on every load. Module titles are escaped by Foundry (`escape: true`) because they come from third-party manifests.
 
 ### Fixed
+- **D&D Beyond Importer actors were never overwritten (1.8.0 regression in practice).** DDB Importer brings monsters into the world with `game.actors.importFromCompendium` from its own DDB compendium, so real DDB actors carry a `_stats.compendiumSource`. The actor lookup checked that field first and filed them as "already imported", so the overwrite never triggered and replacement silently reused the DDB actor. DDB actors are now recognised before `compendiumSource` is considered; a test reproduces a DDB actor imported from DDB's compendium.
 - **Three official books were ignored by the default mode.** The Wizards of the Coast creator page on Foundry now lists 14 packages; the whitelist had 11. Added **Ravenloft: The Horrors Within** (`dnd-ravenloft-horrors-within`, adventure tier), **Arcana Unleashed: Deadfall** (`dnd-deadfall`, adventure tier) and **Arcana Unleashed** (`dnd-arcana-unleashed`, expansion tier). They were detected as "looks official" but only used under "Everything Detected"; they are now trusted by default.
 - **The compendium list in the picker could not be scrolled** outside "Custom Selection". It was made read-only with `pointer-events: none`, which also swallowed the mouse wheel; the checkboxes are now disabled instead, so the list scrolls in every mode (and can no longer be toggled from the keyboard while read-only). A test fails if a rule on the list itself blocks pointer events again.
 - The README claimed newly installed books are "picked up on their own" by the default mode; only books in the known list are. The docs now describe the actual behaviour and the new notification.
 - `tools/validate-manifest.mjs` now recognises i18n keys passed to `ui.notifications.*` with `localize: true`, so a missing translation there fails validation instead of passing silently.
 
 ### Changed
-- Tests: 257 → 271.
+- Tests: 257 → 272.
 
 ## [1.8.0] - 2026-10-31
 

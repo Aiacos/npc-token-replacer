@@ -105,6 +105,20 @@ describe("TokenReplacer — overwrite D&D Beyond imports in place", () => {
     expect(data.flags["npc-token-replacer"].sourceUuid).toBe(COMPENDIUM_UUID);
   });
 
+  // DDB Importer brings monsters into the world with
+  // game.actors.importFromCompendium(<its own DDB compendium>), so real DDB
+  // actors carry a compendiumSource. That must not hide them from the overwrite.
+  it("overwrites a DDB actor that was imported from DDB's own compendium", async () => {
+    const ddb = ddbActor({ _stats: { compendiumSource: "Compendium.world.ddb-mondo-ddb-monsters.Actor.abc123" } });
+    setWorldActors([ddb]);
+    TokenReplacer.buildActorLookup();
+
+    await TokenReplacer.replaceToken(tokenDoc(), entry, pack);
+
+    expect(ddb.update).toHaveBeenCalledTimes(1);
+    expect(game.actors.importFromCompendium).not.toHaveBeenCalled();
+  });
+
   it("does not import a duplicate or create the module's import folder", async () => {
     setWorldActors([ddbActor()]);
     TokenReplacer.buildActorLookup();

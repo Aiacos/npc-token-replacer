@@ -75,7 +75,7 @@ Tests exist to catch regressions, not to be green.
    cancelled dialogs, missing compendiums, failed imports, network timeouts.
 4. **Both compatibility paths are tested.** Anything routed through
    `FoundryCompat` needs a test with the modern API present *and* absent.
-5. **Coverage never regresses.** Currently 271 tests; a PR that lowers the
+5. **Coverage never regresses.** Currently 272 tests; a PR that lowers the
    count needs an explicit justification in the CHANGELOG.
 6. **Cache-clearing in `beforeEach`.** Static caches leak between tests; clear
    every cache the test touches.

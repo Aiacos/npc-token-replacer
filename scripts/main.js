@@ -502,13 +502,20 @@ class TokenReplacer {
     TokenReplacer.#actorLookup = new Map();
     TokenReplacer.#importedActorsByName = new Map();
     for (const a of game.actors) {
-      // Our own flag survives an in-place overwrite even if core stops writing compendiumSource
-      const uuid = a.flags?.[MODULE_ID]?.sourceUuid || a._stats?.compendiumSource || a.flags?.core?.sourceId;
-      if (uuid) {
-        TokenReplacer.#actorLookup.set(uuid, a);
+      // Our own tag wins: the actor was already overwritten (it survives even if
+      // core stops writing compendiumSource)
+      const ownSource = a.flags?.[MODULE_ID]?.sourceUuid;
+      if (ownSource) {
+        TokenReplacer.#actorLookup.set(ownSource, a);
       } else if (TokenReplacer.isDdbImportedActor(a)) {
+        // Checked before compendiumSource: DDB Importer brings monsters into the
+        // world via importFromCompendium(<its own DDB compendium>), so real DDB
+        // actors always carry one and would otherwise look already-official
         const key = NameMatcher.normalizeName(a.name);
         if (!TokenReplacer.#importedActorsByName.has(key)) TokenReplacer.#importedActorsByName.set(key, a);
+      } else {
+        const uuid = a._stats?.compendiumSource || a.flags?.core?.sourceId;
+        if (uuid) TokenReplacer.#actorLookup.set(uuid, a);
       }
     }
     Logger.debug(`Built actor lookup Map with ${TokenReplacer.#actorLookup.size} entries, ${TokenReplacer.#importedActorsByName.size} D&D Beyond imports`);

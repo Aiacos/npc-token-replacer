@@ -359,7 +359,7 @@ Documentazione tecnica di supporto:
 
 | Comando | Scopo |
 |---------|-------|
-| `npm test` | Esegue la suite di test (271 test) |
+| `npm test` | Esegue la suite di test (272 test) |
 | `npm run lint` | ESLint su `scripts/`, `tools/` e `tests/` |
 | `npm run validate` | Verifica `module.json`, i file referenziati, le chiavi i18n e i percorsi dei template |
 | `npm run check` | Tutti e tre, in ordine |
