@@ -99,6 +99,7 @@
     "ActorsOverwriteFailed": "{count} attore/i D&D Beyond non sono stati sovrascritti — dettagli nella console.",
     "NewOfficialSourcesEnabled": "Nuovo manuale D&D ufficiale rilevato e attivato automaticamente: {names}. Le sue creature ora vengono usate per la sostituzione dei token.",
     "ActorsSkippedLoadError": "Un compendio non si è caricato, quindi gli attori D&D Beyond non sono stati aggiornati questa volta (i token vengono comunque sostituiti). Riprova quando si carica.",
-    "PreviewColScene": "Scena"
+    "PreviewColScene": "Scena",
+    "StaleCode": "NPC Token Replacer {installed} è installato, ma il browser sta ancora usando il codice in cache della {running}. Ricarica la pagina saltando la cache: Ctrl+Shift+R (Cmd+Shift+R su Mac), oppure riavvia l'app desktop."
   }
 }

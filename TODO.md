@@ -23,6 +23,11 @@ Open work only. Finished items are removed — their record lives in
 
 ## Low
 
+- [ ] **Foundry registry announcements never ran**: the Release workflow skips the
+  step because the `FOUNDRY_PACKAGE_TOKEN` secret is not set (it logs a skip and
+  stays green). Installs via the manifest URL still update; the package listing on
+  foundryvtt.com does not. → repository secrets, `tools/publish-foundry.mjs`
+
 - [ ] **Hardcoded wildcard variant suffixes** — investigate `FilePicker.browse()` instead of
   HEAD probes. → `scripts/lib/wildcard-resolver.js` (`TODO [LOW] Maintainability`)
 - [ ] **Dependabot triage treats 0.x minor bumps as non-breaking** and auto-merges them.

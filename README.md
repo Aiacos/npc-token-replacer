@@ -329,6 +329,20 @@ The module couldn't find any enabled compendiums. Check:
 
 Check the console log for details on which creatures weren't found. The matching algorithm tries to be flexible, but some custom or homebrew creatures may not have equivalents in the official compendiums.
 
+### 🐛 The button is missing, or the module behaves like an older version
+
+After an update the browser can keep running cached module files while Foundry
+already reports the new version. Reload the page bypassing the cache —
+**Ctrl+Shift+R** (**Cmd+Shift+R** on Mac) — or restart the desktop app. Since
+1.8.6 the module detects this itself and shows the GM a warning naming both
+versions. To check by hand, run in the console:
+
+```js
+import("/modules/npc-token-replacer/scripts/lib/version.js").then(m => console.log(m.CODE_VERSION))
+```
+
+It must print the same version shown in **Manage Modules**.
+
 ### 🐛 Some tokens show errors
 
 If specific tokens fail to replace, check the console for error details. Common causes:
@@ -429,7 +443,7 @@ A global debug API is exposed via `window.NPCTokenReplacer` for console access.
 
 | Command | Purpose |
 |---------|---------|
-| `npm test` | Run the unit suite (293 tests) |
+| `npm test` | Run the unit suite (298 tests) |
 | `npm run lint` | ESLint over `scripts/`, `tools/` and `tests/` |
 | `npm run validate` | Verify `module.json`, referenced files, i18n keys and template paths |
 | `npm run check` | All three, in order |

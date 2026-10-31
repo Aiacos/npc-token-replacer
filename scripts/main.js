@@ -10,6 +10,7 @@ import { ProgressReporter } from "./lib/progress-reporter.js";
 import { FoundryCompat } from "./lib/foundry-compat.js";
 import { SourceDetector } from "./lib/source-detector.js";
 import { buildCompendiumSelectorForm, preloadSelectorTemplates } from "./lib/compendium-selector.js";
+import { CODE_VERSION } from "./lib/version.js";
 
 /** Error with phase indicator ("import_failed", "creation_failed", "delete_failed"). */
 class TokenReplacerError extends Error {
@@ -1364,6 +1365,26 @@ class NPCTokenReplacerController {
     }
   }
 
+  /**
+   * Compare the running code with the installed manifest. After an update the
+   * browser can keep serving cached module files while module.json is already
+   * new, so the module half-works on old code; tell the GM to hard-reload.
+   * @returns {boolean} true when they match
+   */
+  static checkLoadedCodeVersion() {
+    const installed = game.modules.get(MODULE_ID)?.version;
+    if (!installed || installed === CODE_VERSION) return true;
+    Logger.warn(`Installed version ${installed} but the browser is running code ${CODE_VERSION} — cached files; hard-reload the page`);
+    if (game.user?.isGM) {
+      ui.notifications.warn("NPC_REPLACER.StaleCode", {
+        localize: true,
+        format: { installed, running: CODE_VERSION },
+        permanent: true
+      });
+    }
+    return false;
+  }
+
   /** Build the window.NPCTokenReplacer debug API object. */
   static getDebugAPI() {
     return {
@@ -1526,12 +1547,13 @@ function registerActorDirectoryButton(app, html) {
 }
 
 Hooks.once("init", () => {
-  Logger.log(`Initializing NPC Token Replacer (Foundry generation ${FoundryCompat.generation || "unknown"})`);
+  Logger.log(`Initializing NPC Token Replacer v${CODE_VERSION} (Foundry generation ${FoundryCompat.generation || "unknown"})`);
   registerSettings();
   preloadSelectorTemplates();
 });
 
 Hooks.once("ready", async () => {
+  NPCTokenReplacerController.checkLoadedCodeVersion();
   try {
     await NPCTokenReplacerController.initialize();
   } catch (error) {

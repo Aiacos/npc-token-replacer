@@ -7,9 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Stale-code warning.** After an update the browser can keep running cached module files while Foundry already reports the new version, so the module half-works on old code — the replace button missing from the Actors tab and D&D Beyond actors imported instead of overwritten were both traced to this in a live world. The code now carries its own version (`scripts/lib/version.js`); at `ready` it is compared with the installed manifest and, if they differ, the GM gets a permanent warning naming both versions and telling them to reload with Ctrl+Shift+R. The console also logs the running code version at `init`. README troubleshooting explains how to check by hand.
+
+### Changed
+- **Release safety:** `bump-version` updates `CODE_VERSION` together with `module.json`; the manifest validator fails if they differ; the release ZIP check now verifies **every** tracked script, language file, template and stylesheet is packaged (it checked four hard-coded files) and that the packaged `CODE_VERSION` matches the release.
+
 ### Changed
 - **The button now replaces NPC tokens on every scene of the world**, not only the scene open on the canvas. Each token is replaced on its own scene; no scene needs to be open. Selecting tokens still narrows the run to those tokens. The preview gains a **Scene** column and counts the scenes involved. Tokens are tracked by uuid, since token ids are only unique within a scene. The "No active scene" check and its message were removed.
-- Tests: 287 → 293.
+- Tests: 287 → 298.
 
 ## [1.8.5] - 2026-10-31
 

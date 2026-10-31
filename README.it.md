@@ -338,6 +338,20 @@ Se una creatura esiste in un manuale ufficiale appena uscito, cerca nel log
 l'avviso su un pacchetto che **"sembra ufficiale"**: passando alla modalità
 **Tutto ciò che viene rilevato** lo userai subito.
 
+### 🐛 Il pulsante non c'è, o il modulo si comporta come una versione vecchia
+
+Dopo un aggiornamento il browser può continuare a usare i file del modulo in
+cache mentre Foundry mostra già la versione nuova. Ricarica la pagina saltando la
+cache — **Ctrl+Shift+R** (**Cmd+Shift+R** su Mac) — oppure riavvia l'app desktop.
+Dalla 1.8.6 il modulo se ne accorge da solo e mostra al GM un avviso con le due
+versioni. Per controllare a mano, esegui in console:
+
+```js
+import("/modules/npc-token-replacer/scripts/lib/version.js").then(m => console.log(m.CODE_VERSION))
+```
+
+Deve stampare la stessa versione mostrata in **Gestisci moduli**.
+
 ### 🐛 Alcuni token danno errore
 
 Se token specifici non vengono sostituiti, controlla i dettagli in console. Cause comuni:
@@ -385,7 +399,7 @@ Documentazione tecnica di supporto:
 
 | Comando | Scopo |
 |---------|-------|
-| `npm test` | Esegue la suite di test (293 test) |
+| `npm test` | Esegue la suite di test (298 test) |
 | `npm run lint` | ESLint su `scripts/`, `tools/` e `tests/` |
 | `npm run validate` | Verifica `module.json`, i file referenziati, le chiavi i18n e i percorsi dei template |
 | `npm run check` | Tutti e tre, in ordine |

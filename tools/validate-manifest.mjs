@@ -186,6 +186,19 @@ for (const translated of ["README.it.md"]) {
   }
 }
 
+// ── code version matches the manifest ───────────────────────────────────────
+// The running code compares CODE_VERSION with the installed manifest to detect
+// a browser on cached files; a release where they differ would always warn.
+{
+  const versionFile = path.join(ROOT, "scripts/lib/version.js");
+  const codeVersion = existsSync(versionFile)
+    ? readFileSync(versionFile, "utf8").match(/CODE_VERSION\s*=\s*"([^"]*)"/)?.[1]
+    : undefined;
+  if (codeVersion !== manifest.version) {
+    fail(`scripts/lib/version.js CODE_VERSION (${codeVersion ?? "missing"}) does not match module.json version ${manifest.version}`);
+  }
+}
+
 // ── report ──────────────────────────────────────────────────────────────────
 for (const message of warnings) console.warn(`::warning::${message}`);
 for (const message of errors) console.error(`::error::${message}`);

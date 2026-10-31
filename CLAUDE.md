@@ -75,7 +75,7 @@ Tests exist to catch regressions, not to be green.
    cancelled dialogs, missing compendiums, failed imports, network timeouts.
 4. **Both compatibility paths are tested.** Anything routed through
    `FoundryCompat` needs a test with the modern API present *and* absent.
-5. **Coverage never regresses.** Currently 293 tests; a PR that lowers the
+5. **Coverage never regresses.** Currently 298 tests; a PR that lowers the
    count needs an explicit justification in the CHANGELOG.
 6. **Cache-clearing in `beforeEach`.** Static caches leak between tests; clear
    every cache the test touches.
@@ -320,7 +320,8 @@ scripts/
     ├── compendium-selector.js  # Settings form: shared model + AppV2/AppV1 shells
     ├── name-matcher.js         # NameMatcher (multi-stage creature name matching)
     ├── wildcard-resolver.js    # WildcardResolver (HEAD-probe token art paths)
-    └── progress-reporter.js    # ProgressReporter (v12/v13+ progress bar abstraction)
+    ├── progress-reporter.js    # ProgressReporter (v12/v13+ progress bar abstraction)
+    └── version.js              # CODE_VERSION — kept equal to module.json by bump-version, checked by the validator
 
 tools/
 ├── validate-manifest.mjs       # Manifest, i18n and template validation (npm run validate)
@@ -415,7 +416,7 @@ graph TD
 ### Foundry Integration Points
 
 - `Hooks.once("init")`: Register settings
-- `Hooks.once("ready")`: Initialize controller, notify the GM once about new official-looking books (`notifyNewOfficialSources`, remembered in the hidden `notifiedSources` setting), pre-cache monster index
+- `Hooks.once("ready")`: Compare `CODE_VERSION` with the installed manifest (`checkLoadedCodeVersion`) and warn the GM to hard-reload if the browser runs cached older files; initialize controller, notify the GM once about new official-looking books (`notifyNewOfficialSources`, remembered in the hidden `notifiedSources` setting), pre-cache monster index
 - `Hooks.on("renderActorDirectory")`: Add the replace button to the Actors tab footer — v13/v14 `DocumentDirectory` renders a `footer` part, and the hook passes the app `HTMLElement` (`hookEvents.renderApplicationV2`); it fires on every re-render, so the button is added once
 - `window.NPCTokenReplacer`: Debug API exposed globally via `NPCTokenReplacerController.getDebugAPI()`
 

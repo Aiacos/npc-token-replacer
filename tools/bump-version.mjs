@@ -4,8 +4,9 @@
  *
  * Usage: node tools/bump-version.mjs <patch|minor|major|x.y.z>
  *
- * Updates module.json (version + download URL), package.json, and promotes the
- * CHANGELOG "Unreleased" section to the new version. Prints the new version to
+ * Updates module.json (version + download URL), package.json, the CODE_VERSION
+ * constant in scripts/lib/version.js, and promotes the CHANGELOG "Unreleased"
+ * section to the new version. Prints the new version to
  * stdout and writes it to $GITHUB_OUTPUT when running in Actions.
  *
  * The pure helpers are exported so they can be unit-tested without touching
@@ -64,6 +65,21 @@ function promoteChangelog(changelog, version, date) {
   };
 }
 
+const CODE_VERSION_FILE = "scripts/lib/version.js";
+const CODE_VERSION_PATTERN = /(CODE_VERSION\s*=\s*")[^"]*(")/;
+
+/**
+ * Set the CODE_VERSION constant the running code uses to detect stale cached
+ * files in the browser.
+ * @param {string} source Contents of scripts/lib/version.js
+ * @param {string} version
+ * @returns {{content: string, changed: boolean}}
+ */
+function setCodeVersion(source, version) {
+  if (!CODE_VERSION_PATTERN.test(source)) return { content: source, changed: false };
+  return { content: source.replace(CODE_VERSION_PATTERN, `$1${version}$2`), changed: true };
+}
+
 function main() {
   const argument = process.argv[2];
   if (!argument) {
@@ -92,6 +108,12 @@ function main() {
     writeFileSync("package.json", `${JSON.stringify(pkg, null, 2)}\n`);
   }
 
+  if (existsSync(CODE_VERSION_FILE)) {
+    const result = setCodeVersion(readFileSync(CODE_VERSION_FILE, "utf8"), version);
+    if (result.changed) writeFileSync(CODE_VERSION_FILE, result.content);
+    else console.warn(`::warning::no CODE_VERSION constant in ${CODE_VERSION_FILE} — skipping`);
+  }
+
   if (existsSync("CHANGELOG.md")) {
     const result = promoteChangelog(readFileSync("CHANGELOG.md", "utf8"), version, new Date().toISOString().slice(0, 10));
     if (result.changed) writeFileSync("CHANGELOG.md", result.content);
@@ -105,4 +127,4 @@ function main() {
 // Only act when run as a script, so the helpers can be imported by tests.
 if (process.argv[1] && process.argv[1].endsWith("bump-version.mjs")) main();
 
-export { nextVersion, promoteChangelog };
+export { nextVersion, promoteChangelog, setCodeVersion };

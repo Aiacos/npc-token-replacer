@@ -99,6 +99,7 @@
     "ActorsOverwriteFailed": "{count} D&D Beyond actor(s) could not be overwritten — see the console for details.",
     "NewOfficialSourcesEnabled": "New official D&D book detected and enabled automatically: {names}. Its creatures are now used for token replacement.",
     "ActorsSkippedLoadError": "A compendium failed to load, so D&D Beyond actors were not updated this time (tokens are still replaced). Try again once it loads.",
-    "PreviewColScene": "Scene"
+    "PreviewColScene": "Scene",
+    "StaleCode": "NPC Token Replacer {installed} is installed, but your browser is still running cached code from {running}. Reload the page bypassing the cache: Ctrl+Shift+R (Cmd+Shift+R on Mac), or restart the desktop app."
   }
 }
