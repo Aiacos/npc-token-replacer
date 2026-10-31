@@ -11,459 +11,12 @@ import { FoundryCompat } from "./lib/foundry-compat.js";
 import { SourceDetector } from "./lib/source-detector.js";
 import { buildCompendiumSelectorForm, preloadSelectorTemplates } from "./lib/compendium-selector.js";
 import { CODE_VERSION } from "./lib/version.js";
-
-/** Error with phase indicator ("import_failed", "creation_failed", "delete_failed"). */
-class TokenReplacerError extends Error {
-  constructor(message, phase) {
-    super(message);
-    this.name = "TokenReplacerError";
-    this.phase = phase;
-  }
-}
-
-/** Manages Actor folders for compendium imports. */
-class FolderManager {
-  static #importFolderCache = null;
-
-  static get FOLDER_NAME() { return "MonsterManual"; }
-  static get FOLDER_COLOR() { return "#7a1010"; }
-
-  /** Patterns for identifying monster-related Actor folders as import parents */
-  static #MONSTER_FOLDER_PATTERNS = Object.freeze([
-    Object.freeze({ pattern: /monster/i, name: "monster" }),
-    Object.freeze({ pattern: /creature/i, name: "creature" }),
-    Object.freeze({ pattern: /npc/i, name: "npc" }),
-    Object.freeze({ pattern: /bestiary/i, name: "bestiary" }),
-    Object.freeze({ pattern: /enemy/i, name: "enemy" }),
-    Object.freeze({ pattern: /enemies/i, name: "enemies" })
-  ]);
-  static get MONSTER_FOLDER_PATTERNS() {
-    return FolderManager.#MONSTER_FOLDER_PATTERNS;
-  }
-
-  /** Build full folder path string like "/Parent/Child/Folder" */
-  static getFolderPath(folder) {
-    if (!folder) return "";
-    const parts = [folder.name];
-    let parent = folder.folder;
-    let depth = 0;
-    while (parent && depth < 10) {
-      parts.unshift(parent.name);
-      parent = parent.folder;
-      depth++;
-    }
-    return `/${parts.join("/")}`;
-  }
-
-  /**
-   * Get or create the Actor folder for Monster Manual imports.
-   * Looks for existing monster folders, creates a subfolder if needed. Cached.
-   * @returns {Promise<Folder|null>} The import folder, or null on failure
-   */
-  static async getOrCreateImportFolder() {
-    if (FolderManager.#importFolderCache && game.folders.has(FolderManager.#importFolderCache.id)) {
-      return FolderManager.#importFolderCache;
-    }
-
-    Logger.log("Scanning Actor folders for import destination...");
-
-    // Single pass — gather all Actor folders once and reuse for all searches
-    const actorFolders = game.folders.filter(f => f.type === "Actor");
-    Logger.log(`Found ${actorFolders.length} Actor folders in world`);
-
-    // Log all existing folders (debug level)
-    if (actorFolders.length > 0) {
-      Logger.debug("Existing Actor folders:");
-      actorFolders.forEach(f => {
-        Logger.debug(`  - ${FolderManager.getFolderPath(f)} (id: ${f.id})`);
-      });
-    }
-
-    // Check if our folder already exists (search local array, not game.folders)
-    let folder = actorFolders.find(f => f.name === FolderManager.FOLDER_NAME);
-
-    if (folder) {
-      Logger.log(`Found existing folder: ${FolderManager.getFolderPath(folder)}`);
-      FolderManager.#importFolderCache = folder;
-      return folder;
-    }
-    Logger.debug(`Folder "${FolderManager.FOLDER_NAME}" not found`);
-
-    // Look for existing monster-related folders to use as parent
-    let parentFolder = null;
-    for (const { pattern } of FolderManager.MONSTER_FOLDER_PATTERNS) {
-      const match = actorFolders.find(f => pattern.test(f.name) && !f.folder);
-      if (match) {
-        parentFolder = match;
-        Logger.debug(`  Selected top-level folder: ${FolderManager.getFolderPath(parentFolder)}`);
-        break;
-      }
-    }
-
-    // Create the folder name based on parent
-    let folderName = FolderManager.FOLDER_NAME;
-    if (parentFolder) {
-      folderName = `${parentFolder.name} - ${FolderManager.FOLDER_NAME}`;
-      Logger.log(`Will create folder "${folderName}" inside "${parentFolder.name}"`);
-    } else {
-      Logger.log(`No monster folder found, will create "${folderName}" at root level`);
-    }
-
-    // Check if this combined name already exists (search local array)
-    folder = actorFolders.find(f => f.name === folderName);
-
-    if (folder) {
-      Logger.log(`Found existing folder: ${FolderManager.getFolderPath(folder)}`);
-      FolderManager.#importFolderCache = folder;
-      return folder;
-    }
-
-    // Create the new folder
-    Logger.log(`Creating new folder: "${folderName}"...`);
-    try {
-      folder = await Folder.create({
-        name: folderName,
-        type: "Actor",
-        // Folder documents store their parent in `folder`; `parent` is not a schema field
-        folder: parentFolder?.id ?? null,
-        color: FolderManager.FOLDER_COLOR
-      });
-      Logger.log(`Created new folder: ${FolderManager.getFolderPath(folder)}`);
-      FolderManager.#importFolderCache = folder;
-      return folder;
-    } catch (error) {
-      Logger.error("Failed to create import folder", error);
-      ui.notifications.error(game.i18n.localize("NPC_REPLACER.ErrorFolderCreate"));
-      return null;
-    }
-  }
-
-  static clearCache() {
-    FolderManager.#importFolderCache = null;
-    Logger.debug("FolderManager cache cleared");
-  }
-}
-
-/**
- * Detects WotC compendiums, manages enabled compendiums, loads and indexes monsters.
- */
-class CompendiumManager {
-  static #indexCache = null;
-  /** normalizedName -> Array<{entry, pack, normalizedName}> */
-  static #indexMap = null;
-  /** significantWord -> Array<index entry refs> for Stage 3 partial matching */
-  static #wordIndex = null;
-  static #enabledPacksCache = null;
-  static #wotcCompendiumsCache = null;
-  static #lastLoadErrors = [];
-  /** packCollection -> classification returned by SourceDetector */
-  static #classifications = new Map();
-
-  /** Get priority for a pack (higher = preferred). Uses the detection cache. */
-  static getCompendiumPriority(pack) {
-    return CompendiumManager.#classifications.get(pack?.collection)?.priority
-      ?? SourceDetector.classify(pack).priority;
-  }
-
-  /**
-   * Extra package ids or pack collections the GM added by hand — the escape
-   * hatch for content the automatic signals cannot recognise.
-   * @returns {Set<string>|null}
-   */
-  static #getManualSourceIds() {
-    let raw;
-    try {
-      raw = game.settings.get(MODULE_ID, "additionalSources");
-    } catch (error) {
-      Logger.debug(`additionalSources setting unavailable: ${error.message}`);
-      return null;
-    }
-    if (typeof raw !== "string" || raw.trim() === "") return null;
-    const ids = raw.split(/[\s,;]+/).map(id => id.trim()).filter(Boolean);
-    return ids.length > 0 ? new Set(ids) : null;
-  }
-
-  /**
-   * Detect every Actor compendium that can supply D&D creatures.
-   *
-   * Two layers: the authoritative whitelist of Wizards of the Coast packages
-   * (trusted by default), plus forward-looking signals — WotC authorship,
-   * premium content declaring this system, or a package id the GM added by
-   * hand — which are detected and listed but only used when the GM opts in.
-   * That way a book released after this version is never silently ignored,
-   * and a third-party module is never silently trusted. Cached.
-   *
-   * @returns {readonly CompendiumCollection[]}
-   */
-  static detectWOTCCompendiums() {
-    if (CompendiumManager.#wotcCompendiumsCache) {
-      return CompendiumManager.#wotcCompendiumsCache;
-    }
-
-    Logger.log("Detecting official D&D compendiums...");
-
-    const manualIds = CompendiumManager.#getManualSourceIds();
-    const classifications = new Map();
-
-    const detected = game.packs.filter(pack => {
-      if (pack.documentName !== "Actor") return false;
-      const info = SourceDetector.classify(pack, manualIds);
-      if (info.tier === SourceDetector.TIER.NONE) return false;
-      classifications.set(pack.collection, info);
-      return true;
-    });
-
-    CompendiumManager.#classifications = classifications;
-
-    const beyondWhitelist = detected.filter(pack => classifications.get(pack.collection).tier === SourceDetector.TIER.PUBLISHER);
-    const verified = detected.filter(pack => classifications.get(pack.collection).tier === SourceDetector.TIER.VERIFIED);
-    if (verified.length > 0) {
-      Logger.log(`${verified.length} official book(s) recognised without the known list (WotC author + premium for this system): ` +
-        verified.map(pack => pack.metadata.packageName).join(", "));
-    }
-    if (beyondWhitelist.length > 0) {
-      Logger.warn(
-        `${beyondWhitelist.length} package(s) look like official D&D content but are not in the known list: ` +
-        `${beyondWhitelist.map(pack => pack.metadata.packageName).join(", ")}. ` +
-        "Switch the compendium mode to \"Everything Detected\" to use them."
-      );
-    }
-
-    Logger.log(`Found ${detected.length} D&D Actor compendium(s):`);
-    detected.forEach(pack => {
-      const info = classifications.get(pack.collection);
-      const priorityLabel = SourceDetector.PRIORITY_LABELS[info.priority] || "UNKNOWN";
-      Logger.log(`  - ${pack.collection} (${pack.metadata.label}) [package: ${info.packageName}, tier: ${info.tier}, priority: ${info.priority}-${priorityLabel}]`);
-    });
-
-    CompendiumManager.#wotcCompendiumsCache = Object.freeze(detected);
-    return CompendiumManager.#wotcCompendiumsCache;
-  }
-
-  /** How a detected pack was recognised: "system", "official", "premium" or "manual". */
-  static getSourceTier(pack) {
-    return CompendiumManager.#classifications.get(pack?.collection)?.tier
-      ?? SourceDetector.classify(pack).tier;
-  }
-
-  /** Human-readable book name for a detected pack (known label, else the module title). */
-  static getSourceLabel(pack) {
-    return CompendiumManager.#classifications.get(pack?.collection)?.label
-      ?? SourceDetector.classify(pack).label;
-  }
-
-  /**
-   * The conservative "core" set (also the fallback for an unreadable setting):
-   * official SRD and rulebooks only. Priority alone is not enough, because
-   * opt-in tiers without Adventure/Scene packs also classify as CORE.
-   */
-  static #isCoreSource(pack) {
-    return CompendiumManager.getCompendiumPriority(pack) <= SourceDetector.PRIORITY.CORE
-      && CompendiumManager.isOfficialSource(pack);
-  }
-
-  /** True for first-party D&D content: system SRD, whitelisted or verified WotC book. */
-  static isOfficialSource(pack) {
-    return CompendiumManager.#classifications.get(pack?.collection)?.official
-      ?? SourceDetector.classify(pack).official;
-  }
-
-  /**
-   * Resolve the compendiums to read, from the `enabledCompendiums` setting:
-   *   ["default"] every auto-detected OFFICIAL source (system SRD + WotC modules)
-   *   ["core"]    only SRD + core rulebooks (priority 1-2)
-   *   ["all"]     everything detected, including premium and manually added packs
-   *   [ids...]    the listed pack collections
-   * @returns {readonly CompendiumCollection[]}
-   */
-  static getEnabledCompendiums() {
-    if (CompendiumManager.#enabledPacksCache) return CompendiumManager.#enabledPacksCache;
-
-    const allPacks = CompendiumManager.detectWOTCCompendiums();
-
-    let settingValue;
-    try {
-      settingValue = game.settings.get(MODULE_ID, "enabledCompendiums");
-    } catch (e) {
-      Logger.warn(`Failed to retrieve enabledCompendiums setting (${e.name}: ${e.message})`);
-      ui.notifications.error(game.i18n.localize("NPC_REPLACER.ErrorSettingsRetrieve"));
-      // Reading the setting failed: stay conservative rather than silently widening scope
-      const result = allPacks.filter(pack => CompendiumManager.#isCoreSource(pack));
-      CompendiumManager.#enabledPacksCache = Object.freeze(result);
-      return CompendiumManager.#enabledPacksCache;
-    }
-
-    let enabledPackIds;
-    try {
-      enabledPackIds = typeof settingValue === "string" ? JSON.parse(settingValue) : settingValue;
-    } catch (e) {
-      Logger.warn(`Failed to parse enabledCompendiums JSON (${e.name}: ${e.message})`);
-      ui.notifications.error(game.i18n.localize("NPC_REPLACER.ErrorSettingsParse"));
-      enabledPackIds = ["core"];
-    }
-
-    if (!enabledPackIds || !Array.isArray(enabledPackIds) || enabledPackIds.length === 0) {
-      enabledPackIds = ["default"];
-    }
-
-    let result;
-    if (enabledPackIds.includes("all")) {
-      Logger.log("Using all detected compendiums");
-      result = allPacks;
-    } else if (enabledPackIds.includes("core")) {
-      result = allPacks.filter(pack => CompendiumManager.#isCoreSource(pack));
-      Logger.log(`Using core compendiums (SRD + rulebooks): ${result.map(p => p.metadata.label).join(", ")}`);
-    } else if (enabledPackIds.includes("default")) {
-      result = allPacks.filter(pack => CompendiumManager.isOfficialSource(pack));
-      Logger.log(`Using every official D&D compendium: ${result.map(p => p.metadata.label).join(", ")}`);
-    } else {
-      const enabledSet = new Set(enabledPackIds);
-      result = allPacks.filter(pack => enabledSet.has(pack.collection));
-      Logger.log(`Enabled compendiums: ${result.map(p => p.metadata.label).join(", ")}`);
-    }
-
-    CompendiumManager.#enabledPacksCache = Object.freeze(result);
-    return CompendiumManager.#enabledPacksCache;
-  }
-
-  /**
-   * Actor types that are never scene creatures. A blocklist (rather than an
-   * allowlist) keeps actor types introduced by future system versions indexed
-   * instead of silently dropping them.
-   */
-  static #NON_CREATURE_TYPES = Object.freeze(new Set(["character", "group", "vehicle"]));
-
-  /** True when a compendium index entry can stand in for an NPC token. */
-  static isCreatureEntry(entry) {
-    const type = entry?.type;
-    if (!type) return true; // no type information — keep it and let name matching decide
-    return !CompendiumManager.#NON_CREATURE_TYPES.has(type);
-  }
-
-  /** Load combined monster index from all enabled compendiums. Cached unless forceReload. */
-  static async loadMonsterIndex(forceReload = false) {
-    if (CompendiumManager.#indexCache && !forceReload) {
-      return CompendiumManager.#indexCache;
-    }
-
-    CompendiumManager.#lastLoadErrors = [];
-
-    const enabledPacks = CompendiumManager.getEnabledCompendiums();
-
-    if (enabledPacks.length === 0) {
-      Logger.log("No enabled compendiums found");
-      CompendiumManager.#indexCache = Object.freeze([]);
-      CompendiumManager.#indexMap = new Map();
-      CompendiumManager.#wordIndex = new Map();
-      return CompendiumManager.#indexCache;
-    }
-
-    Logger.log(`Loading monster index from ${enabledPacks.length} compendium(s)...`);
-
-    const combinedIndex = [];
-
-    const sortedPacks = [...enabledPacks].sort((a, b) =>
-      CompendiumManager.getCompendiumPriority(b) - CompendiumManager.getCompendiumPriority(a)
-    );
-
-    const indexResults = await Promise.allSettled(
-      sortedPacks.map(pack => pack.getIndex({ fields: ["name", "type"] }).then(() => pack))
-    );
-
-    for (let i = 0; i < indexResults.length; i++) {
-      const result = indexResults[i];
-      const pack = sortedPacks[i];
-
-      if (result.status === "rejected") {
-        CompendiumManager.#lastLoadErrors.push({
-          packId: pack.collection,
-          packLabel: pack.metadata.label,
-          error: result.reason?.message || String(result.reason)
-        });
-        Logger.error(`Failed to load index from ${pack.collection}`, result.reason);
-        ui.notifications.error(game.i18n.format("NPC_REPLACER.ErrorCompendiumLoad", { name: escapeHtml(pack.metadata.label) }));
-        continue;
-      }
-
-      const priority = CompendiumManager.getCompendiumPriority(pack);
-      const priorityLabel = SourceDetector.PRIORITY_LABELS[priority] || "UNKNOWN";
-      let indexed = 0;
-      for (const entry of pack.index.contents) {
-        if (!CompendiumManager.isCreatureEntry(entry)) continue;
-        indexed++;
-        const normalizedName = NameMatcher.normalizeName(entry.name);
-        const significantWords = normalizedName.split(" ").filter(w => w.length >= NameMatcher.MIN_PARTIAL_LENGTH);
-        combinedIndex.push({
-          entry,
-          pack,
-          normalizedName,
-          significantWords,
-          priority
-        });
-      }
-      Logger.log(`  [${priority}-${priorityLabel}] Loaded ${indexed}/${pack.index.size} creature entries from ${pack.metadata.label}`);
-    }
-
-    Logger.log(`Total: ${combinedIndex.length} entries from all compendiums`);
-    Logger.log(`Priority order: ${Object.entries(SourceDetector.PRIORITY_LABELS).sort(([a], [b]) => b - a).map(([p, label]) => `${label} (${p})`).join(" > ")}`);
-
-    const indexMap = new Map();
-    const wordIndex = new Map();
-    for (const item of combinedIndex) {
-      const key = item.normalizedName;
-      if (!indexMap.has(key)) indexMap.set(key, []);
-      indexMap.get(key).push(item);
-
-      for (const word of item.significantWords) {
-        if (!wordIndex.has(word)) wordIndex.set(word, []);
-        wordIndex.get(word).push(item);
-      }
-    }
-
-    const index = Object.freeze(combinedIndex);
-
-    // A pack that failed to index is retried on the next run instead of being
-    // missing until reload: serve this partial index once, but do not cache it.
-    CompendiumManager.#indexCache = CompendiumManager.#lastLoadErrors.length > 0 ? null : index;
-    CompendiumManager.#indexMap = indexMap;
-    CompendiumManager.#wordIndex = wordIndex;
-    return index;
-  }
-
-  static clearCache() {
-    CompendiumManager.#indexCache = null;
-    CompendiumManager.#indexMap = null;
-    CompendiumManager.#wordIndex = null;
-    CompendiumManager.#wotcCompendiumsCache = null;
-    CompendiumManager.#enabledPacksCache = null;
-    CompendiumManager.#lastLoadErrors = [];
-    CompendiumManager.#classifications = new Map();
-    Logger.debug("CompendiumManager caches cleared");
-  }
-
-  static getLastLoadErrors() {
-    return [...CompendiumManager.#lastLoadErrors];
-  }
-
-  static getIndexMap() {
-    return CompendiumManager.#indexMap;
-  }
-
-  static getWordIndex() {
-    return CompendiumManager.#wordIndex;
-  }
-
-  static isIndexCached() {
-    return CompendiumManager.#indexCache !== null;
-  }
-
-  static getCacheSize() {
-    return CompendiumManager.#indexCache ? CompendiumManager.#indexCache.length : 0;
-  }
-}
-
-// Wire late-bound dependency — NameMatcher needs CompendiumManager for priority lookups
-NameMatcher.setCompendiumManager(CompendiumManager);
+import { TokenReplacerError } from "./lib/errors.js";
+import { escapeHtml } from "./lib/html.js";
+import { FolderManager } from "./lib/folder-manager.js";
+import { CompendiumManager } from "./lib/compendium-manager.js";
+import { CompendiumDocs } from "./lib/compendium-docs.js";
+import { ActorImporter } from "./lib/actor-importer.js";
 
 /**
  * Handles token replacement: extract properties, import actors, create new tokens.
@@ -471,153 +24,12 @@ NameMatcher.setCompendiumManager(CompendiumManager);
 class TokenReplacer {
   static #sequentialCounter = 0;
   static #variationMode = null;
-  /** Session-scoped Map: compendium UUID -> world Actor */
-  static #actorLookup = null;
-  /** normalizedName -> world actor imported by D&D Beyond Importer, not yet overwritten. */
-  static #importedActorsByName = null;
-  /** Flag scopes written by D&D Beyond Importer, dropped when an actor is overwritten. */
-  static #DDB_FLAG_SCOPES = Object.freeze(["ddbimporter", "monsterMunch"]);
-  /** Every D&D Beyond Importer actor not yet overwritten, in world order. */
-  static #importedActors = null;
-  static #compendiumDocCache = new Map();
-  static #COMPENDIUM_DOC_CACHE_MAX = 100;
-
-  // An actor counts as already imported from a compendium entry through, in order:
-  // this module's own tag (survives a core rename of compendiumSource), the v12+
-  // _stats.compendiumSource, or the pre-v12 flags.core.sourceId.
-  static buildActorLookup() {
-    TokenReplacer.#actorLookup = new Map();
-    TokenReplacer.#importedActorsByName = new Map();
-    TokenReplacer.#importedActors = [];
-    for (const a of game.actors) {
-      // Our own tag wins: the actor was already overwritten (it survives even if
-      // core stops writing compendiumSource)
-      const ownSource = a.flags?.[MODULE_ID]?.sourceUuid;
-      if (ownSource) {
-        TokenReplacer.#actorLookup.set(ownSource, a);
-      } else if (TokenReplacer.isDdbImportedActor(a)) {
-        // Checked before compendiumSource: DDB Importer brings monsters into the
-        // world via importFromCompendium(<its own DDB compendium>), so real DDB
-        // actors always carry one and would otherwise look already-official
-        TokenReplacer.#importedActors.push(a);
-        const key = NameMatcher.normalizeName(a.name);
-        if (!TokenReplacer.#importedActorsByName.has(key)) TokenReplacer.#importedActorsByName.set(key, a);
-      } else {
-        const uuid = a._stats?.compendiumSource || a.flags?.core?.sourceId;
-        if (uuid) TokenReplacer.#actorLookup.set(uuid, a);
-      }
-    }
-    Logger.debug(`Built actor lookup Map with ${TokenReplacer.#actorLookup.size} entries, ${TokenReplacer.#importedActorsByName.size} D&D Beyond imports`);
-  }
-
-  /**
-   * True for monsters created by D&D Beyond Importer. Mirrors the importer's own
-   * test (ddb-importer src/muncher/tools.ts): an "npc" carrying flags.ddbimporter.id.
-   */
-  static isDdbImportedActor(actor) {
-    return actor?.type === "npc" && actor.flags?.ddbimporter?.id !== undefined;
-  }
-
-  /** Whether the GM allows overwriting imported actors. Unreadable means no — it is destructive. */
-  static overwriteAllowed() {
-    try {
-      return game.settings.get(MODULE_ID, "overwriteImportedActors") === true;
-    } catch (error) {
-      Logger.debug(`overwriteImportedActors unavailable, not overwriting: ${error.message}`);
-      return false;
-    }
-  }
-
-  /**
-   * The D&D Beyond import that replacing with this compendium entry would
-   * overwrite, or null. An actor already imported from the same entry wins,
-   * so a world never gets both overwritten and re-imported.
-   * Requires buildActorLookup() to have run.
-   */
-  static findOverwriteTarget(compendiumEntry, pack) {
-    if (!TokenReplacer.#importedActorsByName || !TokenReplacer.overwriteAllowed()) return null;
-    const uuid = compendiumEntry.uuid ?? `Compendium.${pack.collection}.Actor.${compendiumEntry._id}`;
-    if (TokenReplacer.#actorLookup?.has(uuid)) return null;
-    const target = TokenReplacer.#importedActorsByName.get(NameMatcher.normalizeName(compendiumEntry.name));
-    // The lookup outlives the non-modal preview; skip actors deleted meanwhile
-    return target && game.actors.has(target.id) ? target : null;
-  }
-
-  /**
-   * Replace an existing world actor's data with the compendium version, keeping
-   * where it lives and who owns it. recursive:false replaces inner objects and
-   * embedded collections explicitly (DatabaseUpdateOperation, v13/v14) instead
-   * of merging DDB items with the official ones.
-   */
-  static async #overwriteActor(target, compendiumActor) {
-    const data = game.actors.fromCompendium(compendiumActor);
-    delete data._id;
-    data.folder = target.folder?.id ?? null;
-    data.ownership = target.ownership;
-    data.sort = target.sort;
-    // Drop the D&D Beyond Importer flags (the actor no longer is a DDB import),
-    // keep every other module's flags and the sheet choice
-    const kept = { ...(target.flags ?? {}) };
-    for (const key of TokenReplacer.#DDB_FLAG_SCOPES) delete kept[key];
-    data.flags = { ...kept, ...(data.flags ?? {}), [MODULE_ID]: { sourceUuid: compendiumActor.uuid } };
-    await target.update(data, { diff: false, recursive: false });
-    return target;
-  }
-
-  /** D&D Beyond Importer actors not yet overwritten. Requires buildActorLookup(). */
-  static getImportedActors() {
-    return [...(TokenReplacer.#importedActors ?? [])];
-  }
-
-  /** Remember an overwrite so neither path overwrites or imports it again this session. */
-  static #recordOverwrite(target, compendiumActor) {
-    TokenReplacer.#importedActors = TokenReplacer.#importedActors?.filter(a => a !== target) ?? null;
-    for (const [key, actor] of TokenReplacer.#importedActorsByName ?? []) {
-      if (actor === target) TokenReplacer.#importedActorsByName.delete(key);
-    }
-    TokenReplacer.#actorLookup?.set(compendiumActor.uuid, target);
-  }
-
-  /**
-   * Overwrite one D&D Beyond actor in place with a compendium entry (the
-   * world-wide pass of the replace button). Requires buildActorLookup().
-   * @throws {TokenReplacerError} phase "import_failed"
-   */
-  static async overwriteImportedActor(actor, compendiumEntry, pack) {
-    try {
-      const compendiumActor = await TokenReplacer.#loadCompendiumActor(compendiumEntry, pack);
-      await TokenReplacer.#overwriteActor(actor, compendiumActor);
-      TokenReplacer.#recordOverwrite(actor, compendiumActor);
-      Logger.log(`Overwrote D&D Beyond actor "${actor.name}" (id: ${actor.id}) in place from ${pack.metadata.label}`);
-      return actor;
-    } catch (error) {
-      throw new TokenReplacerError(`Failed to overwrite "${actor.name}": ${error.message}`, "import_failed");
-    }
-  }
-
-  /** Compendium document for an index entry, through the bounded FIFO cache. */
-  static async #loadCompendiumActor(compendiumEntry, pack) {
-    const docCacheKey = `${pack.collection}|${compendiumEntry._id}`;
-    let compendiumActor = TokenReplacer.#compendiumDocCache.get(docCacheKey);
-    if (!compendiumActor) {
-      compendiumActor = await pack.getDocument(compendiumEntry._id);
-      if (TokenReplacer.#compendiumDocCache.size >= TokenReplacer.#COMPENDIUM_DOC_CACHE_MAX) {
-        // Evict oldest entry (Map preserves insertion order)
-        const oldest = TokenReplacer.#compendiumDocCache.keys().next().value;
-        TokenReplacer.#compendiumDocCache.delete(oldest);
-      }
-      TokenReplacer.#compendiumDocCache.set(docCacheKey, compendiumActor);
-    }
-    return compendiumActor;
-  }
-
+  /** Reset the per-run state: actor lookup, compendium documents, variation mode. */
   static clearActorLookup() {
-    TokenReplacer.#actorLookup = null;
-    TokenReplacer.#importedActorsByName = null;
-    TokenReplacer.#importedActors = null;
+    ActorImporter.clear();
+    CompendiumDocs.clear();
     TokenReplacer.#variationMode = null;
-    TokenReplacer.#compendiumDocCache.clear();
-    Logger.debug("Actor lookup Map and variation mode cleared");
+    Logger.debug("Run state cleared (actor lookup, compendium documents, variation mode)");
   }
 
   // TODO [MEDIUM] Compatibility: allowlist silently drops properties added in new Foundry versions.
@@ -630,7 +42,6 @@ class TokenReplacer {
     "hidden", "rotation", "disposition", "locked", "alpha"
   ]);
   static get PRESERVED_PROPERTIES() { return TokenReplacer.#PRESERVED_PROPERTIES; }
-
 
   static resetCounter() {
     TokenReplacer.#sequentialCounter = 0;
@@ -700,49 +111,6 @@ class TokenReplacer {
   static getNPCTokensFromScene() {
     if (!canvas.scene) return [];
     return canvas.scene.tokens.contents.filter(TokenReplacer.#isNPCToken);
-  }
-
-  /** Find existing world actor or import from compendium. */
-  static async #getOrImportWorldActor(compendiumActor, compendiumEntry, pack) {
-    let worldActor = TokenReplacer.#actorLookup?.get(compendiumActor.uuid) || null;
-
-    // Guard against stale cached references (actor deleted between sessions)
-    if (worldActor && !game.actors.has(worldActor.id)) {
-      Logger.warn(`Cached actor "${worldActor.name}" (id: ${worldActor.id}) no longer exists in game.actors, will re-import`);
-      TokenReplacer.#actorLookup.delete(compendiumActor.uuid);
-      worldActor = null;
-    }
-
-    if (worldActor) {
-      Logger.log(`Using existing imported actor "${worldActor.name}"`);
-      return worldActor;
-    }
-
-    const target = TokenReplacer.findOverwriteTarget(compendiumEntry, pack);
-    if (target) {
-      await TokenReplacer.#overwriteActor(target, compendiumActor);
-      TokenReplacer.#recordOverwrite(target, compendiumActor);
-      Logger.log(`Overwrote D&D Beyond actor "${target.name}" (id: ${target.id}) in place with "${compendiumActor.name}" from ${pack.metadata.label}`);
-      return target;
-    }
-
-    const importFolder = await FolderManager.getOrCreateImportFolder();
-    if (!importFolder) {
-      Logger.warn(`Import folder unavailable — actor "${compendiumActor.name}" will be imported to the root folder`);
-    }
-    const updateData = importFolder ? { folder: importFolder.id } : {};
-    worldActor = await game.actors.importFromCompendium(pack, compendiumEntry._id, updateData);
-
-    if (!worldActor) {
-      throw new Error(`Failed to import actor "${compendiumActor.name}" from compendium`);
-    }
-
-    if (TokenReplacer.#actorLookup) {
-      TokenReplacer.#actorLookup.set(compendiumActor.uuid, worldActor);
-    }
-
-    Logger.log(`Imported actor "${compendiumActor.name}" from compendium into folder "${importFolder?.name || "root"}"`);
-    return worldActor;
   }
 
   /** Resolve wildcard texture path (e.g. "specter-*.webp") to an actual file. */
@@ -828,14 +196,14 @@ class TokenReplacer {
 
     let compendiumActor;
     try {
-      compendiumActor = await TokenReplacer.#loadCompendiumActor(compendiumEntry, pack);
+      compendiumActor = await CompendiumDocs.load(compendiumEntry, pack);
     } catch (error) {
       throw new TokenReplacerError(`Failed to load "${compendiumEntry.name}" from compendium: ${error.message}`, "import_failed");
     }
 
     let worldActor;
     try {
-      worldActor = await TokenReplacer.#getOrImportWorldActor(compendiumActor, compendiumEntry, pack);
+      worldActor = await ActorImporter.resolveWorldActor(compendiumActor, compendiumEntry, pack);
     } catch (error) {
       throw new TokenReplacerError(`Failed to import "${compendiumEntry.name}": ${error.message}`, "import_failed");
     }
@@ -889,7 +257,6 @@ class TokenReplacer {
 class NPCTokenReplacerController {
   static #isProcessing = false;
   static #clearPending = false;
-
 
   /** Check GM status, active scene, and compendium availability. */
   static validatePrerequisites() {
@@ -1076,7 +443,7 @@ class NPCTokenReplacerController {
    * @returns {{actor: Actor, match: {entry, pack}|null}[]} unmatched actors are kept, for the preview
    */
   static planActorOverwrites(scopeActorIds = null) {
-    if (!TokenReplacer.overwriteAllowed()) return [];
+    if (!ActorImporter.overwriteAllowed()) return [];
     // An overwrite tags the actor as official for good; against an index that is
     // missing a pack it could lock in a lower-priority version. Tokens are only
     // replaced, so they still run.
@@ -1085,7 +452,7 @@ class NPCTokenReplacerController {
       return [];
     }
     const indexMap = CompendiumManager.getIndexMap();
-    return TokenReplacer.getImportedActors()
+    return ActorImporter.getImportedActors()
       .filter(actor => !scopeActorIds || scopeActorIds.has(actor.id))
       .map(actor => ({
         actor,
@@ -1105,7 +472,7 @@ class NPCTokenReplacerController {
       for (let i = 0; i < toOverwrite.length; i++) {
         const { actor, match } = toOverwrite[i];
         try {
-          await TokenReplacer.overwriteImportedActor(actor, match.entry, match.pack);
+          await ActorImporter.overwriteImportedActor(actor, match.entry, match.pack);
           result.overwritten++;
         } catch (error) {
           Logger.error(`Could not overwrite D&D Beyond actor "${actor.name}"`, error);
@@ -1159,7 +526,7 @@ class NPCTokenReplacerController {
       const { tokens: npcTokens, isSelection, skipped = { replaced: 0, inCombat: 0 } } = TokenReplacer.getNPCTokensToProcess();
 
       // Built before matching so the preview can list actors that will be overwritten
-      TokenReplacer.buildActorLookup();
+      ActorImporter.buildActorLookup();
       // The same button also brings D&D Beyond actors up to date: every one in the
       // world, or only those behind the selected tokens
       const scope = isSelection ? new Set(npcTokens.map(token => token.actorId)) : null;
@@ -1305,7 +672,7 @@ class NPCTokenReplacerController {
       const tokenDoc = tokens[i];
       const creatureName = tokenDoc.actor?.name || tokenDoc.name;
       const match = NameMatcher.findMatch(creatureName, index);
-      const overwrite = match ? TokenReplacer.findOverwriteTarget(match.entry, match.pack) : null;
+      const overwrite = match ? ActorImporter.findOverwriteTarget(match.entry, match.pack) : null;
       results.push({ tokenDoc, creatureName, match, overwrite });
 
       progress.update(i + 1, game.i18n.format("NPC_REPLACER.ProgressUpdate", {
@@ -1533,20 +900,6 @@ function registerSettings() {
   }
 }
 
-const HTML_ESCAPES = Object.freeze({
-  "&": "&amp;",
-  "<": "&lt;",
-  ">": "&gt;",
-  '"': "&quot;",
-  "'": "&#39;"
-});
-const HTML_ESCAPE_PATTERN = /[&<>"']/g;
-
-function escapeHtml(str) {
-  if (str == null) return "";
-  return String(str).replace(HTML_ESCAPE_PATTERN, char => HTML_ESCAPES[char]);
-}
-
 /**
  * Put the replace button at the bottom of the Actors sidebar tab (GM only).
  * v13/v14 DocumentDirectory renders a `footer` part; renderActorDirectory
@@ -1600,4 +953,4 @@ Hooks.once("ready", async () => {
 Hooks.on("renderActorDirectory", registerActorDirectoryButton);
 
 // Named exports for testing
-export { FolderManager, CompendiumManager, TokenReplacer, NPCTokenReplacerController, TokenReplacerError, registerActorDirectoryButton, registerSettings };
+export { TokenReplacer, NPCTokenReplacerController, registerActorDirectoryButton, registerSettings };

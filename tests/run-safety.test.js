@@ -1,5 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import { TokenReplacer, NPCTokenReplacerController, CompendiumManager } from "../scripts/main.js";
+import { ActorImporter } from "../scripts/lib/actor-importer.js";
+import { TokenReplacer, NPCTokenReplacerController } from "../scripts/main.js";
+import { CompendiumManager } from "../scripts/lib/compendium-manager.js";
 
 /**
  * Safety of a world-wide run: tokens the module already replaced and tokens in
@@ -101,7 +103,7 @@ describe("Which tokens a world-wide run touches", () => {
     game.folders.filter = vi.fn(() => []);
     game.folders.has = vi.fn(() => false);
     globalThis.Folder.create = vi.fn().mockResolvedValue({ id: "f" });
-    TokenReplacer.buildActorLookup();
+    ActorImporter.buildActorLookup();
 
     await TokenReplacer.replaceToken(scene.tokens.contents[0], { name: "Goblin", _id: "g" }, p);
 

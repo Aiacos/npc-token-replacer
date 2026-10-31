@@ -1,5 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import { TokenReplacer, NPCTokenReplacerController, CompendiumManager } from "../scripts/main.js";
+import { ActorImporter } from "../scripts/lib/actor-importer.js";
+import { TokenReplacer, NPCTokenReplacerController } from "../scripts/main.js";
+import { CompendiumManager } from "../scripts/lib/compendium-manager.js";
 import { FoundryCompat } from "../scripts/lib/foundry-compat.js";
 
 /**
@@ -87,7 +89,7 @@ describe("TokenReplacer — overwrite D&D Beyond imports in place", () => {
   it("replaces the DDB actor's data in place, keeping its folder, ownership and sort", async () => {
     const ddb = ddbActor();
     setWorldActors([ddb]);
-    TokenReplacer.buildActorLookup();
+    ActorImporter.buildActorLookup();
 
     await TokenReplacer.replaceToken(tokenDoc(), entry, pack);
 
@@ -112,7 +114,7 @@ describe("TokenReplacer — overwrite D&D Beyond imports in place", () => {
   it("overwrites a DDB actor that was imported from DDB's own compendium", async () => {
     const ddb = ddbActor({ _stats: { compendiumSource: "Compendium.world.ddb-mondo-ddb-monsters.Actor.abc123" } });
     setWorldActors([ddb]);
-    TokenReplacer.buildActorLookup();
+    ActorImporter.buildActorLookup();
 
     await TokenReplacer.replaceToken(tokenDoc(), entry, pack);
 
@@ -123,7 +125,7 @@ describe("TokenReplacer — overwrite D&D Beyond imports in place", () => {
   it("keeps other modules' flags but drops the D&D Beyond ones when overwriting", async () => {
     const ddb = ddbActor({ flags: { ddbimporter: { id: 1 }, monsterMunch: { x: 1 }, core: { sheetClass: "dnd5e.NPCActorSheet" }, "token-attacher": { a: 1 } } });
     setWorldActors([ddb]);
-    TokenReplacer.buildActorLookup();
+    ActorImporter.buildActorLookup();
 
     await TokenReplacer.replaceToken(tokenDoc(), entry, pack);
 
@@ -137,7 +139,7 @@ describe("TokenReplacer — overwrite D&D Beyond imports in place", () => {
 
   it("does not import a duplicate or create the module's import folder", async () => {
     setWorldActors([ddbActor()]);
-    TokenReplacer.buildActorLookup();
+    ActorImporter.buildActorLookup();
 
     await TokenReplacer.replaceToken(tokenDoc(), entry, pack);
 
@@ -149,7 +151,7 @@ describe("TokenReplacer — overwrite D&D Beyond imports in place", () => {
   it("overwrites each DDB actor once, then reuses it for later tokens", async () => {
     const ddb = ddbActor();
     setWorldActors([ddb]);
-    TokenReplacer.buildActorLookup();
+    ActorImporter.buildActorLookup();
 
     await TokenReplacer.replaceToken(tokenDoc(), entry, pack);
     await TokenReplacer.replaceToken({ ...tokenDoc(), id: "token-2" }, entry, pack);
@@ -160,7 +162,7 @@ describe("TokenReplacer — overwrite D&D Beyond imports in place", () => {
   it("recognises an actor it overwrote in an earlier session and reuses it", async () => {
     const previously = ddbActor({ flags: { "npc-token-replacer": { sourceUuid: COMPENDIUM_UUID } } });
     setWorldActors([previously]);
-    TokenReplacer.buildActorLookup();
+    ActorImporter.buildActorLookup();
 
     await TokenReplacer.replaceToken(tokenDoc(), entry, pack);
 
@@ -171,7 +173,7 @@ describe("TokenReplacer — overwrite D&D Beyond imports in place", () => {
   it("never touches a same-named world actor that DDB Importer did not create", async () => {
     const homebrew = ddbActor({ id: "homebrew", flags: {} });
     setWorldActors([homebrew]);
-    TokenReplacer.buildActorLookup();
+    ActorImporter.buildActorLookup();
 
     await TokenReplacer.replaceToken(tokenDoc(), entry, pack);
 
@@ -183,7 +185,7 @@ describe("TokenReplacer — overwrite D&D Beyond imports in place", () => {
     const imported = { id: "imported", name: "Goblin", type: "npc", _stats: { compendiumSource: COMPENDIUM_UUID }, flags: {} };
     const ddb = ddbActor();
     setWorldActors([imported, ddb]);
-    TokenReplacer.buildActorLookup();
+    ActorImporter.buildActorLookup();
 
     await TokenReplacer.replaceToken(tokenDoc(), entry, pack);
 
@@ -196,7 +198,7 @@ describe("TokenReplacer — overwrite D&D Beyond imports in place", () => {
   it("falls back to importing when the DDB actor was deleted during the preview", async () => {
     const ddb = ddbActor();
     setWorldActors([ddb]);
-    TokenReplacer.buildActorLookup();
+    ActorImporter.buildActorLookup();
     game.actors.has = vi.fn(() => false);
 
     await TokenReplacer.replaceToken(tokenDoc(), entry, pack);
@@ -209,7 +211,7 @@ describe("TokenReplacer — overwrite D&D Beyond imports in place", () => {
     setOverwriteSetting(false);
     const ddb = ddbActor();
     setWorldActors([ddb]);
-    TokenReplacer.buildActorLookup();
+    ActorImporter.buildActorLookup();
 
     await TokenReplacer.replaceToken(tokenDoc(), entry, pack);
 
@@ -222,9 +224,9 @@ describe("TokenReplacer — overwrite D&D Beyond imports in place", () => {
     game.settings.get = vi.fn(() => { throw new Error("not registered"); });
     const ddb = ddbActor();
     setWorldActors([ddb]);
-    TokenReplacer.buildActorLookup();
+    ActorImporter.buildActorLookup();
 
-    expect(TokenReplacer.findOverwriteTarget(entry, pack)).toBeNull();
+    expect(ActorImporter.findOverwriteTarget(entry, pack)).toBeNull();
   });
 });
 
@@ -242,7 +244,7 @@ describe("Preview — overwrites are listed before anything changes", () => {
 
   it("computeMatches marks matches that will overwrite a DDB actor", async () => {
     setWorldActors([ddbActor()]);
-    TokenReplacer.buildActorLookup();
+    ActorImporter.buildActorLookup();
     const index = [{ entry, pack, normalizedName: "goblin", significantWords: ["goblin"], priority: 2 }];
     const progress = { start: vi.fn(), update: vi.fn() };
 

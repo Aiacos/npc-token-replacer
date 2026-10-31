@@ -1,11 +1,9 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import {
-  NPCTokenReplacerController,
-  CompendiumManager,
-  FolderManager,
-  TokenReplacer,
-  TokenReplacerError
-} from "../scripts/main.js";
+import { ActorImporter } from "../scripts/lib/actor-importer.js";
+import { NPCTokenReplacerController, TokenReplacer } from "../scripts/main.js";
+import { CompendiumManager } from "../scripts/lib/compendium-manager.js";
+import { FolderManager } from "../scripts/lib/folder-manager.js";
+import { TokenReplacerError } from "../scripts/lib/errors.js";
 import { WildcardResolver } from "../scripts/lib/wildcard-resolver.js";
 import { ProgressReporter } from "../scripts/lib/progress-reporter.js";
 
@@ -53,7 +51,7 @@ describe("BUG-03 — NPCTokenReplacerController.clearCache propagation", () => {
 
 // ─── Test Group 2: BUG-01 — Actor lookup stale reference guard ──────────────
 
-describe("BUG-01 — TokenReplacer.buildActorLookup", () => {
+describe("BUG-01 — ActorImporter.buildActorLookup", () => {
   const UUID = "Compendium.dnd5e.monsters.Actor.goblin";
   let pack;
   let scene;
@@ -84,7 +82,7 @@ describe("BUG-01 — TokenReplacer.buildActorLookup", () => {
   const run = async actors => {
     game.actors[Symbol.iterator] = function* () { yield* actors; };
     game.actors.has = vi.fn(id => actors.some(a => a.id === id));
-    TokenReplacer.buildActorLookup();
+    ActorImporter.buildActorLookup();
     await TokenReplacer.replaceToken({ id: "t", name: "Goblin", parent: scene }, { name: "Goblin", _id: "goblin" }, pack);
     return scene.createEmbeddedDocuments.mock.calls[0][1][0].actorId;
   };

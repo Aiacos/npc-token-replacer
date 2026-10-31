@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import { CompendiumManager } from "../scripts/main.js";
+import { CompendiumManager } from "../scripts/lib/compendium-manager.js";
 import { SourceDetector } from "../scripts/lib/source-detector.js";
 
 /**

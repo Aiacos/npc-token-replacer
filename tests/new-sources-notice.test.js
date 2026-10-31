@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import { CompendiumManager, NPCTokenReplacerController } from "../scripts/main.js";
+import { NPCTokenReplacerController } from "../scripts/main.js";
+import { CompendiumManager } from "../scripts/lib/compendium-manager.js";
 
 /**
  * A book released after this version is detected from its signals but not used

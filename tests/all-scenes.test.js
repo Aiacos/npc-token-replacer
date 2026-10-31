@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import { TokenReplacer, NPCTokenReplacerController, CompendiumManager } from "../scripts/main.js";
+import { TokenReplacer, NPCTokenReplacerController } from "../scripts/main.js";
+import { CompendiumManager } from "../scripts/lib/compendium-manager.js";
 import { FoundryCompat } from "../scripts/lib/foundry-compat.js";
 
 /**

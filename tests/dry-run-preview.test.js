@@ -1,5 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import { NPCTokenReplacerController, CompendiumManager, TokenReplacer } from "../scripts/main.js";
+import { ActorImporter } from "../scripts/lib/actor-importer.js";
+import { NPCTokenReplacerController, TokenReplacer } from "../scripts/main.js";
+import { CompendiumManager } from "../scripts/lib/compendium-manager.js";
 import { NameMatcher } from "../scripts/lib/name-matcher.js";
 
 // ---------------------------------------------------------------------------
@@ -351,7 +353,7 @@ describe("replaceNPCTokens integration with preview flow", () => {
     // Mock replaceToken to succeed
     replaceTokenSpy = vi.spyOn(TokenReplacer, "replaceToken").mockResolvedValue();
     vi.spyOn(TokenReplacer, "resetCounter").mockImplementation(() => {});
-    vi.spyOn(TokenReplacer, "buildActorLookup").mockImplementation(() => {});
+    vi.spyOn(ActorImporter, "buildActorLookup").mockImplementation(() => {});
   });
 
   it("calls computeMatches before showPreviewDialog", async () => {

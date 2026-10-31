@@ -1,5 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import { TokenReplacer, NPCTokenReplacerController, CompendiumManager, FolderManager } from "../scripts/main.js";
+import { TokenReplacer, NPCTokenReplacerController } from "../scripts/main.js";
+import { CompendiumManager } from "../scripts/lib/compendium-manager.js";
+import { FolderManager } from "../scripts/lib/folder-manager.js";
 import { NameMatcher } from "../scripts/lib/name-matcher.js";
 import { WildcardResolver } from "../scripts/lib/wildcard-resolver.js";
 import { SourceDetector } from "../scripts/lib/source-detector.js";
