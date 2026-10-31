@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **One-time notification for new official books.** A book released after this version (Wizards of the Coast / Foundry Gaming authorship, not yet in the known list) was only reported in the browser console, so a GM had no way to learn it existed but was unused. The GM now gets a persistent notification naming each such book once per world, pointing to the compendium picker. Books already in use, whitelisted books and non-GM users are skipped; the list of announced books lives in a hidden world setting (`notifiedSources`), and an unreadable list keeps the notice quiet rather than repeating it on every load. Module titles are escaped by Foundry (`escape: true`) because they come from third-party manifests.
+
+### Fixed
+- The README claimed newly installed books are "picked up on their own" by the default mode; only books in the known list are. The docs now describe the actual behaviour and the new notification.
+- `tools/validate-manifest.mjs` now recognises i18n keys passed to `ui.notifications.*` with `localize: true`, so a missing translation there fails validation instead of passing silently.
+
+### Changed
+- Tests: 257 → 265.
+
 ## [1.8.0] - 2026-10-31
 
 ### Added

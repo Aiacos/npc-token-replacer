@@ -96,7 +96,8 @@ const collectFiles = async (directory, extensions) => {
     .map(entry => path.join(entry.parentPath ?? entry.path, entry.name));
 };
 
-const KEY_PATTERN = /(?:localize|format)\(\s*["'`](NPC_REPLACER\.[^"'`]+)["'`]/g;
+// Notifications localize their own key when called with {localize: true}
+const KEY_PATTERN = /(?:localize|format|notifications\.(?:info|warn|error|notify))\(\s*["'`](NPC_REPLACER\.[^"'`]+)["'`]/g;
 const TEMPLATE_KEY_PATTERN = /localize\s+"(NPC_REPLACER\.[^"]+)"/g;
 
 const usedKeys = new Set();
