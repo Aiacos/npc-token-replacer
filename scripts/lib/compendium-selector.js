@@ -115,13 +115,21 @@ class CompendiumSelectorModel {
     }
   }
 
-  /** Grey out the pack list unless "custom" is selected. Works on a plain element. */
+  /**
+   * Make the pack list read-only unless "custom" is selected. The checkboxes are
+   * disabled rather than the list swallowing pointer events, so the GM can still
+   * scroll it to see what each mode uses. Works on a plain element.
+   */
   static attachModeListeners(root) {
     const el = FoundryCompat.toElement(root);
     const list = el?.querySelector("#compendium-list");
     if (!el || !list) return;
 
-    const sync = value => list.classList.toggle("disabled", value !== "custom");
+    const sync = value => {
+      const readOnly = value !== "custom";
+      list.classList.toggle("disabled", readOnly);
+      list.querySelectorAll('input[name="packs"]').forEach(box => { box.disabled = readOnly; });
+    };
     el.querySelectorAll('input[name="mode"]').forEach(radio => {
       radio.addEventListener("change", event => sync(event.target.value));
     });

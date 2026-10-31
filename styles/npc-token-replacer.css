@@ -53,9 +53,10 @@
   margin-top: 0.5rem;
 }
 
-.compendium-list.disabled {
+/* Read-only outside custom mode: the checkboxes are disabled in JS. Never
+   pointer-events: none here — it also blocks wheel scrolling of the list. */
+.compendium-list.disabled .compendium-item {
   opacity: 0.5;
-  pointer-events: none;
 }
 
 .compendium-item {

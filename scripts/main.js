@@ -158,7 +158,7 @@ class CompendiumManager {
   /** packCollection -> classification returned by SourceDetector */
   static #classifications = new Map();
 
-  /** The 11 packages Wizards of the Coast publishes on Foundry VTT. */
+  /** The 14 packages Wizards of the Coast publishes on Foundry VTT. */
   static get OFFICIAL_WOTC_PACKAGES() { return SourceDetector.OFFICIAL_WOTC_PACKAGES; }
 
   /** Human-readable book names for the official packages. */
@@ -261,6 +261,12 @@ class CompendiumManager {
   static getSourceTier(pack) {
     return CompendiumManager.#classifications.get(pack?.collection)?.tier
       ?? SourceDetector.classify(pack).tier;
+  }
+
+  /** Human-readable book name for a detected pack (known label, else the module title). */
+  static getSourceLabel(pack) {
+    return CompendiumManager.#classifications.get(pack?.collection)?.label
+      ?? SourceDetector.classify(pack).label;
   }
 
   /** True when the pack comes from first-party D&D content (system SRD or WotC module). */
@@ -496,13 +502,20 @@ class TokenReplacer {
     TokenReplacer.#actorLookup = new Map();
     TokenReplacer.#importedActorsByName = new Map();
     for (const a of game.actors) {
-      // Our own flag survives an in-place overwrite even if core stops writing compendiumSource
-      const uuid = a.flags?.[MODULE_ID]?.sourceUuid || a._stats?.compendiumSource || a.flags?.core?.sourceId;
-      if (uuid) {
-        TokenReplacer.#actorLookup.set(uuid, a);
+      // Our own tag wins: the actor was already overwritten (it survives even if
+      // core stops writing compendiumSource)
+      const ownSource = a.flags?.[MODULE_ID]?.sourceUuid;
+      if (ownSource) {
+        TokenReplacer.#actorLookup.set(ownSource, a);
       } else if (TokenReplacer.isDdbImportedActor(a)) {
+        // Checked before compendiumSource: DDB Importer brings monsters into the
+        // world via importFromCompendium(<its own DDB compendium>), so real DDB
+        // actors always carry one and would otherwise look already-official
         const key = NameMatcher.normalizeName(a.name);
         if (!TokenReplacer.#importedActorsByName.has(key)) TokenReplacer.#importedActorsByName.set(key, a);
+      } else {
+        const uuid = a._stats?.compendiumSource || a.flags?.core?.sourceId;
+        if (uuid) TokenReplacer.#actorLookup.set(uuid, a);
       }
     }
     Logger.debug(`Built actor lookup Map with ${TokenReplacer.#actorLookup.size} entries, ${TokenReplacer.#importedActorsByName.size} D&D Beyond imports`);
@@ -1139,6 +1152,8 @@ class NPCTokenReplacerController {
     // Detect available WOTC compendiums
     const wotcPacks = CompendiumManager.detectWOTCCompendiums();
 
+    await NPCTokenReplacerController.notifyNewOfficialSources();
+
     if (wotcPacks.length === 0) {
       Logger.log("No official D&D compendiums found. Install official D&D content for this module to work.");
     } else {
@@ -1151,6 +1166,51 @@ class NPCTokenReplacerController {
         Logger.error("Failed to pre-cache monster index", error);
         ui.notifications.warn(game.i18n.localize("NPC_REPLACER.ErrorIndexLoad"));
       }
+    }
+  }
+
+  /**
+   * Tell the GM, once per book, about official-looking content (WotC / Foundry
+   * Gaming authorship) that is not in the whitelist and not in use. Such books
+   * are never trusted silently, so without this the GM would only learn about
+   * them from the console.
+   */
+  static async notifyNewOfficialSources() {
+    if (!game.user?.isGM) return;
+
+    let notified;
+    try {
+      const raw = game.settings.get(MODULE_ID, "notifiedSources");
+      notified = new Set(typeof raw === "string" ? JSON.parse(raw || "[]") : raw ?? []);
+    } catch (error) {
+      // Unreadable state would mean a notice on every load; stay quiet instead
+      Logger.debug(`notifiedSources unavailable, skipping new-source notice: ${error.message}`);
+      return;
+    }
+
+    const inUse = new Set(CompendiumManager.getEnabledCompendiums().map(pack => pack.collection));
+    const fresh = new Map(); // packageName -> label, one entry per book
+    for (const pack of CompendiumManager.detectWOTCCompendiums()) {
+      if (CompendiumManager.getSourceTier(pack) !== SourceDetector.TIER.PUBLISHER) continue;
+      if (inUse.has(pack.collection)) continue;
+      const packageName = pack.metadata.packageName;
+      if (notified.has(packageName) || fresh.has(packageName)) continue;
+      fresh.set(packageName, CompendiumManager.getSourceLabel(pack));
+    }
+    if (fresh.size === 0) return;
+
+    ui.notifications.info("NPC_REPLACER.NewOfficialSources", {
+      localize: true,
+      format: { names: [...fresh.values()].join(", ") },
+      // Titles come from third-party manifests: Foundry escapes format values
+      escape: true,
+      permanent: true
+    });
+
+    try {
+      await game.settings.set(MODULE_ID, "notifiedSources", JSON.stringify([...notified, ...fresh.keys()]));
+    } catch (error) {
+      Logger.warn(`Could not remember notified sources, the notice may repeat: ${error.message}`);
     }
   }
 
@@ -1218,6 +1278,14 @@ function registerSettings() {
     type: Number,
     range: { min: 1, max: 30, step: 1 },
     default: 5
+  });
+
+  // Books already announced by notifyNewOfficialSources, so each is announced once
+  game.settings.register(MODULE_ID, "notifiedSources", {
+    scope: "world",
+    config: false,
+    type: String,
+    default: "[]"
   });
 
   // Actors already imported by D&D Beyond Importer are overwritten in place

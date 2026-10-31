@@ -89,6 +89,7 @@
       "premium": "Premium",
       "manual": "Manual",
       "none": ""
-    }
+    },
+    "NewOfficialSources": "New official D&D content detected: {names}. It is not used yet — enable it from Module Settings → NPC Token Replacer → Configure Compendiums (\"Everything Detected\", or tick it under \"Custom Selection\")."
   }
 }

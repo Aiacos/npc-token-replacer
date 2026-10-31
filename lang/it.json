@@ -89,6 +89,7 @@
       "premium": "Premium",
       "manual": "Manuale",
       "none": ""
-    }
+    },
+    "NewOfficialSources": "Rilevati nuovi contenuti D&D ufficiali: {names}. Non sono ancora usati — attivali da Impostazioni Modulo → NPC Token Replacer → Configura compendi (\"Tutto ciò che viene rilevato\", oppure spuntali in \"Selezione personalizzata\")."
   }
 }

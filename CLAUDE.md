@@ -75,7 +75,7 @@ Tests exist to catch regressions, not to be green.
    cancelled dialogs, missing compendiums, failed imports, network timeouts.
 4. **Both compatibility paths are tested.** Anything routed through
    `FoundryCompat` needs a test with the modern API present *and* absent.
-5. **Coverage never regresses.** Currently 257 tests; a PR that lowers the
+5. **Coverage never regresses.** Currently 272 tests; a PR that lowers the
    count needs an explicit justification in the CHANGELOG.
 6. **Cache-clearing in `beforeEach`.** Static caches leak between tests; clear
    every cache the test touches.
@@ -381,7 +381,7 @@ graph TD
 
 **Compendium Detection** (`CompendiumManager` + `SourceDetector`): two deliberate layers.
 
-1. **Whitelist** — `OFFICIAL_WOTC_PACKAGES`, the 11 packages Wizards of the Coast publishes on Foundry VTT. Exact, no false positives, trusted by default. Package-id prefixes (`dnd-`, `ddb-`) are **not** a signal: they also match third-party importers, homebrew and community adventures.
+1. **Whitelist** — `OFFICIAL_WOTC_PACKAGES`, the 14 packages Wizards of the Coast publishes on Foundry VTT. Exact, no false positives, trusted by default. Package-id prefixes (`dnd-`, `ddb-`) are **not** a signal: they also match third-party importers, homebrew and community adventures.
 2. **Forward-looking signals** — WotC/Foundry Gaming authorship (`publisher` tier) or premium content declaring the active system (`premium` tier), plus package ids the GM lists in `additionalSources` (`manual` tier). These catch books released after this version. They are detected, logged and listed in the picker, but only used when the GM selects "Everything Detected" — never trusted silently.
 
 **Priority System** (`SourceDetector.classify`): 4 tiers (Adventure > Expansion > Core > Fallback). Known packages keep their curated priority; unknown packages are classified from what their module actually ships — an Adventure pack means adventure content, Scene packs mean a setting book, neither means a rulebook.
@@ -409,7 +409,7 @@ graph TD
 ### Foundry Integration Points
 
 - `Hooks.once("init")`: Register settings
-- `Hooks.once("ready")`: Initialize controller, pre-cache monster index
+- `Hooks.once("ready")`: Initialize controller, notify the GM once about new official-looking books (`notifyNewOfficialSources`, remembered in the hidden `notifiedSources` setting), pre-cache monster index
 - `Hooks.on("getSceneControlButtons")`: Add toolbar button (handles both v12 array and v13 object formats)
 - `window.NPCTokenReplacer`: Debug API exposed globally via `NPCTokenReplacerController.getDebugAPI()`
 
@@ -459,7 +459,7 @@ In addition to classes, three standalone utility functions remain:
 ```javascript
 const MODULE_ID = "npc-token-replacer";           // Module identifier
 const DEFAULT_HTTP_TIMEOUT_MS = 5000;             // HTTP timeout for HEAD requests
-const OFFICIAL_WOTC_PACKAGES = [ /* 11 ids */ ];  // Authoritative whitelist
+const OFFICIAL_WOTC_PACKAGES = [ /* 14 ids */ ];  // Authoritative whitelist
 const KNOWN_MODULE_LABELS = {...};                // Human-readable book names
 const OFFICIAL_AUTHOR_PATTERN = /wizards of the coast|foundry gaming/i;
 const PRIORITY = { FALLBACK: 1, CORE: 2, EXPANSION: 3, ADVENTURE: 4 };

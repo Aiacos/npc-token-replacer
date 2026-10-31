@@ -38,7 +38,7 @@ const TIER = Object.freeze({
  * The official Wizards of the Coast packages published on Foundry VTT.
  *
  * Authoritative list from https://foundryvtt.com/creators/wizards-of-the-coast/
- * (11 packages: 1 free system + 10 premium modules).
+ * (14 packages: 1 free system + 13 premium modules, checked 2026-10-31).
  *
  * Package-id prefix matching is deliberately NOT used: `dnd-` and `ddb-` are
  * also used by third-party importers, homebrew and community adventures, which
@@ -56,7 +56,10 @@ const OFFICIAL_WOTC_PACKAGES = Object.freeze([
   "dnd-tomb-annihilation",         // Tomb of Annihilation
   "dnd-adventures-faerun",         // Forgotten Realms: Adventures in Faerûn
   "dnd-heroes-faerun",             // Forgotten Realms: Heroes of Faerûn
-  "dnd-heroes-borderlands"         // Heroes of the Borderlands
+  "dnd-heroes-borderlands",        // Heroes of the Borderlands
+  "dnd-ravenloft-horrors-within",  // Ravenloft: The Horrors Within
+  "dnd-arcana-unleashed",          // Arcana Unleashed
+  "dnd-deadfall"                   // Arcana Unleashed: Deadfall
 ]);
 
 /** Human-readable book names, shown in the compendium picker and logs. */
@@ -71,7 +74,10 @@ const KNOWN_MODULE_LABELS = Object.freeze({
   "dnd-tomb-annihilation": "Tomb of Annihilation",
   "dnd-adventures-faerun": "Forgotten Realms: Adventures in Faerûn",
   "dnd-heroes-faerun": "Forgotten Realms: Heroes of Faerûn",
-  "dnd-heroes-borderlands": "Heroes of the Borderlands"
+  "dnd-heroes-borderlands": "Heroes of the Borderlands",
+  "dnd-ravenloft-horrors-within": "Ravenloft: The Horrors Within",
+  "dnd-arcana-unleashed": "Arcana Unleashed",
+  "dnd-deadfall": "Arcana Unleashed: Deadfall"
 });
 
 /**
@@ -97,12 +103,17 @@ const KNOWN_PRIORITIES = Object.freeze({
   "dnd-dungeon-masters-guide": PRIORITY.CORE,
 
   "dnd-forge-artificer": PRIORITY.EXPANSION,
+  // Supplement: creatures plus a one-session introductory adventure
+  "dnd-arcana-unleashed": PRIORITY.EXPANSION,
 
   "dnd-phandelver-below": PRIORITY.ADVENTURE,
   "dnd-tomb-annihilation": PRIORITY.ADVENTURE,
   "dnd-adventures-faerun": PRIORITY.ADVENTURE,
   "dnd-heroes-faerun": PRIORITY.ADVENTURE,
-  "dnd-heroes-borderlands": PRIORITY.ADVENTURE
+  "dnd-heroes-borderlands": PRIORITY.ADVENTURE,
+  // Ships 17 adventures alongside its Domains of Dread creatures
+  "dnd-ravenloft-horrors-within": PRIORITY.ADVENTURE,
+  "dnd-deadfall": PRIORITY.ADVENTURE
 });
 
 /**
@@ -111,7 +122,7 @@ const KNOWN_PRIORITIES = Object.freeze({
  *
  * Two layers, on purpose:
  *
- *   1. **Whitelist** — the 11 packages Wizards of the Coast publishes on
+ *   1. **Whitelist** — the 14 packages Wizards of the Coast publishes on
  *      Foundry. Exact, no false positives, trusted by default.
  *   2. **Signals** — WotC authorship, or premium content declaring the active
  *      system. These catch books released after this version was written, and

@@ -46,6 +46,23 @@ describe("SourceDetector.classify", () => {
       }
     });
 
+    // Listed on foundryvtt.com/creators/wizards-of-the-coast/ (checked 2026-10-31)
+    // but missing from the whitelist, so the default mode ignored them.
+    it.each([
+      ["dnd-ravenloft-horrors-within", "Ravenloft: The Horrors Within", PRIORITY.ADVENTURE],
+      ["dnd-deadfall", "Arcana Unleashed: Deadfall", PRIORITY.ADVENTURE],
+      ["dnd-arcana-unleashed", "Arcana Unleashed", PRIORITY.EXPANSION]
+    ])("trusts %s as %s", (packageName, label, priority) => {
+      const result = SourceDetector.classify(pack(packageName));
+      expect(result.tier).toBe(TIER.OFFICIAL);
+      expect(result.priority).toBe(priority);
+      expect(result.label).toBe(label);
+    });
+
+    it("matches the 14 packages on the Wizards of the Coast creator page", () => {
+      expect(SourceDetector.OFFICIAL_WOTC_PACKAGES).toHaveLength(14);
+    });
+
     it("exposes a human-readable book name for whitelisted packages", () => {
       expect(SourceDetector.classify(pack("dnd-monster-manual")).label).toBe("Monster Manual (2024)");
     });
