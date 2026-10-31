@@ -238,6 +238,11 @@ class CompendiumManager {
     CompendiumManager.#classifications = classifications;
 
     const beyondWhitelist = detected.filter(pack => classifications.get(pack.collection).tier === SourceDetector.TIER.PUBLISHER);
+    const verified = detected.filter(pack => classifications.get(pack.collection).tier === SourceDetector.TIER.VERIFIED);
+    if (verified.length > 0) {
+      Logger.log(`${verified.length} official book(s) recognised without the known list (WotC author + premium for this system): ` +
+        verified.map(pack => pack.metadata.packageName).join(", "));
+    }
     if (beyondWhitelist.length > 0) {
       Logger.warn(
         `${beyondWhitelist.length} package(s) look like official D&D content but are not in the known list: ` +
@@ -269,10 +274,10 @@ class CompendiumManager {
       ?? SourceDetector.classify(pack).label;
   }
 
-  /** True when the pack comes from first-party D&D content (system SRD or WotC module). */
+  /** True for first-party D&D content: system SRD, whitelisted or verified WotC book. */
   static isOfficialSource(pack) {
-    const tier = CompendiumManager.getSourceTier(pack);
-    return tier === SourceDetector.TIER.SYSTEM || tier === SourceDetector.TIER.OFFICIAL;
+    return CompendiumManager.#classifications.get(pack?.collection)?.official
+      ?? SourceDetector.classify(pack).official;
   }
 
   /**
@@ -492,6 +497,8 @@ class TokenReplacer {
   static #actorLookup = null;
   /** normalizedName -> world actor imported by D&D Beyond Importer, not yet overwritten. */
   static #importedActorsByName = null;
+  /** Every D&D Beyond Importer actor not yet overwritten, in world order. */
+  static #importedActors = null;
   static #compendiumDocCache = new Map();
   static #COMPENDIUM_DOC_CACHE_MAX = 100;
 
@@ -501,6 +508,7 @@ class TokenReplacer {
   static buildActorLookup() {
     TokenReplacer.#actorLookup = new Map();
     TokenReplacer.#importedActorsByName = new Map();
+    TokenReplacer.#importedActors = [];
     for (const a of game.actors) {
       // Our own tag wins: the actor was already overwritten (it survives even if
       // core stops writing compendiumSource)
@@ -511,6 +519,7 @@ class TokenReplacer {
         // Checked before compendiumSource: DDB Importer brings monsters into the
         // world via importFromCompendium(<its own DDB compendium>), so real DDB
         // actors always carry one and would otherwise look already-official
+        TokenReplacer.#importedActors.push(a);
         const key = NameMatcher.normalizeName(a.name);
         if (!TokenReplacer.#importedActorsByName.has(key)) TokenReplacer.#importedActorsByName.set(key, a);
       } else {
@@ -530,7 +539,7 @@ class TokenReplacer {
   }
 
   /** Whether the GM allows overwriting imported actors. Unreadable means no — it is destructive. */
-  static #overwriteAllowed() {
+  static overwriteAllowed() {
     try {
       return game.settings.get(MODULE_ID, "overwriteImportedActors") === true;
     } catch (error) {
@@ -546,7 +555,7 @@ class TokenReplacer {
    * Requires buildActorLookup() to have run.
    */
   static findOverwriteTarget(compendiumEntry, pack) {
-    if (!TokenReplacer.#importedActorsByName || !TokenReplacer.#overwriteAllowed()) return null;
+    if (!TokenReplacer.#importedActorsByName || !TokenReplacer.overwriteAllowed()) return null;
     const uuid = compendiumEntry.uuid ?? `Compendium.${pack.collection}.Actor.${compendiumEntry._id}`;
     if (TokenReplacer.#actorLookup?.has(uuid)) return null;
     const target = TokenReplacer.#importedActorsByName.get(NameMatcher.normalizeName(compendiumEntry.name));
@@ -571,9 +580,57 @@ class TokenReplacer {
     return target;
   }
 
+  /** D&D Beyond Importer actors not yet overwritten. Requires buildActorLookup(). */
+  static getImportedActors() {
+    return [...(TokenReplacer.#importedActors ?? [])];
+  }
+
+  /** Remember an overwrite so neither path overwrites or imports it again this session. */
+  static #recordOverwrite(target, compendiumActor) {
+    TokenReplacer.#importedActors = TokenReplacer.#importedActors?.filter(a => a !== target) ?? null;
+    for (const [key, actor] of TokenReplacer.#importedActorsByName ?? []) {
+      if (actor === target) TokenReplacer.#importedActorsByName.delete(key);
+    }
+    TokenReplacer.#actorLookup?.set(compendiumActor.uuid, target);
+  }
+
+  /**
+   * Overwrite one D&D Beyond actor in place with a compendium entry (the
+   * world-wide pass of the replace button). Requires buildActorLookup().
+   * @throws {TokenReplacerError} phase "import_failed"
+   */
+  static async overwriteImportedActor(actor, compendiumEntry, pack) {
+    try {
+      const compendiumActor = await TokenReplacer.#loadCompendiumActor(compendiumEntry, pack);
+      await TokenReplacer.#overwriteActor(actor, compendiumActor);
+      TokenReplacer.#recordOverwrite(actor, compendiumActor);
+      Logger.log(`Overwrote D&D Beyond actor "${actor.name}" (id: ${actor.id}) in place from ${pack.metadata.label}`);
+      return actor;
+    } catch (error) {
+      throw new TokenReplacerError(`Failed to overwrite "${actor.name}": ${error.message}`, "import_failed");
+    }
+  }
+
+  /** Compendium document for an index entry, through the bounded LRU cache. */
+  static async #loadCompendiumActor(compendiumEntry, pack) {
+    const docCacheKey = `${pack.collection}|${compendiumEntry._id}`;
+    let compendiumActor = TokenReplacer.#compendiumDocCache.get(docCacheKey);
+    if (!compendiumActor) {
+      compendiumActor = await pack.getDocument(compendiumEntry._id);
+      if (TokenReplacer.#compendiumDocCache.size >= TokenReplacer.#COMPENDIUM_DOC_CACHE_MAX) {
+        // Evict oldest entry (Map preserves insertion order)
+        const oldest = TokenReplacer.#compendiumDocCache.keys().next().value;
+        TokenReplacer.#compendiumDocCache.delete(oldest);
+      }
+      TokenReplacer.#compendiumDocCache.set(docCacheKey, compendiumActor);
+    }
+    return compendiumActor;
+  }
+
   static clearActorLookup() {
     TokenReplacer.#actorLookup = null;
     TokenReplacer.#importedActorsByName = null;
+    TokenReplacer.#importedActors = null;
     TokenReplacer.#variationMode = null;
     TokenReplacer.#compendiumDocCache.clear();
     Logger.debug("Actor lookup Map and variation mode cleared");
@@ -662,8 +719,7 @@ class TokenReplacer {
     const target = TokenReplacer.findOverwriteTarget(compendiumEntry, pack);
     if (target) {
       await TokenReplacer.#overwriteActor(target, compendiumActor);
-      TokenReplacer.#importedActorsByName.delete(NameMatcher.normalizeName(compendiumEntry.name));
-      TokenReplacer.#actorLookup.set(compendiumActor.uuid, target);
+      TokenReplacer.#recordOverwrite(target, compendiumActor);
       Logger.log(`Overwrote D&D Beyond actor "${target.name}" (id: ${target.id}) in place with "${compendiumActor.name}" from ${pack.metadata.label}`);
       return target;
     }
@@ -768,17 +824,7 @@ class TokenReplacer {
 
     let compendiumActor;
     try {
-      const docCacheKey = `${pack.collection}|${compendiumEntry._id}`;
-      compendiumActor = TokenReplacer.#compendiumDocCache.get(docCacheKey);
-      if (!compendiumActor) {
-        compendiumActor = await pack.getDocument(compendiumEntry._id);
-        if (TokenReplacer.#compendiumDocCache.size >= TokenReplacer.#COMPENDIUM_DOC_CACHE_MAX) {
-          // Evict oldest entry (Map preserves insertion order)
-          const oldest = TokenReplacer.#compendiumDocCache.keys().next().value;
-          TokenReplacer.#compendiumDocCache.delete(oldest);
-        }
-        TokenReplacer.#compendiumDocCache.set(docCacheKey, compendiumActor);
-      }
+      compendiumActor = await TokenReplacer.#loadCompendiumActor(compendiumEntry, pack);
     } catch (error) {
       throw new TokenReplacerError(`Failed to load "${compendiumEntry.name}" from compendium: ${error.message}`, "import_failed");
     }
@@ -865,7 +911,7 @@ class NPCTokenReplacerController {
   }
 
   /** Show 3-column preview dialog (Token | Match | Source). Returns true if user confirms. */
-  static async showPreviewDialog(matchResults) {
+  static async showPreviewDialog(matchResults, actorPlan = []) {
     const matched = matchResults.filter(r => r.match !== null);
     const unmatched = matchResults.filter(r => r.match === null);
     const sorted = [...matched, ...unmatched];
@@ -898,15 +944,38 @@ class NPCTokenReplacerController {
       total: matchResults.length
     }));
 
-    // One actor can back many tokens; count each overwrite once
-    const overwriteCount = new Set(matched.filter(r => r.overwrite).map(r => r.overwrite.id)).size;
+    // One actor can back many tokens, and appear in both lists; count each overwrite once
+    const plannedActors = actorPlan.filter(p => p.match);
+    const overwriteCount = new Set([
+      ...matched.filter(r => r.overwrite).map(r => r.overwrite.id),
+      ...plannedActors.map(p => p.actor.id)
+    ]).size;
     const overwriteSummary = overwriteCount > 0
       ? `<p class="npc-replacer-overwrite-summary"><i class="fas fa-triangle-exclamation"></i> ${escapeHtml(game.i18n.format("NPC_REPLACER.PreviewOverwriteSummary", { count: overwriteCount }))}</p>`
       : "";
 
-    const content = `
+    const actorRows = actorPlan.map(({ actor, match }) => match
+      ? `<tr><td>${escapeHtml(actor.name)}</td><td>${escapeHtml(match.entry.name)}</td><td>${escapeHtml(match.pack.metadata.label)}</td></tr>`
+      : `<tr><td>${escapeHtml(actor.name)}</td><td class="npc-replacer-no-match">${escapeHtml(game.i18n.localize("NPC_REPLACER.PreviewActorUnchanged"))}</td><td>&mdash;</td></tr>`
+    ).join("");
+    const actorSection = actorPlan.length === 0 ? "" : `
+      <h4>${escapeHtml(game.i18n.localize("NPC_REPLACER.PreviewActorsTitle"))}</h4>
+      <div class="npc-replacer-preview-table-container">
+        <table class="npc-replacer-preview-table">
+          <thead>
+            <tr>
+              <th>${escapeHtml(game.i18n.localize("NPC_REPLACER.PreviewColActor"))}</th>
+              <th>${escapeHtml(game.i18n.localize("NPC_REPLACER.PreviewColMatch"))}</th>
+              <th>${escapeHtml(game.i18n.localize("NPC_REPLACER.PreviewColSource"))}</th>
+            </tr>
+          </thead>
+          <tbody>${actorRows}</tbody>
+        </table>
+      </div>`;
+
+    // With an empty scene the button only updates actors: skip the token table
+    const tokenSection = matchResults.length === 0 ? "" : `
       <p>${summary}</p>
-      ${overwriteSummary}
       <div class="npc-replacer-preview-table-container">
         <table class="npc-replacer-preview-table">
           <thead>
@@ -920,8 +989,12 @@ class NPCTokenReplacerController {
             ${rowsHtml}
           </tbody>
         </table>
-      </div>
-    `;
+      </div>`;
+
+    const content = `
+      ${overwriteSummary}
+      ${tokenSection}
+      ${actorSection}`;
 
     let dialogTimeoutMinutes = 5;
     try {
@@ -939,7 +1012,7 @@ class NPCTokenReplacerController {
       yesLabel: game.i18n.localize("NPC_REPLACER.ConfirmYes"),
       noLabel: game.i18n.localize("NPC_REPLACER.ConfirmNo"),
       // Nothing to replace: the confirm button stays unusable
-      yesDisabled: matched.length === 0
+      yesDisabled: matched.length === 0 && plannedActors.length === 0
     });
 
     try {
@@ -988,6 +1061,64 @@ class NPCTokenReplacerController {
     Logger.log(`Replacement complete: ${replaced} replaced, ${notFound.length} not found, ${importFailed.length} import failures, ${creationFailed.length} creation failures, ${deleteFailed.length} delete failures`);
   }
 
+  /**
+   * Pair every D&D Beyond actor in the world with its official version, by
+   * exact normalized name only: overwriting is destructive, so a variant
+   * ("Goblin Warrior" -> "Goblin") is never applied to a whole actor.
+   * @returns {{actor: Actor, match: {entry, pack}|null}[]} unmatched actors are kept, for the preview
+   */
+  static planActorOverwrites() {
+    if (!TokenReplacer.overwriteAllowed()) return [];
+    // An overwrite tags the actor as official for good; against an index that is
+    // missing a pack it could lock in a lower-priority version. Tokens are only
+    // replaced, so they still run.
+    if (CompendiumManager.getLastLoadErrors().length > 0) {
+      ui.notifications.warn(game.i18n.localize("NPC_REPLACER.ActorsSkippedLoadError"));
+      return [];
+    }
+    const indexMap = CompendiumManager.getIndexMap();
+    return TokenReplacer.getImportedActors().map(actor => ({
+      actor,
+      match: NameMatcher.selectBestMatch(indexMap?.get(NameMatcher.normalizeName(actor.name)) ?? [])
+    }));
+  }
+
+  /** Overwrite every planned actor; one failure never stops the rest. */
+  static async #overwritePlannedActors(plan) {
+    const toOverwrite = plan.filter(p => p.match);
+    const result = { overwritten: 0, failed: [] };
+    if (toOverwrite.length === 0) return result;
+
+    const progress = new ProgressReporter();
+    progress.start(toOverwrite.length, game.i18n.localize("NPC_REPLACER.ProgressActors"));
+    try {
+      for (let i = 0; i < toOverwrite.length; i++) {
+        const { actor, match } = toOverwrite[i];
+        try {
+          await TokenReplacer.overwriteImportedActor(actor, match.entry, match.pack);
+          result.overwritten++;
+        } catch (error) {
+          Logger.error(`Could not overwrite D&D Beyond actor "${actor.name}"`, error);
+          result.failed.push(actor.name);
+        }
+        progress.update(i + 1, game.i18n.format("NPC_REPLACER.ProgressUpdate", {
+          current: i + 1, total: toOverwrite.length, name: escapeHtml(actor.name)
+        }));
+        if (i % 10 === 9) await new Promise(resolve => setTimeout(resolve, 0));
+      }
+    } finally {
+      progress.finish();
+    }
+
+    if (result.overwritten > 0) {
+      ui.notifications.info(game.i18n.format("NPC_REPLACER.ActorsOverwritten", { count: result.overwritten }));
+    }
+    if (result.failed.length > 0) {
+      ui.notifications.warn(game.i18n.format("NPC_REPLACER.ActorsOverwriteFailed", { count: result.failed.length }));
+    }
+    return result;
+  }
+
   /** Main entry: validate → scan → preview → replace → report. */
   static async replaceNPCTokens() {
     if (NPCTokenReplacerController.#isProcessing) {
@@ -1016,7 +1147,13 @@ class NPCTokenReplacerController {
       }
 
       const { tokens: npcTokens, isSelection } = TokenReplacer.getNPCTokensToProcess();
-      if (npcTokens.length === 0) {
+
+      // Built before matching so the preview can list actors that will be overwritten
+      TokenReplacer.buildActorLookup();
+      // The same button also brings every D&D Beyond actor in the world up to date
+      const actorPlan = NPCTokenReplacerController.planActorOverwrites();
+
+      if (npcTokens.length === 0 && !actorPlan.some(p => p.match)) {
         const message = isSelection
           ? game.i18n.localize("NPC_REPLACER.NoSelectedNPCs")
           : game.i18n.localize("NPC_REPLACER.NoTokens");
@@ -1025,24 +1162,27 @@ class NPCTokenReplacerController {
       }
 
       const sourceDesc = isSelection ? "selected" : "in scene";
-      Logger.log(`Found ${npcTokens.length} NPC tokens ${sourceDesc}`);
+      Logger.log(`Found ${npcTokens.length} NPC tokens ${sourceDesc}, ${actorPlan.length} D&D Beyond actor(s) in the world`);
 
-      // Built before matching so the preview can list actors that will be overwritten
-      TokenReplacer.buildActorLookup();
-
-      const scanProgress = new ProgressReporter();
-      let matchResults;
-      try {
-        matchResults = await NPCTokenReplacerController.computeMatches(npcTokens, index, scanProgress);
-      } finally {
-        scanProgress.finish();
+      let matchResults = [];
+      if (npcTokens.length > 0) {
+        const scanProgress = new ProgressReporter();
+        try {
+          matchResults = await NPCTokenReplacerController.computeMatches(npcTokens, index, scanProgress);
+        } finally {
+          scanProgress.finish();
+        }
       }
 
-      const confirmed = await NPCTokenReplacerController.showPreviewDialog(matchResults);
+      const confirmed = await NPCTokenReplacerController.showPreviewDialog(matchResults, actorPlan);
       if (!confirmed) {
         Logger.log("Token replacement cancelled by user");
         return;
       }
+
+      // Actors first: scene tokens then find them already official and reuse them
+      await NPCTokenReplacerController.#overwritePlannedActors(actorPlan);
+      if (matchResults.length === 0) return;
 
       TokenReplacer.resetCounter();
 
@@ -1189,26 +1329,33 @@ class NPCTokenReplacerController {
     }
 
     const inUse = new Set(CompendiumManager.getEnabledCompendiums().map(pack => pack.collection));
-    const fresh = new Map(); // packageName -> label, one entry per book
+    // packageName -> label, one entry per book. Verified books are already used;
+    // publisher-only books wait for the GM to opt in.
+    const enabled = new Map();
+    const waiting = new Map();
     for (const pack of CompendiumManager.detectWOTCCompendiums()) {
-      if (CompendiumManager.getSourceTier(pack) !== SourceDetector.TIER.PUBLISHER) continue;
-      if (inUse.has(pack.collection)) continue;
+      const tier = CompendiumManager.getSourceTier(pack);
       const packageName = pack.metadata.packageName;
-      if (notified.has(packageName) || fresh.has(packageName)) continue;
-      fresh.set(packageName, CompendiumManager.getSourceLabel(pack));
+      if (notified.has(packageName)) continue;
+      if (tier === SourceDetector.TIER.VERIFIED) {
+        enabled.set(packageName, CompendiumManager.getSourceLabel(pack));
+      } else if (tier === SourceDetector.TIER.PUBLISHER && !inUse.has(pack.collection)) {
+        waiting.set(packageName, CompendiumManager.getSourceLabel(pack));
+      }
     }
-    if (fresh.size === 0) return;
 
-    ui.notifications.info("NPC_REPLACER.NewOfficialSources", {
-      localize: true,
-      format: { names: [...fresh.values()].join(", ") },
-      // Titles come from third-party manifests: Foundry escapes format values
-      escape: true,
-      permanent: true
+    if (enabled.size === 0 && waiting.size === 0) return;
+
+    // Titles come from third-party manifests: Foundry escapes format values
+    const options = books => ({
+      localize: true, format: { names: [...books.values()].join(", ") }, escape: true, permanent: true
     });
+    if (enabled.size > 0) ui.notifications.info("NPC_REPLACER.NewOfficialSourcesEnabled", options(enabled));
+    if (waiting.size > 0) ui.notifications.info("NPC_REPLACER.NewOfficialSources", options(waiting));
 
     try {
-      await game.settings.set(MODULE_ID, "notifiedSources", JSON.stringify([...notified, ...fresh.keys()]));
+      await game.settings.set(MODULE_ID, "notifiedSources",
+        JSON.stringify([...notified, ...enabled.keys(), ...waiting.keys()]));
     } catch (error) {
       Logger.warn(`Could not remember notified sources, the notice may repeat: ${error.message}`);
     }
@@ -1344,44 +1491,35 @@ function escapeHtml(str) {
 }
 
 /**
- * Add the replace button to the token controls.
- *
- * v13+ passes an object keyed by control name whose tools fire `onChange`;
- * v12 passes an array of control groups whose tools fire `onClick`. Only the
- * callback the running version actually uses is attached — supplying both makes
- * v13 run the action twice.
+ * Put the replace button at the bottom of the Actors sidebar tab (GM only).
+ * v13/v14 DocumentDirectory renders a `footer` part; renderActorDirectory
+ * passes the application's HTMLElement (hookEvents.renderApplicationV2), and
+ * fires again on every re-render, so the button is added only once.
  */
-function registerControlButton(controls) {
-  const run = () => NPCTokenReplacerController.replaceNPCTokens();
-  const tool = {
-    name: "npcReplacer",
-    title: game.i18n.localize("NPC_REPLACER.Button"),
-    icon: "fas fa-sync-alt",
-    button: true,
-    visible: game.user.isGM
-  };
+function registerActorDirectoryButton(app, html) {
+  if (!game.user?.isGM) return;
+  const element = FoundryCompat.toElement(html);
+  if (!element || element.querySelector("button.npc-replacer-run")) return;
 
-  const tokenGroup = controls?.tokens;
-  if (tokenGroup && typeof tokenGroup === "object" && !Array.isArray(tokenGroup)) {
-    if (!tokenGroup.tools) {
-      Logger.error("Token controls found but 'tools' property is missing — toolbar button not registered");
-      return;
-    }
-    tokenGroup.tools.npcReplacer = { ...tool, order: Object.keys(tokenGroup.tools).length, onChange: run };
-    return;
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = "npc-replacer-run";
+  const icon = document.createElement("i");
+  icon.className = "fas fa-sync-alt";
+  icon.setAttribute("inert", "");
+  button.append(icon, ` ${game.i18n.localize("NPC_REPLACER.Button")}`);
+  button.addEventListener("click", () => NPCTokenReplacerController.replaceNPCTokens());
+
+  const footer = element.querySelector('.directory-footer, [data-application-part="footer"]');
+  if (footer) {
+    footer.append(button);
+  } else {
+    // No footer part (layout changed): still keep the button at the bottom
+    const wrapper = document.createElement("footer");
+    wrapper.className = "directory-footer npc-replacer-footer";
+    wrapper.append(button);
+    element.append(wrapper);
   }
-
-  if (Array.isArray(controls)) {
-    const tokenControls = controls.find(c => c.name === "token");
-    if (tokenControls && Array.isArray(tokenControls.tools)) {
-      tokenControls.tools.push({ ...tool, onClick: run });
-    } else {
-      Logger.error("Could not find token controls group — toolbar button not registered");
-    }
-    return;
-  }
-
-  Logger.error("Unrecognized scene controls format — toolbar button not registered. This may indicate an incompatible Foundry version.");
 }
 
 Hooks.once("init", () => {
@@ -1401,7 +1539,7 @@ Hooks.once("ready", async () => {
   window.NPCTokenReplacer = NPCTokenReplacerController.getDebugAPI();
 });
 
-Hooks.on("getSceneControlButtons", registerControlButton);
+Hooks.on("renderActorDirectory", registerActorDirectoryButton);
 
 // Named exports for testing
-export { FolderManager, CompendiumManager, TokenReplacer, NPCTokenReplacerController, TokenReplacerError, registerControlButton, registerSettings };
+export { FolderManager, CompendiumManager, TokenReplacer, NPCTokenReplacerController, TokenReplacerError, registerActorDirectoryButton, registerSettings };

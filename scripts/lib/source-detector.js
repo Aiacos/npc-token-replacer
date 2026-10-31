@@ -28,6 +28,9 @@ const PRIORITY_LABELS = Object.freeze({
 const TIER = Object.freeze({
   SYSTEM: "system",
   OFFICIAL: "official",
+  // WotC authorship + protected premium package for the active system: a book
+  // released after this version, trusted without a module update
+  VERIFIED: "verified",
   PUBLISHER: "publisher",
   PREMIUM: "premium",
   MANUAL: "manual",
@@ -194,14 +197,18 @@ class SourceDetector {
 
     if (isSystem) tier = TIER.SYSTEM;
     else if (OFFICIAL_WOTC_PACKAGES.includes(packageName)) tier = TIER.OFFICIAL;
-    else if (SourceDetector.#hasOfficialAuthor(module)) tier = TIER.PUBLISHER;
+    else if (SourceDetector.#hasOfficialAuthor(module)) {
+      // Authorship alone can be typed into any manifest; a protected package is
+      // distributed through Foundry's premium system, which a homebrew module is not
+      tier = SourceDetector.#isPremiumForSystem(module) ? TIER.VERIFIED : TIER.PUBLISHER;
+    }
     else if (SourceDetector.#isPremiumForSystem(module)) tier = TIER.PREMIUM;
     else if (manualIds && (manualIds.has(packageName) || manualIds.has(collection))) tier = TIER.MANUAL;
 
     return {
       packageName,
       tier,
-      official: tier === TIER.SYSTEM || tier === TIER.OFFICIAL,
+      official: tier === TIER.SYSTEM || tier === TIER.OFFICIAL || tier === TIER.VERIFIED,
       priority: SourceDetector.#resolvePriority(packageName, isSystem, module, tier),
       label: KNOWN_MODULE_LABELS[packageName] ?? module?.title ?? packageName
     };

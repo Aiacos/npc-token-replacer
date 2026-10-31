@@ -16,6 +16,10 @@ const actorPack = (packageName, name = "monsters") => ({
 
 const MODULES = {
   "dnd-future-book": { id: "dnd-future-book", title: "Future Book", authors: [{ name: "Wizards of the Coast" }], packs: [] },
+  "dnd-verified-book": {
+    id: "dnd-verified-book", title: "Verified Book", authors: [{ name: "Wizards of the Coast" }],
+    protected: true, relationships: { systems: [{ id: "dnd5e" }] }, packs: []
+  },
   "dnd-other-book": { id: "dnd-other-book", title: "Other <b>Book</b>", authors: [{ name: "Foundry Gaming" }], packs: [] },
   "dnd-monster-manual": { id: "dnd-monster-manual", title: "Monster Manual", authors: [{ name: "Wizards of the Coast" }], packs: [] }
 };
@@ -40,6 +44,8 @@ describe("NPCTokenReplacerController.notifyNewOfficialSources", () => {
     packs = [actorPack("dnd-monster-manual"), actorPack("dnd-future-book")];
     game.packs.filter = vi.fn(pred => packs.filter(pred));
     game.modules.get = vi.fn(id => MODULES[id]);
+    // The test harness defaults to "test-system"; premium signals are system-specific
+    game.system = { id: "dnd5e" };
     game.user.isGM = true;
     ui.notifications.info = vi.fn();
     useSettings({});
@@ -90,6 +96,27 @@ describe("NPCTokenReplacerController.notifyNewOfficialSources", () => {
     await NPCTokenReplacerController.notifyNewOfficialSources();
 
     expect(ui.notifications.info).not.toHaveBeenCalled();
+  });
+
+  // Detected from both signals: used right away, and the GM is told it happened
+  it("announces a verified new book as already enabled, once", async () => {
+    packs = [actorPack("dnd-monster-manual"), actorPack("dnd-verified-book")];
+
+    await NPCTokenReplacerController.notifyNewOfficialSources();
+    CompendiumManager.clearCache();
+    await NPCTokenReplacerController.notifyNewOfficialSources();
+
+    expect(ui.notifications.info).toHaveBeenCalledTimes(1);
+    expect(ui.notifications.info.mock.calls[0][0]).toBe("NPC_REPLACER.NewOfficialSourcesEnabled");
+    expect(ui.notifications.info.mock.calls[0][1].format.names).toBe("Verified Book");
+  });
+
+  it("uses a verified new book in the default mode", () => {
+    packs = [actorPack("dnd-monster-manual"), actorPack("dnd-verified-book")];
+
+    const used = CompendiumManager.getEnabledCompendiums().map(p => p.collection);
+
+    expect(used).toContain("dnd-verified-book.monsters");
   });
 
   it("only notifies GMs", async () => {

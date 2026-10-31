@@ -67,7 +67,7 @@ jobs:
 
           Before merging, smoke-test the module in a v${LATEST} world:
 
-          - the toolbar button appears and runs
+          - the replace button appears at the bottom of the Actors tab and runs
           - the compendium selector opens and saves
           - the preview dialog confirms, cancels and times out
           - the progress bar renders during a replacement

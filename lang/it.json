@@ -85,11 +85,20 @@
     "Tier": {
       "system": "SRD",
       "official": "Ufficiale",
+      "verified": "Ufficiale (rilevato)",
       "publisher": "Sembra ufficiale",
       "premium": "Premium",
       "manual": "Manuale",
       "none": ""
     },
-    "NewOfficialSources": "Rilevati nuovi contenuti D&D ufficiali: {names}. Non sono ancora usati — attivali da Impostazioni Modulo → NPC Token Replacer → Configura compendi (\"Tutto ciò che viene rilevato\", oppure spuntali in \"Selezione personalizzata\")."
+    "NewOfficialSources": "Rilevati nuovi contenuti D&D ufficiali: {names}. Non sono ancora usati — attivali da Impostazioni Modulo → NPC Token Replacer → Configura compendi (\"Tutto ciò che viene rilevato\", oppure spuntali in \"Selezione personalizzata\").",
+    "PreviewActorsTitle": "Attori D&D Beyond in questo mondo",
+    "PreviewColActor": "Attore",
+    "PreviewActorUnchanged": "Nessuna versione ufficiale — lasciato invariato",
+    "ProgressActors": "Aggiornamento degli attori D&D Beyond...",
+    "ActorsOverwritten": "{count} attore/i D&D Beyond sovrascritti con la versione ufficiale.",
+    "ActorsOverwriteFailed": "{count} attore/i D&D Beyond non sono stati sovrascritti — dettagli nella console.",
+    "NewOfficialSourcesEnabled": "Nuovo manuale D&D ufficiale rilevato e attivato automaticamente: {names}. Le sue creature ora vengono usate per la sostituzione dei token.",
+    "ActorsSkippedLoadError": "Un compendio non si è caricato, quindi gli attori D&D Beyond non sono stati aggiornati questa volta (i token vengono comunque sostituiti). Riprova quando si carica."
   }
 }

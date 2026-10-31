@@ -6,8 +6,8 @@ A Foundry VTT module that automatically replaces NPC tokens in your scene with o
 
 ## ✨ Features
 
-- **One-Click Replacement**: Adds a button to the Token Controls toolbar for easy access
-- **Automatic Compendium Detection**: Trusts an exact whitelist of the packages Wizards of the Coast publishes on Foundry, plus the system SRD. Books released after this version are still detected from package signals (Wizards of the Coast authorship, premium D&D content) and offered in the picker, without being trusted silently.
+- **One-Click Replacement**: A **Replace NPC Tokens** button at the bottom of the **Actors** sidebar tab (GM only)
+- **Automatic Compendium Detection**: Trusts an exact whitelist of the packages Wizards of the Coast publishes on Foundry, plus the system SRD. Books released after this version are recognised automatically, without a module update, when they are both signed by Wizards of the Coast and sold as protected premium content for dnd5e; the GM is told when one is enabled.
 - **Multi-Compendium Support**: Search across multiple official D&D compendiums simultaneously
 - **Smart Priority System**: Prefers adventure/expansion creatures over Monster Manual over SRD
 - **Configurable Compendium Selection**: Read every official source (default), restrict to core rulebooks, include premium third-party content, or pick compendiums one by one
@@ -18,7 +18,7 @@ A Foundry VTT module that automatically replaces NPC tokens in your scene with o
 - **Smart Name Matching**: Handles variations in creature names (e.g., "Goblin Warrior" matches "Goblin")
 - **Token Variation Mode**: Choose how to handle multiple token art variations (None/Sequential/Random)
 - **Folder Organization**: Automatically organizes imported monsters into folders
-- **D&D Beyond Importer Aware**: Creatures already imported by D&D Beyond Importer are overwritten in place with the official version - same folder, same ownership, no duplicates - and listed in the preview first
+- **D&D Beyond Importer Aware**: The same button also brings every creature imported by D&D Beyond Importer up to date - each one is overwritten in place with its official version (same folder, same ownership, no duplicates), matched by exact name, and listed in the preview first. Creatures with no official version are left unchanged
 
 ## 📚 Supported Official D&D Content
 
@@ -35,14 +35,18 @@ and tells you about it, instead of silently ignoring it:
 |----------------------------|---------|------|-----------------|
 | The active game system's own compendiums | `dnd5e` SRD monsters | SRD | ✅ |
 | In the official WotC package list | `dnd-monster-manual` | Official | ✅ |
-| Authored by Wizards of the Coast / Foundry Gaming | a book released after this version | Looks official | ⚙️ opt-in |
+| Authored by Wizards of the Coast / Foundry Gaming **and** a protected premium package for dnd5e | a book released after this version | Official (detected) | ✅ |
+| Authored by Wizards of the Coast / Foundry Gaming, but not protected premium content | a free module claiming WotC authorship | Looks official | ⚙️ opt-in |
 | Premium content declaring the dnd5e system | paid third-party bestiaries | Premium | ⚙️ opt-in |
 | Package id you added under **Additional Compendium Sources** | anything else | Manual | ⚙️ opt-in |
 
-When a new official book is installed, it is detected as **"Looks official"**,
-logged with a warning naming the package, and listed in the compendium picker —
-switch to **Everything Detected** to start using it immediately, without waiting
-for a module update.
+When a new official book is installed, it is recognised as **"Official
+(detected)"** and used right away — no module update needed — and the GM gets a
+one-time notification naming it. Authorship alone is not enough, because anyone
+can type "Wizards of the Coast" into a manifest; the package must also be
+protected premium content, which is distributed through Foundry's premium system.
+Anything that only *claims* WotC authorship stays **"Looks official"**: the GM
+is notified once and can opt in with **Everything Detected**.
 
 Third-party content — DDB-Importer (`ddb-*`), community homebrew modules, and
 legacy books that have never been ported to Foundry by WotC (Volo's, MToF,
@@ -145,9 +149,9 @@ groups and vehicles in those compendiums are skipped.
 ## 🎯 Usage
 
 1. Open a scene with NPC tokens placed on it
-2. Select the **Token Controls** layer (the person icon in the left toolbar)
-3. **Optional**: Select specific tokens to replace only those (if no tokens selected, all scene NPCs will be processed)
-4. Click the **Replace NPC Tokens** button (sync icon)
+2. Open the **Actors** tab in the right sidebar
+3. **Optional**: Select specific tokens on the scene to replace only those (if no tokens are selected, all scene NPCs will be processed)
+4. Click **Replace NPC Tokens** at the bottom of the Actors tab
 5. A confirmation dialog will appear showing the NPC tokens that will be replaced
 6. Click **Replace Tokens** to proceed or **Cancel** to abort
 7. The module will:
@@ -155,6 +159,27 @@ groups and vehicles in those compendiums are skipped.
    - Delete the original tokens
    - Create new tokens from the compendium with the original position, elevation, size, and visibility
 8. A notification will show the results
+
+### 🎯 D&D Beyond Importer actors
+
+With **Overwrite D&D Beyond Imports** on (the default), the button also updates
+**every** actor D&D Beyond Importer created in the world, not only those on the
+current scene:
+
+- each one is matched to the official compendium by **exact name** (a variant
+  such as "Goblin Warrior" is never turned into "Goblin");
+- the preview lists, in a separate section, which actors will be overwritten and
+  which have no official version and stay unchanged;
+- actors are overwritten first, then the scene's tokens are replaced and reuse
+  them — nothing is overwritten twice;
+- it works with an empty scene too.
+
+**Tokens on other scenes.** A placed token is an independent copy of the
+prototype, so its **art, size and name** do not change when its actor is
+overwritten. Its **statistics** follow the actor: a linked token reads the actor
+directly; an unlinked token is the actor plus its own per-token changes (for
+example its current hit points), which it keeps. Run the button on each scene
+whose tokens should also get the official art.
 
 ### 🎯 Selection Mode
 
@@ -168,7 +193,7 @@ runs the full workflow (preview → confirm → replace) from the hotbar or a ke
 binding. Because the logic stays in the module, the macro is updated with it.
 
 ```js
-// Replace NPC tokens (same as the toolbar button)
+// Same as the Replace NPC Tokens button in the Actors tab
 NPCTokenReplacer.replaceNPCTokens();
 ```
 
@@ -229,10 +254,11 @@ The module offers four compendium selection modes:
 | **Everything Detected** | Also includes books released after this version (recognised from Wizards of the Coast / Foundry Gaming authorship), premium D&D content from other publishers, and anything added under **Additional Compendium Sources**. |
 | **Custom Selection** | Manually select which compendiums to use. |
 
-> **New official books.** A book released after this version is detected but not
-> used by **All Official D&D Content** until a module update adds it to the known
-> list. The GM gets a one-time notification naming it, and can use it right away
-> with **Everything Detected** or by ticking it under **Custom Selection**.
+> **New official books.** A book released after this version is used by **All
+> Official D&D Content** automatically when it is a protected premium WotC
+> package for dnd5e, and the GM gets a one-time notification. A package that only
+> claims WotC authorship is announced once but used only under **Everything
+> Detected** or when ticked under **Custom Selection**.
 
 > Upgrading from 1.4.x? The default changed: worlds that never touched this
 > setting now read **all** official content instead of just the core rulebooks.
@@ -394,7 +420,7 @@ The module integrates with Foundry VTT through these hooks:
 
 - `Hooks.once("init")`: Registers module settings
 - `Hooks.once("ready")`: Initializes the controller and pre-caches monster indexes
-- `Hooks.on("getSceneControlButtons")`: Adds the toolbar button (v12 array format uses `onClick`, v13+ object format uses `onChange`)
+- `Hooks.on("renderActorDirectory")`: Adds the replace button to the footer of the Actors sidebar tab (GM only, once per render)
 
 A global debug API is exposed via `window.NPCTokenReplacer` for console access.
 
@@ -402,7 +428,7 @@ A global debug API is exposed via `window.NPCTokenReplacer` for console access.
 
 | Command | Purpose |
 |---------|---------|
-| `npm test` | Run the unit suite (272 tests) |
+| `npm test` | Run the unit suite (287 tests) |
 | `npm run lint` | ESLint over `scripts/`, `tools/` and `tests/` |
 | `npm run validate` | Verify `module.json`, referenced files, i18n keys and template paths |
 | `npm run check` | All three, in order |

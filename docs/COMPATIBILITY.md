@@ -56,16 +56,15 @@ The same reasoning applies to the preview dialog, which goes through
 `FoundryCompat.confirmDialog()` and returns both the pending answer and a
 `close()` handle so the timeout can dismiss the dialog on either API.
 
-## 🛡️ Scene control buttons
+## 🛡️ Actors tab button
 
-v12 and v13+ disagree on both the container shape and the callback name.
-Attaching *both* callbacks makes v13 run the action twice, so
-`registerControlButton` attaches exactly one:
-
-| Foundry | `controls` shape | Callback |
-|---------|------------------|----------|
-| v12 | `Array<{ name, tools: [] }>` | `onClick` |
-| v13+ | `{ tokens: { tools: {} } }` | `onChange` |
+The replace button sits in the footer of the Actors sidebar tab. v13/v14
+`DocumentDirectory` declares `header`, `directory` and `footer` parts, and the
+`renderActorDirectory` hook (`hookEvents.renderApplicationV2`) passes the
+application's `HTMLElement`. The hook fires on every re-render, so
+`registerActorDirectoryButton` adds the button only once; if a future layout
+drops the footer part, it appends its own footer so the button stays at the
+bottom.
 
 ## 🛡️ Forward-compatible data handling
 
@@ -73,8 +72,9 @@ Attaching *both* callbacks makes v13 run the action twice, so
   `character`, `group` and `vehicle`; any type a future system version adds is
   still indexed rather than silently dropped.
 - **Source detection is layered.** An exact whitelist of the Wizards of the
-  Coast packages is trusted by default; authorship and premium signals surface
-  books released after this version as opt-in. Package-id prefixes are never a
+  Coast packages is trusted by default; a book released after this version is
+  trusted when it is both WotC-authored and a protected premium package for the
+  active system, and surfaced as opt-in on authorship alone. Package-id prefixes are never a
   signal. See [`scripts/lib/source-detector.js`](../scripts/lib/source-detector.js).
 - **`compatibility.maximum` is never set.** The manifest validator fails the
   build if it is, because it would lock the module out of future generations.
@@ -85,7 +85,7 @@ The `foundry-compat.yml` workflow runs weekly, compares the newest published
 generation against `compatibility.verified`, and opens a pull request bumping it.
 That PR carries a manual smoke-test checklist:
 
-- [ ] the toolbar button appears and runs
+- [ ] the replace button appears at the bottom of the Actors tab and runs
 - [ ] the compendium selector opens, lists sources and saves
 - [ ] the preview dialog confirms, cancels and times out
 - [ ] the progress bar renders during a replacement
