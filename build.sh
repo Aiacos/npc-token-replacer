@@ -183,6 +183,5 @@ unzip -l "releases/${OUTPUT_FILE}" | tail -n +4 | head -n -2 | while IFS= read -
     echo -e "    $line"
 done
 echo ""
-echo -e "  ${GREEN}GitHub release command:${NC}"
-echo "    gh release create v${VERSION} releases/${OUTPUT_FILE} module.json --title \"v${VERSION}\""
+echo -e "  ${GREEN}Publishing:${NC} releases are built and published by GitHub Actions → Release."
 echo ""

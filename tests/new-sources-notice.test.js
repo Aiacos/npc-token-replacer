@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import { CompendiumManager, NPCTokenReplacerController } from "../scripts/main.js";
+import { StartupNotices } from "../scripts/lib/startup-notices.js";
+import { CompendiumManager } from "../scripts/lib/compendium-manager.js";
 
 /**
  * A book released after this version is detected from its signals but not used
@@ -36,7 +37,7 @@ function useSettings(values) {
   game.settings.set = vi.fn((ns, key, value) => { settings[key] = value; return Promise.resolve(value); });
 }
 
-describe("NPCTokenReplacerController.notifyNewOfficialSources", () => {
+describe("StartupNotices.notifyNewOfficialSources", () => {
 
   beforeEach(() => {
     vi.restoreAllMocks();
@@ -52,7 +53,7 @@ describe("NPCTokenReplacerController.notifyNewOfficialSources", () => {
   });
 
   it("tells the GM once about an official-looking book that is not in use", async () => {
-    await NPCTokenReplacerController.notifyNewOfficialSources();
+    await StartupNotices.notifyNewOfficialSources();
 
     expect(ui.notifications.info).toHaveBeenCalledTimes(1);
     expect(ui.notifications.info).toHaveBeenCalledWith("NPC_REPLACER.NewOfficialSources", {
@@ -66,9 +67,9 @@ describe("NPCTokenReplacerController.notifyNewOfficialSources", () => {
   });
 
   it("does not repeat the notice on the next load", async () => {
-    await NPCTokenReplacerController.notifyNewOfficialSources();
+    await StartupNotices.notifyNewOfficialSources();
     CompendiumManager.clearCache();
-    await NPCTokenReplacerController.notifyNewOfficialSources();
+    await StartupNotices.notifyNewOfficialSources();
 
     expect(ui.notifications.info).toHaveBeenCalledTimes(1);
   });
@@ -76,7 +77,7 @@ describe("NPCTokenReplacerController.notifyNewOfficialSources", () => {
   it("names every new book once, even when a book ships several packs", async () => {
     packs.push(actorPack("dnd-future-book", "npcs"), actorPack("dnd-other-book"));
 
-    await NPCTokenReplacerController.notifyNewOfficialSources();
+    await StartupNotices.notifyNewOfficialSources();
 
     expect(ui.notifications.info.mock.calls[0][1].format.names).toBe("Future Book, Other <b>Book</b>");
     expect(JSON.parse(settings.notifiedSources)).toEqual(["dnd-future-book", "dnd-other-book"]);
@@ -85,7 +86,7 @@ describe("NPCTokenReplacerController.notifyNewOfficialSources", () => {
   it("stays silent about books that are already whitelisted", async () => {
     packs = [actorPack("dnd-monster-manual")];
 
-    await NPCTokenReplacerController.notifyNewOfficialSources();
+    await StartupNotices.notifyNewOfficialSources();
 
     expect(ui.notifications.info).not.toHaveBeenCalled();
   });
@@ -93,7 +94,7 @@ describe("NPCTokenReplacerController.notifyNewOfficialSources", () => {
   it("stays silent when the book is already in use", async () => {
     useSettings({ enabledCompendiums: '["all"]' });
 
-    await NPCTokenReplacerController.notifyNewOfficialSources();
+    await StartupNotices.notifyNewOfficialSources();
 
     expect(ui.notifications.info).not.toHaveBeenCalled();
   });
@@ -102,13 +103,23 @@ describe("NPCTokenReplacerController.notifyNewOfficialSources", () => {
   it("announces a verified new book as already enabled, once", async () => {
     packs = [actorPack("dnd-monster-manual"), actorPack("dnd-verified-book")];
 
-    await NPCTokenReplacerController.notifyNewOfficialSources();
+    await StartupNotices.notifyNewOfficialSources();
     CompendiumManager.clearCache();
-    await NPCTokenReplacerController.notifyNewOfficialSources();
+    await StartupNotices.notifyNewOfficialSources();
 
     expect(ui.notifications.info).toHaveBeenCalledTimes(1);
     expect(ui.notifications.info.mock.calls[0][0]).toBe("NPC_REPLACER.NewOfficialSourcesEnabled");
     expect(ui.notifications.info.mock.calls[0][1].format.names).toBe("Verified Book");
+  });
+
+  it("does not claim a verified book is in use when the GM's mode excludes it", async () => {
+    packs = [actorPack("dnd-monster-manual"), actorPack("dnd-verified-book")];
+    useSettings({ enabledCompendiums: '["dnd-monster-manual.monsters"]' });
+
+    await StartupNotices.notifyNewOfficialSources();
+
+    expect(ui.notifications.info).toHaveBeenCalledTimes(1);
+    expect(ui.notifications.info.mock.calls[0][0]).toBe("NPC_REPLACER.NewOfficialSources");
   });
 
   it("uses a verified new book in the default mode", () => {
@@ -122,7 +133,7 @@ describe("NPCTokenReplacerController.notifyNewOfficialSources", () => {
   it("only notifies GMs", async () => {
     game.user.isGM = false;
 
-    await NPCTokenReplacerController.notifyNewOfficialSources();
+    await StartupNotices.notifyNewOfficialSources();
 
     expect(ui.notifications.info).not.toHaveBeenCalled();
     expect(game.settings.set).not.toHaveBeenCalled();
@@ -132,7 +143,7 @@ describe("NPCTokenReplacerController.notifyNewOfficialSources", () => {
   it("stays silent when the list of notified books cannot be read", async () => {
     useSettings({ notifiedSources: new Error("not registered") });
 
-    await NPCTokenReplacerController.notifyNewOfficialSources();
+    await StartupNotices.notifyNewOfficialSources();
 
     expect(ui.notifications.info).not.toHaveBeenCalled();
   });
@@ -140,7 +151,7 @@ describe("NPCTokenReplacerController.notifyNewOfficialSources", () => {
   it("still shows the notice when remembering it fails", async () => {
     game.settings.set = vi.fn().mockRejectedValue(new Error("offline"));
 
-    await expect(NPCTokenReplacerController.notifyNewOfficialSources()).resolves.toBeUndefined();
+    await expect(StartupNotices.notifyNewOfficialSources()).resolves.toBeUndefined();
 
     expect(ui.notifications.info).toHaveBeenCalledTimes(1);
   });

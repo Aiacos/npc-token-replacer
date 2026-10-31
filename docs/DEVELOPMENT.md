@@ -42,13 +42,17 @@ npm run check      # all three, in order — run before pushing
 - an i18n key is used in source but missing from `lang/en.json`
 - a template path referenced from source does not exist
 - a Handlebars partial referenced from a template does not exist
+- `scripts/lib/version.js` `CODE_VERSION` differs from the manifest version
 
 Translation drift (a non-English file missing or over-declaring keys) is
 reported as a warning, so translations can lag behind the code without blocking
 a release.
 
 Unused i18n keys are reported as warnings rather than errors, so translations
-can stay ahead of the code.
+can stay ahead of the code. A key counts as used when it appears anywhere in
+`scripts/` as a complete `NPC_REPLACER.*` string literal; keys built at runtime
+(`NPC_REPLACER.Tier.${tier}`) are covered by a unit test. The README chapter
+icons are compared between `README.md` and `README.it.md` (warning on drift).
 
 ### 🧪 Testing conventions
 
@@ -83,11 +87,13 @@ already baked into the packaged manifest.
 
 | Workflow | Trigger | What it does |
 |----------|---------|--------------|
-| `ci.yml` | push to `main`/`develop`, every PR, manual | Lint, validate and test on Node 20 and 22; coverage artifact; package smoke test that asserts every manifest-referenced file made it into the ZIP |
+| `ci.yml` | push to `main`/`develop`, every PR, manual | Lint, validate and test on Node 20 and 22; coverage artifact; package smoke test that asserts every tracked runtime file (`scripts/`, `lang/`, `templates/`, `styles/`) made it into the ZIP |
 | `release.yml` | manual dispatch, or a `v*` tag | The full release pipeline (below) |
 | `foundry-compat.yml` | weekly cron, manual | Compares the newest published Foundry generation with `compatibility.verified` and opens a bump PR when it is behind |
-| `dependabot.yml` | weekly | Opens update PRs for workflow actions and dev dependencies |
 | `dependabot-auto-merge.yml` | daily cron, manual | Merges patch/minor Dependabot PRs whose checks are green; labels everything else `needs-review` |
+
+Dependabot itself is configured in `.github/dependabot.yml` (weekly update PRs
+for workflow actions and dev dependencies).
 
 ### Releasing
 
@@ -95,8 +101,9 @@ already baked into the packaged manifest.
 explicit `x.y.z`. The workflow then:
 
 1. runs lint and the unit suite
-2. bumps `module.json`, `package.json` and promotes the CHANGELOG
-   `[Unreleased]` section to the new version
+2. bumps `module.json`, `package.json`, `package-lock.json` and
+   `scripts/lib/version.js`, and promotes the CHANGELOG `[Unreleased]` section
+   to the new version
 3. validates the manifest **against the version being shipped**
 4. commits `chore: release vX.Y.Z`, tags it, pushes both
 5. builds the ZIP and verifies it (packaged version matches, required files present)

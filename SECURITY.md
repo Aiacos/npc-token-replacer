@@ -31,7 +31,7 @@ dependencies. These are the places where untrusted data meets it:
   actor overwrites are listed before anything changes; the settings menu is
   `restricted`. → `scripts/main.js`
 - [x] **Settings parsing** fails closed — an unreadable selection falls back to the
-  default sources, an unreadable overwrite setting to *not* overwriting.
+  core rulebooks and SRD only, an unreadable overwrite setting to *not* overwriting.
 - [x] **Secrets** — none in the repository; gitleaks runs as a pre-commit hook where
   installed. The only CI secret, `FOUNDRY_PACKAGE_TOKEN`, is optional and exposed only
   to the registry-announcement step of the release workflow.

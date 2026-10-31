@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { nextVersion, promoteChangelog, setCodeVersion } from "../../tools/bump-version.mjs";
+import { nextVersion, promoteChangelog, setCodeVersion, setLockfileVersion } from "../../tools/bump-version.mjs";
 
 /**
  * Release tooling tests.
@@ -72,5 +72,15 @@ describe("setCodeVersion", () => {
 
   it("reports rather than guesses when the constant is missing", () => {
     expect(setCodeVersion("export {};\n", "1.8.6").changed).toBe(false);
+  });
+});
+
+describe("setLockfileVersion", () => {
+  it("updates both version fields npm records for the root package", () => {
+    const lock = { version: "1.7.3", packages: { "": { version: "1.7.3" }, "node_modules/x": { version: "0.9.0" } } };
+    setLockfileVersion(lock, "1.8.7");
+    expect(lock.version).toBe("1.8.7");
+    expect(lock.packages[""].version).toBe("1.8.7");
+    expect(lock.packages["node_modules/x"].version).toBe("0.9.0");
   });
 });

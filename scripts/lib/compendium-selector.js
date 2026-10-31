@@ -36,8 +36,10 @@ class CompendiumSelectorModel {
       const raw = game.settings.get(MODULE_ID, "enabledCompendiums");
       ids = typeof raw === "string" ? JSON.parse(raw) : raw;
     } catch (error) {
-      Logger.warn(`Error parsing enabledCompendiums in form (${error.name}: ${error.message}), displaying default selection`);
-      ids = ["default"];
+      // Show what the runtime actually uses on a parse error (core), so saving the
+      // form cannot silently widen the scope
+      Logger.warn(`Error parsing enabledCompendiums in form (${error.name}: ${error.message}), displaying core selection`);
+      ids = ["core"];
     }
 
     if (!Array.isArray(ids) || ids.length === 0) return { mode: "default", ids: [] };
@@ -69,7 +71,7 @@ class CompendiumSelectorModel {
           tierLabel: game.i18n.localize(`NPC_REPLACER.Tier.${tier}`),
           enabled: mode === "all"
             || (mode === "default" && isOfficial)
-            || (mode === "core" && priority <= SourceDetector.PRIORITY.CORE)
+            || (mode === "core" && priority <= SourceDetector.PRIORITY.CORE && isOfficial)
             || (selected?.has(pack.collection) ?? false),
           isCoreFallback: priority <= SourceDetector.PRIORITY.CORE
         };
@@ -165,7 +167,14 @@ function buildCompendiumSelectorForm({ compendiumManager, onSaved }) {
         },
         position: { width: 520, height: "auto" },
         form: {
-          handler: (event, form, formData) => model.save(formData?.object ?? formData),
+          // Checked pack ids are read from the form itself: FormDataExtended may
+          // report a checkbox group as booleans rather than their values
+          handler: (event, form, formData) => {
+            const data = { ...(formData?.object ?? formData ?? {}) };
+            const boxes = form?.querySelectorAll?.('input[name="packs"]');
+            if (boxes?.length) data.packs = [...boxes].filter(box => box.checked).map(box => box.value);
+            return model.save(data);
+          },
           closeOnSubmit: true
         }
       };

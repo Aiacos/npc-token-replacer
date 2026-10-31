@@ -84,11 +84,10 @@ jobs:
           # form loads at runtime and the manifest itself.
           {
             jq -r '[ .esmodules[]?, .styles[]?, (.languages[]?.path) ] | .[]' module.json
-            printf '%s\n' module.json \
-              templates/compendium-selector-body.hbs \
-              templates/compendium-selector-footer.hbs \
-              templates/compendium-selector.html
-          } > required.txt
+            printf '%s\n' module.json
+            # Every tracked runtime file: one missing ES module breaks the whole load
+            git ls-files 'scripts/*.js' 'lang/*.json' 'templates/*' 'styles/*.css'
+          } | sort -u > required.txt
 
           MISSING=0
           while IFS= read -r file; do

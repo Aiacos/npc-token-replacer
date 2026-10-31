@@ -1,5 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import { TokenReplacer, NPCTokenReplacerController, CompendiumManager } from "../scripts/main.js";
+import { PreviewDialog } from "../scripts/lib/preview-dialog.js";
+import { TokenReplacer, NPCTokenReplacerController } from "../scripts/main.js";
+import { CompendiumManager } from "../scripts/lib/compendium-manager.js";
 import { FoundryCompat } from "../scripts/lib/foundry-compat.js";
 
 /**
@@ -9,13 +11,13 @@ import { FoundryCompat } from "../scripts/lib/foundry-compat.js";
 
 const npc = (id, name, scene) => ({
   id, name, parent: scene, uuid: `Scene.${scene.id}.Token.${id}`,
-  actor: { name, type: "npc" }
+  actorId: `actor-${name}`, actor: { name, type: "npc" }
 });
 
 function makeScene(id, name, tokenSpecs) {
   const scene = { id, name, tokens: null };
   const tokens = tokenSpecs.map(([tid, tname, type = "npc"]) =>
-    type === "npc" ? npc(tid, tname, scene) : { id: tid, name: tname, parent: scene, uuid: `Scene.${id}.Token.${tid}`, actor: { name: tname, type } });
+    type === "npc" ? npc(tid, tname, scene) : { id: tid, name: tname, parent: scene, uuid: `Scene.${id}.Token.${tid}`, actorId: `actor-${tname}`, actor: { name: tname, type } });
   scene.tokens = { contents: tokens, has: vi.fn(tid => tokens.some(t => t.id === tid)) };
   return scene;
 }
@@ -85,7 +87,7 @@ describe("NPCTokenReplacerController — all scenes", () => {
     game.packs.filter = vi.fn(pred => [pack].filter(pred));
     game.settings.get = vi.fn((ns, key) => ({ enabledCompendiums: '["default"]', overwriteImportedActors: false })[key]);
     game.actors[Symbol.iterator] = function* () {};
-    vi.spyOn(NPCTokenReplacerController, "showPreviewDialog").mockResolvedValue(true);
+    vi.spyOn(PreviewDialog, "confirm").mockResolvedValue(true);
     const replace = vi.spyOn(TokenReplacer, "replaceToken").mockResolvedValue({ id: "new" });
 
     await NPCTokenReplacerController.replaceNPCTokens();
@@ -96,9 +98,9 @@ describe("NPCTokenReplacerController — all scenes", () => {
 
   it("names the scene of every token in the preview", async () => {
     const confirm = vi.spyOn(FoundryCompat, "confirmDialog").mockReturnValue({ answer: Promise.resolve(false), close: vi.fn() });
-    const results = castle.tokens.contents.map(tokenDoc => ({ tokenDoc, creatureName: tokenDoc.name, match: null }));
+    const results = castle.tokens.contents.map(tokenDoc => ({ tokenDoc, scene: TokenReplacer.sceneOf(tokenDoc), creatureName: tokenDoc.name, match: null }));
 
-    await NPCTokenReplacerController.showPreviewDialog(results);
+    await PreviewDialog.confirm(results);
 
     const { content } = confirm.mock.calls[0][0];
     expect(content).toContain("NPC_REPLACER.PreviewColScene");

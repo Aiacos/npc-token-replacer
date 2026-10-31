@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import { CompendiumManager } from "../scripts/main.js";
+import { CompendiumManager } from "../scripts/lib/compendium-manager.js";
+import { SourceDetector } from "../scripts/lib/source-detector.js";
 
 /**
  * CompendiumManager Unit Tests
@@ -181,6 +182,20 @@ describe("CompendiumManager", () => {
       expect(result).not.toContain(adventurePack);
     });
 
+    // "core" is the conservative mode (and the fallback when the setting is
+    // unreadable): it must never pull in content that "default" would exclude
+    it('"core" mode never includes non-official packs that happen to classify as CORE', () => {
+      const manualPack = createMockPack("homebrew-monsters", "Homebrew");
+      mockPacks = [corePack, manualPack];
+      game.modules.get = vi.fn(id => (id === "homebrew-monsters" ? { id, packs: [{ type: "Actor" }] } : undefined));
+      game.settings.get = vi.fn((ns, key) => ({ enabledCompendiums: '["core"]', additionalSources: "homebrew-monsters" })[key]);
+
+      const result = CompendiumManager.getEnabledCompendiums();
+
+      expect(result).toContain(corePack);
+      expect(result).not.toContain(manualPack);
+    });
+
     it('"all" mode includes every detected compendium', () => {
       game.settings.get = vi.fn().mockReturnValue('["all"]');
       const result = CompendiumManager.getEnabledCompendiums();
@@ -296,7 +311,7 @@ describe("CompendiumManager", () => {
   describe("static getters", () => {
 
     it("OFFICIAL_WOTC_PACKAGES returns the 14 official WotC packages", () => {
-      expect(CompendiumManager.OFFICIAL_WOTC_PACKAGES).toEqual([
+      expect(SourceDetector.OFFICIAL_WOTC_PACKAGES).toEqual([
         "dnd5e",
         "dnd-monster-manual",
         "dnd-players-handbook",
@@ -314,12 +329,9 @@ describe("CompendiumManager", () => {
       ]);
     });
 
-    it("WOTC_MODULE_PREFIXES (deprecated) still returns legacy prefixes for backward compat", () => {
-      expect(CompendiumManager.WOTC_MODULE_PREFIXES).toEqual(["dnd-", "dnd5e"]);
-    });
 
     it("COMPENDIUM_PRIORITIES includes all 14 official WotC packages", () => {
-      const priorities = CompendiumManager.COMPENDIUM_PRIORITIES;
+      const priorities = SourceDetector.KNOWN_PRIORITIES;
       expect(priorities["dnd5e"]).toBe(1);
       expect(priorities["dnd-tashas-cauldron"]).toBe(1);
       expect(priorities["dnd-monster-manual"]).toBe(2);
@@ -334,7 +346,7 @@ describe("CompendiumManager", () => {
     });
 
     it("COMPENDIUM_PRIORITIES does not include non-WotC legacy packages", () => {
-      const priorities = CompendiumManager.COMPENDIUM_PRIORITIES;
+      const priorities = SourceDetector.KNOWN_PRIORITIES;
       expect(priorities["dnd-volos-guide-to-monsters"]).toBeUndefined();
       expect(priorities["dnd-mordenkainens-tome-of-foes"]).toBeUndefined();
       expect(priorities["dnd-fizbans-treasury-of-dragons"]).toBeUndefined();
@@ -344,7 +356,7 @@ describe("CompendiumManager", () => {
     });
 
     it("PRIORITY_LABELS maps priority numbers to labels", () => {
-      const labels = CompendiumManager.PRIORITY_LABELS;
+      const labels = SourceDetector.PRIORITY_LABELS;
       expect(labels[1]).toBe("FALLBACK");
       expect(labels[2]).toBe("CORE");
       expect(labels[3]).toBe("EXPANSION");

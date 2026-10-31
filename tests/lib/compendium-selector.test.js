@@ -75,9 +75,10 @@ describe("CompendiumSelectorModel", () => {
       expect(context.compendiums.filter(c => c.enabled).map(c => c.id)).toEqual([adventurePack.collection]);
     });
 
-    it("falls back to the default mode when the stored value is corrupt", () => {
+    // Mirrors the runtime fallback (core): saving the form must not widen scope
+    it("falls back to the core mode when the stored value is corrupt", () => {
       globalThis.game.settings.get = vi.fn().mockReturnValue("{not json");
-      expect(model.getContext().mode).toBe("default");
+      expect(model.getContext().mode).toBe("core");
     });
 
     it("exposes the source tier for every listed compendium", () => {
@@ -251,6 +252,32 @@ describe("buildCompendiumSelectorForm", () => {
       holder.innerHTML = markup;
       expect(holder.content.children.length, `part "${partId}"`).toBe(1);
     }
+  });
+
+  // FormDataExtended may report checkbox groups as booleans; the checked values
+  // are read from the form element itself so a custom selection always saves ids
+  it("saves the checked pack ids from the form element in custom mode", async () => {
+    globalThis.foundry = {
+      applications: {
+        api: {
+          ApplicationV2: class { static DEFAULT_OPTIONS = {}; async _prepareContext() { return {}; } _onRender() {} },
+          HandlebarsApplicationMixin: Base => class extends Base {}
+        }
+      }
+    };
+    const form = document.createElement("form");
+    form.innerHTML = `
+      <input type="radio" name="mode" value="custom" checked>
+      <input type="checkbox" name="packs" value="dnd5e.monsters" checked>
+      <input type="checkbox" name="packs" value="dnd-monster-manual.actors">
+      <input type="checkbox" name="packs" value="dnd-tomb-annihilation.actors" checked>`;
+
+    const FormClass = buildCompendiumSelectorForm({ compendiumManager, onSaved });
+    await FormClass.DEFAULT_OPTIONS.form.handler(new Event("submit"), form, { object: { mode: "custom", packs: [true, false, true] } });
+
+    expect(game.settings.set).toHaveBeenCalledWith(
+      "npc-token-replacer", "enabledCompendiums", JSON.stringify(["dnd5e.monsters", "dnd-tomb-annihilation.actors"])
+    );
   });
 
   it("routes the ApplicationV2 form handler into the shared model", async () => {

@@ -1,5 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import { TokenReplacer, TokenReplacerError } from "../scripts/main.js";
+import { ActorImporter } from "../scripts/lib/actor-importer.js";
+import { TokenReplacer } from "../scripts/main.js";
+import { TokenReplacerError } from "../scripts/lib/errors.js";
 
 /**
  * TokenReplacer.replaceToken Unit Tests
@@ -192,7 +194,7 @@ describe("TokenReplacer.replaceToken", () => {
     };
 
     // Build the lookup so replaceToken finds the existing actor
-    TokenReplacer.buildActorLookup();
+    ActorImporter.buildActorLookup();
 
     // Mock the lookup to return actor for this UUID
     // The actor lookup is keyed by compendium UUID
@@ -201,7 +203,7 @@ describe("TokenReplacer.replaceToken", () => {
 
     // Rebuild after setting correct source
     TokenReplacer.clearActorLookup();
-    TokenReplacer.buildActorLookup();
+    ActorImporter.buildActorLookup();
 
     await TokenReplacer.replaceToken(mockTokenDoc, compendiumEntry, mockPack);
 

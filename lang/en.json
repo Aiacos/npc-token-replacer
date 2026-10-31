@@ -7,12 +7,12 @@
     "DialogTimeout": "Preview dialog timed out. Please try again.",
     "AlreadyProcessing": "Token replacement is already in progress, please wait.",
     "NoTokens": "No NPC tokens found in any scene",
-    "NoSelectedNPCs": "No NPC tokens in selection (select NPC tokens or deselect all to process entire scene)",
+    "NoSelectedNPCs": "No NPC tokens in the selection. Deselect all to process every scene.",
     "NotFoundCount": "{count} creatures not found in compendiums",
     "DeleteFailedCount": "{count} token(s) replaced but old token could not be removed — duplicates may exist",
     "SummaryPartialFailure": "Replacement completed with issues: {replaced} replaced, {noMatch} not found, {importFailed} import failures, {creationFailed} creation failures",
-    "ErrorSettingsRetrieve": "Failed to read compendium settings. Using default compendiums.",
-    "ErrorSettingsParse": "Compendium settings are corrupted. Using default compendiums.",
+    "ErrorSettingsRetrieve": "Failed to read compendium settings. Using only the core rulebooks and SRD.",
+    "ErrorSettingsParse": "Compendium settings are corrupted. Using only the core rulebooks and SRD.",
     "ErrorCompendiumLoad": "Failed to load compendium: {name}",
     "ErrorIndexLoad": "Failed to load monster index. Token replacement may not work correctly.",
     "ErrorInitFailed": "NPC Token Replacer failed to initialize. Check the browser console for details.",
@@ -61,7 +61,7 @@
         "Saved": "Compendium settings saved. The index will be reloaded on next use.",
         "SaveError": "Failed to save compendium settings. Please try again.",
         "ModeCore": "Core Rulebooks + SRD Only",
-        "ModeCoreHint": "Restrict matching to the SRD and the core rulebooks (Monster Manual, Player's Handbook, Dungeon Master's Guide). Adventures and expansions are ignored.",
+        "ModeCoreHint": "Restrict matching to official SRD and rulebook content (Monster Manual, Player's Handbook, Dungeon Master's Guide, Tasha's). Adventures, expansions and non-official sources are ignored.",
         "Save": "Save Selection"
       },
       "DialogTimeout": {
@@ -100,6 +100,8 @@
     "NewOfficialSourcesEnabled": "New official D&D book detected and enabled automatically: {names}. Its creatures are now used for token replacement.",
     "ActorsSkippedLoadError": "A compendium failed to load, so D&D Beyond actors were not updated this time (tokens are still replaced). Try again once it loads.",
     "PreviewColScene": "Scene",
-    "StaleCode": "NPC Token Replacer {installed} is installed, but your browser is still running cached code from {running}. Reload the page bypassing the cache: Ctrl+Shift+R (Cmd+Shift+R on Mac), or restart the desktop app."
+    "StaleCode": "NPC Token Replacer {installed} is installed, but your browser is still running cached code from {running}. Reload the page bypassing the cache: Ctrl+Shift+R (Cmd+Shift+R on Mac), or restart the desktop app.",
+    "ErrorUnexpected": "Token replacement failed unexpectedly. Check the browser console for details.",
+    "TokensSkipped": "Left unchanged: {replaced} token(s) already replaced by this module and {inCombat} in an encounter. Select them to replace them anyway."
   }
 }

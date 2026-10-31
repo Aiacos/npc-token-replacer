@@ -75,7 +75,7 @@ Tests exist to catch regressions, not to be green.
    cancelled dialogs, missing compendiums, failed imports, network timeouts.
 4. **Both compatibility paths are tested.** Anything routed through
    `FoundryCompat` needs a test with the modern API present *and* absent.
-5. **Coverage never regresses.** Currently 298 tests; a PR that lowers the
+5. **Coverage never regresses.** Currently 318 tests; a PR that lowers the
    count needs an explicit justification in the CHANGELOG.
 6. **Cache-clearing in `beforeEach`.** Static caches leak between tests; clear
    every cache the test touches.
@@ -220,6 +220,7 @@ The same concept carries the same icon in `README.md`, `README.it.md`,
 | 🔄 | CI/CD, releases, automation |
 | 🛡️ | Compatibility and version policy |
 | 🔐 | Security |
+| 📋 | Project ledgers (TODO, tracked work) |
 | 🐛 | Troubleshooting and debugging |
 | 📜 | Principles, licence, credits |
 
@@ -266,16 +267,16 @@ Releases run from **Actions → Release → Run workflow**. Pick a bump (`patch`
 `minor`, `major`, or an explicit `x.y.z`) and the workflow does everything:
 
 1. lint + unit tests
-2. bump `module.json`, `package.json` and promote the CHANGELOG `[Unreleased]` section
+2. bump `module.json`, `package.json`, `package-lock.json` and `scripts/lib/version.js`, and promote the CHANGELOG `[Unreleased]` section
 3. validate the manifest against the exact version being shipped
 4. commit `chore: release vX.Y.Z`, tag `vX.Y.Z`, push both
-5. build and verify the ZIP (manifest version matches, required files present)
+5. build and verify the ZIP (manifest and `CODE_VERSION` match the release, every tracked runtime file present)
 6. rewrite the standalone `module.json` download/manifest URLs for this release
 7. create the GitHub release with both assets (`--prerelease` when the version has a hyphen)
 8. announce the release to the Foundry package registry
 
-Pushing a `vX.Y.Z` tag by hand runs the same pipeline from step 5, after
-verifying the tag matches `module.json`.
+Pushing a `vX.Y.Z` tag by hand runs lint, tests and validation, then the same
+pipeline from step 5, after verifying the tag matches `module.json`.
 
 > **Why `module.json` is uploaded separately**: Foundry VTT downloads the standalone `module.json` first (via the manifest URL) to discover the module version and its download URL. The ZIP also contains a `module.json` but that's only used after installation.
 
@@ -304,79 +305,94 @@ https://github.com/Aiacos/npc-token-replacer/releases/latest/download/module.jso
 
 ## 🧩 Architecture
 
-**Modular OOP design**: Core orchestration in `scripts/main.js` (~1260 lines) with supporting classes extracted to `scripts/lib/`. No build system — plain JavaScript ES modules.
+**Modular design**: `scripts/main.js` (~750 lines) is the Foundry entry point — the token workflow (`TokenReplacer`), the orchestrating controller, settings registration, the Actors-tab button and the hooks. Everything with a single, separable job lives in `scripts/lib/`. No build system — plain JavaScript ES modules; no `lib` file imports `main.js`.
 
 ### File Structure
 
 ```
 scripts/
-├── main.js                     # FolderManager, CompendiumManager, TokenReplacer,
-│                               # NPCTokenReplacerController,
-│                               # registerSettings(), registerActorDirectoryButton(), escapeHtml()
+├── main.js                     # TokenReplacer, NPCTokenReplacerController,
+│                               # registerSettings(), registerActorDirectoryButton(), hooks
 └── lib/
-    ├── logger.js               # Logger class + MODULE_ID constant
-    ├── foundry-compat.js       # FoundryCompat (feature-detected Foundry API access)
-    ├── source-detector.js      # SourceDetector (official-content signals + priority)
+    ├── actor-importer.js       # ActorImporter — world-actor resolution + D&D Beyond in-place overwrite
+    ├── compendium-docs.js      # CompendiumDocs — bounded FIFO cache of compendium documents
+    ├── compendium-manager.js   # CompendiumManager — source detection, enabled packs, monster index
     ├── compendium-selector.js  # Settings form: shared model + AppV2/AppV1 shells
+    ├── errors.js               # TokenReplacerError (phase-tagged)
+    ├── folder-manager.js       # FolderManager — import folder
+    ├── foundry-compat.js       # FoundryCompat (feature-detected Foundry API access)
+    ├── html.js                 # escapeHtml
+    ├── logger.js               # Logger + MODULE_ID
     ├── name-matcher.js         # NameMatcher (multi-stage creature name matching)
-    ├── wildcard-resolver.js    # WildcardResolver (HEAD-probe token art paths)
-    ├── progress-reporter.js    # ProgressReporter (v12/v13+ progress bar abstraction)
-    └── version.js              # CODE_VERSION — kept equal to module.json by bump-version, checked by the validator
+    ├── preview-dialog.js       # PreviewDialog — the mandatory dry-run preview (pure buildContent + confirm)
+    ├── progress-reporter.js    # ProgressReporter (notification progress bars)
+    ├── source-detector.js      # SourceDetector (official-content tiers + priority)
+    ├── startup-notices.js      # StartupNotices — new-book and stale-code notices at ready
+    ├── version.js              # CODE_VERSION — kept equal to module.json by bump-version, checked by the validator
+    └── wildcard-resolver.js    # WildcardResolver (HEAD-probe token art paths)
 
 tools/
-├── validate-manifest.mjs       # Manifest, i18n and template validation (npm run validate)
-├── bump-version.mjs            # Version bump across module.json/package.json/CHANGELOG
+├── validate-manifest.mjs       # Manifest, i18n, template, README-parity and CODE_VERSION validation (npm run validate)
+├── bump-version.mjs            # Version bump: module.json, package.json, package-lock.json, version.js, CHANGELOG
 ├── check-foundry-version.mjs   # Newest published Foundry generation vs. compatibility.verified
+├── dependabot-triage.mjs       # Decides which Dependabot PRs auto-merge
 └── publish-foundry.mjs         # Foundry Package Release API announcement
 
-.github/workflows/
-├── ci.yml                      # Lint, validate, test matrix, package smoke test
-├── release.yml                 # One-trigger release: bump → tag → build → publish
-└── foundry-compat.yml          # Weekly watch: opens a PR when Foundry ships a new generation
+.github/
+├── dependabot.yml              # Dependabot config (actions + dev dependencies, blocked majors ignored)
+└── workflows/
+    ├── ci.yml                  # Lint, validate, test matrix, package smoke test (every runtime file)
+    ├── release.yml             # One-trigger release: bump → tag → build → verify → publish
+    ├── foundry-compat.yml      # Weekly watch: opens a PR when Foundry ships a new generation
+    └── dependabot-auto-merge.yml # Daily triage of Dependabot PRs
 ```
 
-### Class Hierarchy Diagram
+### Class Diagram
 
 ```mermaid
 graph TD
-    Controller["NPCTokenReplacerController<br/>facade: validate → scan → preview → replace → report"]
+    Main["main.js<br/>hooks · settings · Actors-tab button"] --> Controller
+    Controller["NPCTokenReplacerController<br/>validate → scan → plan → preview → overwrite → replace → report"]
 
     Controller --> CM["CompendiumManager<br/>detect sources + build index"]
-    Controller --> TR["TokenReplacer<br/>token operations"]
-    Controller --> NM["NameMatcher<br/>multi-stage name matching"]
-    Controller --> PR["ProgressReporter<br/>progress bars"]
-    Controller --> FC
+    Controller --> TR["TokenReplacer<br/>collect tokens · replace on own scene"]
+    Controller --> AI["ActorImporter<br/>world actors + D&D Beyond overwrite"]
+    Controller --> PD["PreviewDialog<br/>dry-run preview"]
+    Controller --> NM["NameMatcher"]
+    Main --> SN["StartupNotices"]
 
-    CM --> SD["SourceDetector<br/>official-content signals + priority"]
-    NM --> CM
-    TR --> WR["WildcardResolver<br/>token art path resolution"]
-    TR --> FM["FolderManager<br/>import folders"]
-    PR --> FC
-
-    CS["compendium-selector.js<br/>shared model + AppV2 / AppV1 shells"] --> FC
-    CS --> CM
-
-    FC["FoundryCompat<br/>feature-detected Foundry API access"] --> API(["Foundry VTT client API"])
-
-    Logger["Logger<br/>prefixed, level-gated logging"] -.-> Controller
+    TR --> AI
+    TR --> CD["CompendiumDocs<br/>document cache"]
+    TR --> WR["WildcardResolver"]
+    AI --> CD
+    AI --> FM["FolderManager"]
+    CM --> SD["SourceDetector<br/>tiers + priority"]
+    NM -. late-bound .-> CM
+    SN --> CM
+    PD --> FC["FoundryCompat"]
+    CS["compendium-selector.js"] --> FC
 ```
 
 ### Class Responsibilities
 
 | Class | Responsibility | Key Methods |
 |-------|---------------|-------------|
-| **NPCTokenReplacerController** | Main facade that orchestrates token replacement workflow, validates prerequisites, and coordinates all operations | `replaceNPCTokens()`, `validatePrerequisites()`, `showPreviewDialog()`, `computeMatches()`, `clearCache()`, `initialize()`, `getDebugAPI()` |
-| **CompendiumManager** | Detects WOTC compendiums, manages enabled compendiums, loads monster indexes, handles compendium priorities | `detectWOTCCompendiums()`, `getEnabledCompendiums()`, `loadMonsterIndex()`, `getCompendiumPriority()`, `clearCache()` |
-| **TokenReplacer** | Handles token replacement operations, imports actors, creates new tokens with preserved properties | `replaceToken()`, `extractTokenProperties()`, `getNPCTokensToProcess()`, `getNPCTokensFromScene()`, `resetCounter()` |
-| **NameMatcher** | Normalizes creature names and matches them to compendium entries using multi-stage matching | `findMatch()`, `normalizeName()`, `selectBestMatch()` |
-| **WildcardResolver** | Resolves Monster Manual 2024 wildcard token paths (e.g., `specter-*.webp`) to actual files | `resolve()`, `resolveWildcardVariants()`, `selectVariant()`, `isWildcardPath()`, `clearCache()` |
-| **FolderManager** | Manages Actor folders for compendium imports | `getOrCreateImportFolder()`, `getFolderPath()`, `clearCache()` |
-| **Logger** | Provides centralized logging with module prefix | `log()`, `error()`, `warn()`, `debug()` |
-| **ProgressReporter** | Unified progress bar abstraction for v12/v13 (duck-typed version detection) | `start()`, `update()`, `finish()` |
-| **FoundryCompat** | Feature-detected access to Foundry APIs that moved between generations (Dialog/DialogV2, FormApplication/ApplicationV2, SceneNavigation, template loader) | `generation`, `DialogV2`, `LegacyDialog`, `supportsApplicationV2`, `confirmDialog()`, `toElement()` |
-| **SourceDetector** | Recognises official D&D packages from signals and derives their priority dynamically | `classify()`, `PRIORITY`, `TIER`, `OFFICIAL_PREFIXES` |
-| **CompendiumSelectorModel** | Framework-agnostic logic behind the settings form (context, save, mode toggling) | `getContext()`, `save()`, `attachModeListeners()` |
-| **buildCompendiumSelectorForm()** | Factory returning an ApplicationV2 shell when available, else the legacy FormApplication shell | — |
+| **NPCTokenReplacerController** | Orchestrates one run and owns the run lock; defers `clearCache()` requested mid-run | `replaceNPCTokens()`, `validatePrerequisites()`, `computeMatches()`, `planActorOverwrites()`, `clearCache()`, `initialize()`, `getDebugAPI()` |
+| **TokenReplacer** | Picks the tokens to process (all scenes or the selection, skipping already-replaced and in-combat tokens) and replaces each on its own scene | `getNPCTokensToProcess()`, `replaceToken()`, `sceneOf()`, `extractTokenProperties()`, `clearActorLookup()` |
+| **ActorImporter** | Which world actor a replaced token uses: already imported → D&D Beyond actor overwritten in place → fresh import | `buildActorLookup()`, `resolveWorldActor()`, `findOverwriteTarget()`, `overwriteImportedActor()`, `getImportedActors()`, `clear()` |
+| **CompendiumDocs** | Bounded FIFO cache of `pack.getDocument()` (max 100) | `load()`, `clear()` |
+| **PreviewDialog** | The dry-run preview: token table (with scene), D&D Beyond actor table, skipped tokens, overwrite warning; timeout | `buildContent()` (pure), `confirm()` |
+| **StartupNotices** | One-time notice for new official books; stale cached code warning | `notifyNewOfficialSources()`, `checkLoadedCodeVersion()` |
+| **CompendiumManager** | Detects official compendiums, resolves the enabled set, builds the monster index and its maps | `detectWOTCCompendiums()`, `getEnabledCompendiums()`, `loadMonsterIndex()`, `getCompendiumPriority()`, `isOfficialSource()`, `clearCache()` |
+| **SourceDetector** | Classifies a pack into a tier and derives its priority | `classify()`, `PRIORITY`, `TIER`, `OFFICIAL_WOTC_PACKAGES` |
+| **NameMatcher** | Normalizes creature names and matches them in stages | `findMatch()`, `normalizeName()`, `selectBestMatch()` |
+| **WildcardResolver** | Resolves wildcard token art (`specter-*.webp`) by HEAD probes | `resolve()`, `resolveWildcardVariants()`, `selectVariant()`, `clearCache()` |
+| **FolderManager** | Finds or creates the import folder | `getOrCreateImportFolder()`, `getFolderPath()`, `clearCache()` |
+| **FoundryCompat** | Feature-detected access to APIs that moved between generations | `confirmDialog()`, `supportsApplicationV2`, `toElement()` |
+| **ProgressReporter** | Progress bars in notifications | `start()`, `update()`, `finish()` |
+| **Logger** | Prefixed, level-gated logging | `log()`, `warn()`, `error()`, `debug()` |
+| **TokenReplacerError** | Error tagged with the phase that failed (`import_failed`, `creation_failed`, `delete_failed`) | — |
+| **CompendiumSelectorModel** / **buildCompendiumSelectorForm()** | Settings form logic and the AppV2 (else AppV1) shell | `getContext()`, `save()`, `attachModeListeners()` |
 
 ### Key Features by Component
 
@@ -389,34 +405,34 @@ graph TD
 
 **Priority System** (`SourceDetector.classify`): 4 tiers (Adventure > Expansion > Core > Fallback). Known packages keep their curated priority; unknown packages are classified from what their module actually ships — an Adventure pack means adventure content, Scene packs mean a setting book, neither means a rulebook.
 
-**Selection Modes** (`enabledCompendiums` setting): `default` = every official source (the shipped default), `core` = SRD + rulebooks only, `all` = everything detected including premium and manual sources, or an explicit list of pack collection ids.
+**Selection Modes** (`enabledCompendiums` setting): `default` = every official source (the shipped default), `core` = official SRD + rulebooks only (also the fallback when the setting is unreadable), `all` = everything detected including premium and manual sources, or an explicit list of pack collection ids.
 
 **Name Matching** (`NameMatcher.findMatch`): Exact match → variant transforms (removes prefixes/suffixes) → partial word matching
 
 **Token Replacement** (`TokenReplacer.replaceToken`): Handles wildcard token art paths (`*.webp`), resolves the world actor, creates tokens with preserved properties on the token's own scene (`tokenDoc.parent`, never `canvas.scene` — the preview is non-modal).
 
-**Token scope** (`getNPCTokensToProcess`): the selected NPC tokens if any, otherwise NPC tokens on **every scene** of the world (`game.scenes`); no scene needs to be open. Each token is mutated on its own scene (`sceneOf`), and the processed set is keyed by token **uuid** because token ids are only unique within a scene.
+**Token scope** (`getNPCTokensToProcess`): the selected NPC tokens if any, otherwise NPC tokens on **every scene** of the world (`game.scenes`); no scene needs to be open. A world-wide run skips tokens this module already created (`flags.npc-token-replacer.replaced` — re-creating them would reset hit points and conditions) and tokens in an encounter (deleting a token removes its combatant); a selection forces them. Each token is mutated on its own scene (`sceneOf`), and the processed set is keyed by token **uuid** because token ids are only unique within a scene. A selection also scopes the D&D Beyond actor pass to the selected tokens' actors.
 
 **One button, two passes** (`replaceNPCTokens`): `planActorOverwrites()` pairs every D&D Beyond Importer actor in the world with an official entry by **exact normalized name** (no variants — the overwrite is destructive); the single preview lists those and the scene's token matches; on confirm, actors are overwritten first, then tokens are replaced and reuse them. Placed tokens are independent copies of the prototype: overwriting an actor updates linked/unlinked token *stats* (unlinked via ActorDelta, keeping per-token overrides) but not their art/size — only token replacement does that.
 
-**World actor resolution** (`#getOrImportWorldActor`), in order: an actor already imported from the same compendium entry → a D&D Beyond Importer actor with the same name, overwritten in place via `update(data, {diff: false, recursive: false})` keeping folder/ownership/sort (setting `overwriteImportedActors`, listed in the preview) → a fresh import into the module folder.
+**World actor resolution** (`ActorImporter.resolveWorldActor`), in order: an actor already imported from the same compendium entry → a D&D Beyond Importer actor with the same name, overwritten in place via `update(data, {diff: false, recursive: false})` keeping folder/ownership/sort and every non-D&D-Beyond flag (setting `overwriteImportedActors`, listed in the preview, skipped entirely if any compendium failed to load) → a fresh import into the module folder.
 
-**Caches** (class private static fields):
-- `CompendiumManager.#indexCache`: Combined monster index from all enabled compendiums
-- `CompendiumManager.#wotcCompendiumsCache`: Detected WotC compendiums
-- `FolderManager.#importFolderCache`: Actor folder for imports
-- `WildcardResolver.#variantCache`: Resolved wildcard paths
-- `TokenReplacer.#actorLookup`: Session-scoped UUID→world Actor map (prevents duplicate imports); keyed by `flags.npc-token-replacer.sourceUuid`, then `_stats.compendiumSource`
-- `TokenReplacer.#importedActorsByName`: Session-scoped name→world Actor map of D&D Beyond Importer monsters (`npc` + `flags.ddbimporter.id`) not yet overwritten
-- `TokenReplacer.#compendiumDocCache`: LRU cache for `pack.getDocument()` results (max 100)
-- `NPCTokenReplacerController.#isProcessing`: Execution lock
-- `TokenReplacer.#sequentialCounter`: Token variant counter
-- `CompendiumManager.#classifications`: packCollection -> `SourceDetector` classification (tier + priority)
+**Caches** (private static fields; every one is cleared by `NPCTokenReplacerController.clearCache()` or at the end of a run):
+- `CompendiumManager.#wotcCompendiumsCache`, `#classifications`: detected packs and their tier/priority
+- `CompendiumManager.#enabledPacksCache`: the resolved enabled set
+- `CompendiumManager.#indexCache`, `#indexMap`, `#wordIndex`: monster index and its name/word maps (a partial index after a load error is served once, never cached); `#lastLoadErrors`
+- `FolderManager.#importFolderCache`: import folder
+- `WildcardResolver.#variantCache`: resolved wildcard paths (FIFO, max 200; partial network failures are not cached)
+- `CompendiumDocs` cache: `pack.getDocument()` results (FIFO, max 100)
+- `ActorImporter.#actorLookup` (per run): compendium uuid → world actor, from `flags.npc-token-replacer.sourceUuid`, then `_stats.compendiumSource`, then `flags.core.sourceId`
+- `ActorImporter.#importedActors`, `#importedActorsByName` (per run): D&D Beyond Importer monsters (`npc` + `flags.ddbimporter.id`, checked **before** `compendiumSource`, which DDB actors always carry) not yet overwritten
+- `TokenReplacer.#sequentialCounter`, `#variationMode` (per run)
+- `NPCTokenReplacerController.#isProcessing`, `#clearPending`: run lock and deferred clear
 
 ### Foundry Integration Points
 
 - `Hooks.once("init")`: Register settings
-- `Hooks.once("ready")`: Compare `CODE_VERSION` with the installed manifest (`checkLoadedCodeVersion`) and warn the GM to hard-reload if the browser runs cached older files; initialize controller, notify the GM once about new official-looking books (`notifyNewOfficialSources`, remembered in the hidden `notifiedSources` setting), pre-cache monster index
+- `Hooks.once("ready")`: Compare `CODE_VERSION` with the installed manifest (`StartupNotices.checkLoadedCodeVersion`) and warn the GM to hard-reload if the browser runs cached older files; then, **GM only**, initialize the controller, notify once about new official books (`StartupNotices.notifyNewOfficialSources`, remembered in the hidden `notifiedSources` setting) and pre-cache the monster index
 - `Hooks.on("renderActorDirectory")`: Add the replace button to the Actors tab footer — v13/v14 `DocumentDirectory` renders a `footer` part, and the hook passes the app `HTMLElement` (`hookEvents.renderApplicationV2`); it fires on every re-render, so the button is added once
 - `window.NPCTokenReplacer`: Debug API exposed globally via `NPCTokenReplacerController.getDebugAPI()`
 
@@ -430,7 +446,7 @@ graph TD
 
 **Wildcard Token Resolution**: Monster Manual 2024 uses wildcard patterns like `specter-*.webp`. The `WildcardResolver` class probes for numbered variants (1-5, 01-05, a-e) via HEAD requests and selects based on variation mode setting.
 
-**Private Fields**: All classes use ES6 private static fields (`#field`) for internal state and caching, preventing external access and ensuring encapsulation.
+**Private Fields**: State lives in ES private fields (`#field`) — static for the namespace-like classes; `ProgressReporter` and `CompendiumSelectorModel` are the deliberate instance-based exceptions.
 
 **Static Methods**: Most classes use static methods since they don't need instance state - this simplifies the API and avoids instantiation overhead.
 
@@ -452,14 +468,14 @@ NPCTokenReplacer.debugEnabled = true;     // Verbose logging, including detectio
 
 ## ⚙️ Localization
 
-All user-facing strings use `game.i18n.localize()` with keys from `lang/en.json`. Pattern: `NPC_REPLACER.<Category>.<Key>`.
+All user-facing strings use `game.i18n` with keys from `lang/en.json` (mirrored in `lang/it.json`). New keys follow `NPC_REPLACER.<Category>.<Key>`; the older flat keys (`NPC_REPLACER.Button`, …) are kept so existing translations keep working. Keys must appear as complete string literals so the validator can check them; runtime-built keys (`NPC_REPLACER.Tier.${tier}`) are covered by a unit test.
 
 ## 🧩 Utility Functions
 
-In addition to classes, three standalone utility functions remain:
-- `registerSettings()`: Registers module settings during init hook
-- `registerActorDirectoryButton(app, html)`: Adds the replace button to the bottom of the Actors sidebar tab (GM only)
-- `escapeHtml(str)`: Escapes HTML special characters for safe display
+Standalone functions:
+- `registerSettings()` (`main.js`): registers module settings during the init hook
+- `registerActorDirectoryButton(app, html)` (`main.js`): adds the replace button to the bottom of the Actors sidebar tab (GM only)
+- `escapeHtml(str)` (`lib/html.js`): escapes HTML special characters for dialogs and notifications
 
 ## ⚙️ Configuration Constants
 
@@ -472,7 +488,6 @@ const OFFICIAL_AUTHOR_PATTERN = /wizards of the coast|foundry gaming/i;
 const PRIORITY = { FALLBACK: 1, CORE: 2, EXPANSION: 3, ADVENTURE: 4 };
 const TIER = { SYSTEM, OFFICIAL, VERIFIED, PUBLISHER, PREMIUM, MANUAL, NONE };
 const KNOWN_PRIORITIES = {...};                   // Priorities for the whitelist
-const WOTC_MODULE_PREFIXES = ["dnd-", "dnd5e"];   // DEPRECATED since 1.6.0, unused
 ```
 
 ## 🧪 Quality Gate

@@ -1,11 +1,10 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import {
-  NPCTokenReplacerController,
-  CompendiumManager,
-  FolderManager,
-  TokenReplacer,
-  TokenReplacerError
-} from "../scripts/main.js";
+import { PreviewDialog } from "../scripts/lib/preview-dialog.js";
+import { ActorImporter } from "../scripts/lib/actor-importer.js";
+import { NPCTokenReplacerController, TokenReplacer } from "../scripts/main.js";
+import { CompendiumManager } from "../scripts/lib/compendium-manager.js";
+import { FolderManager } from "../scripts/lib/folder-manager.js";
+import { TokenReplacerError } from "../scripts/lib/errors.js";
 import { WildcardResolver } from "../scripts/lib/wildcard-resolver.js";
 import { ProgressReporter } from "../scripts/lib/progress-reporter.js";
 
@@ -53,62 +52,56 @@ describe("BUG-03 — NPCTokenReplacerController.clearCache propagation", () => {
 
 // ─── Test Group 2: BUG-01 — Actor lookup stale reference guard ──────────────
 
-describe("BUG-01 — TokenReplacer.buildActorLookup", () => {
+describe("BUG-01 — ActorImporter.buildActorLookup", () => {
+  const UUID = "Compendium.dnd5e.monsters.Actor.goblin";
+  let pack;
+  let scene;
 
   beforeEach(() => {
+    vi.restoreAllMocks();
     TokenReplacer.clearActorLookup();
+    FolderManager.clearCache();
+    game.settings.get = vi.fn(() => undefined);
+    pack = {
+      collection: "dnd5e.monsters", metadata: { packageName: "dnd5e", label: "SRD" },
+      getDocument: vi.fn().mockResolvedValue({
+        uuid: UUID, name: "Goblin",
+        prototypeToken: { toObject: () => ({ name: "Goblin", texture: { src: "goblin.webp" } }) }
+      })
+    };
+    scene = {
+      id: "s", tokens: { has: () => true },
+      createEmbeddedDocuments: vi.fn(async (t, data) => data),
+      deleteEmbeddedDocuments: vi.fn(async () => [])
+    };
+    game.actors.importFromCompendium = vi.fn().mockResolvedValue({ id: "imported" });
+    game.folders.filter = vi.fn(() => []);
+    game.folders.has = vi.fn(() => false);
+    globalThis.Folder.create = vi.fn().mockResolvedValue({ id: "f" });
   });
 
-  it("populates lookup map from game.actors with compendiumSource", () => {
-    const mockActor = {
-      id: "actor-1",
-      name: "Goblin",
-      _stats: { compendiumSource: "Compendium.dnd5e.monsters.Item.goblin-uuid" },
-      flags: {}
-    };
-    // Make game.actors iterable (Foundry Collection is iterable)
-    const actorsArray = [mockActor];
-    game.actors[Symbol.iterator] = function* () {
-      yield* actorsArray;
-    };
-    game.actors.has = vi.fn(() => true);
+  const run = async actors => {
+    game.actors[Symbol.iterator] = function* () { yield* actors; };
+    game.actors.has = vi.fn(id => actors.some(a => a.id === id));
+    ActorImporter.buildActorLookup();
+    await TokenReplacer.replaceToken({ id: "t", name: "Goblin", parent: scene }, { name: "Goblin", _id: "goblin" }, pack);
+    return scene.createEmbeddedDocuments.mock.calls[0][1][0].actorId;
+  };
 
-    // Verify buildActorLookup completes without error when actors have compendiumSource
-    expect(() => TokenReplacer.buildActorLookup()).not.toThrow();
+  it("reuses an actor imported from the same entry (compendiumSource)", async () => {
+    expect(await run([{ id: "actor-1", name: "Goblin", _stats: { compendiumSource: UUID }, flags: {} }])).toBe("actor-1");
+    expect(game.actors.importFromCompendium).not.toHaveBeenCalled();
   });
 
-  it("populates lookup map from game.actors with flags.core.sourceId fallback", () => {
-    const mockActor = {
-      id: "actor-2",
-      name: "Dragon",
-      _stats: {},
-      flags: { core: { sourceId: "Compendium.dnd5e.monsters.Item.dragon-uuid" } }
-    };
-    const actorsArray = [mockActor];
-    game.actors[Symbol.iterator] = function* () {
-      yield* actorsArray;
-    };
-
-    // Verify it handled the flags.core.sourceId fallback path correctly
-    expect(() => TokenReplacer.buildActorLookup()).not.toThrow();
+  it("reuses an actor recorded with the legacy flags.core.sourceId", async () => {
+    expect(await run([{ id: "actor-2", name: "Goblin", _stats: {}, flags: { core: { sourceId: UUID } } }])).toBe("actor-2");
+    expect(game.actors.importFromCompendium).not.toHaveBeenCalled();
   });
 
-  it("skips actors without compendium source", () => {
-    const mockActor = {
-      id: "actor-3",
-      name: "Homebrew NPC",
-      _stats: {},
-      flags: {}
-    };
-    const actorsArray = [mockActor];
-    game.actors[Symbol.iterator] = function* () {
-      yield* actorsArray;
-    };
-
-    // Should complete without error, actor is simply skipped
-    expect(() => TokenReplacer.buildActorLookup()).not.toThrow();
+  it("imports when the only same-named actor has no compendium source", async () => {
+    expect(await run([{ id: "homebrew", name: "Goblin", _stats: {}, flags: {} }])).toBe("imported");
+    expect(game.actors.importFromCompendium).toHaveBeenCalledTimes(1);
   });
-
 });
 
 // ─── Test Group 3: ERR-01 — loadMonsterIndex notification ───────────────────
@@ -145,6 +138,16 @@ describe("ERR-01 — CompendiumManager.loadMonsterIndex error notification", () 
       "NPC_REPLACER.ErrorCompendiumLoad",
       { name: "Monster Manual" }
     );
+  });
+
+  it("escapes the pack label in the load-error notification", async () => {
+    const failingPack = createMockPack("dnd-monster-manual", "Monster <b>Manual</b>");
+    failingPack.getIndex = vi.fn().mockRejectedValue(new Error("x"));
+    mockPacks = [failingPack];
+
+    await CompendiumManager.loadMonsterIndex(true);
+
+    expect(game.i18n.format).toHaveBeenCalledWith("NPC_REPLACER.ErrorCompendiumLoad", { name: "Monster &lt;b&gt;Manual&lt;/b&gt;" });
   });
 
   it("continues loading other packs when one fails", async () => {
@@ -391,7 +394,7 @@ describe("ERR-02 — Failure classification via replaceNPCTokens", () => {
     });
 
     // Mock showPreviewDialog to auto-confirm
-    const dialogSpy = vi.spyOn(NPCTokenReplacerController, "showPreviewDialog").mockResolvedValue(true);
+    const dialogSpy = vi.spyOn(PreviewDialog, "confirm").mockResolvedValue(true);
 
     // Mock TokenReplacer.replaceToken to throw an import error
     const replaceSpy = vi.spyOn(TokenReplacer, "replaceToken")
@@ -440,7 +443,7 @@ describe("ERR-02 — Failure classification via replaceNPCTokens", () => {
       isSelection: false
     });
 
-    const dialogSpy = vi.spyOn(NPCTokenReplacerController, "showPreviewDialog").mockResolvedValue(true);
+    const dialogSpy = vi.spyOn(PreviewDialog, "confirm").mockResolvedValue(true);
 
     // Mock TokenReplacer.replaceToken to throw a creation error (no "import" keyword)
     const replaceSpy = vi.spyOn(TokenReplacer, "replaceToken")
@@ -483,7 +486,7 @@ describe("ERR-02 — Failure classification via replaceNPCTokens", () => {
       isSelection: false
     });
 
-    const dialogSpy = vi.spyOn(NPCTokenReplacerController, "showPreviewDialog").mockResolvedValue(true);
+    const dialogSpy = vi.spyOn(PreviewDialog, "confirm").mockResolvedValue(true);
 
     // First token: import error; Second token: creation error
     const replaceSpy = vi.spyOn(TokenReplacer, "replaceToken")
@@ -538,7 +541,7 @@ describe("replaceNPCTokens loop bookkeeping", () => {
     game.settings.get = vi.fn().mockReturnValue('["all"]');
     await CompendiumManager.loadMonsterIndex(true);
     vi.spyOn(CompendiumManager, "detectWOTCCompendiums").mockReturnValue([pack]);
-    vi.spyOn(NPCTokenReplacerController, "showPreviewDialog").mockResolvedValue(true);
+    vi.spyOn(PreviewDialog, "confirm").mockResolvedValue(true);
   });
 
   const runWith = async (tokens) => {

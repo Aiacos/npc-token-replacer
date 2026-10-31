@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import { FolderManager } from "../scripts/main.js";
+import { FolderManager } from "../scripts/lib/folder-manager.js";
 
 /**
  * FolderManager.getFolderPath Unit Tests
