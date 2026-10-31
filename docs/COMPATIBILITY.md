@@ -7,8 +7,8 @@ when a new one ships.
 
 | Foundry | Status | What changes for this module |
 |---------|--------|------------------------------|
-| v12 | Minimum supported | Scene controls are an **array**, tools fire `onClick`. `Dialog` / `FormApplication` / `SceneNavigation` are globals. Progress uses `SceneNavigation.displayProgressBar()`. |
-| v13 | Supported | Scene controls are an **object**, tools fire `onChange`. AppV1 classes move to `foundry.appv1.api.*` and warn on global access. Progress uses `ui.notifications.info(label, { progress: true })`. |
+| v12 | Not supported (`compatibility.minimum` is 13) | The legacy `Dialog` / `FormApplication` fallbacks are kept only because they cost nothing and protect against partial API availability. |
+| v13 | **Minimum supported** | AppV1 classes move to `foundry.appv1.api.*` and warn on global access. The replace button lives in the Actors sidebar footer (`DocumentDirectory` `footer` part, `renderActorDirectory` hook). Progress uses `ui.notifications.info(label, { progress: true })`. |
 | v14 | **Verified** (current stable) | AppV1 classes still present but deprecated. `ApplicationV2` / `DialogV2` are the supported path. |
 | v15+ | Expected to work | No `compatibility.maximum` is declared, and every relocated API is feature-detected. |
 | v16 | Watch item | Foundry has announced removal of the AppV1 classes (`Application`, `Dialog`, `FormApplication`, `DocumentSheet`). This module already prefers the V2 path, so removal should be a no-op. |

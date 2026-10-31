@@ -7,8 +7,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+A methodical review of the whole module (runtime, architecture, tests, docs and
+pipeline — four independent reviews, every finding verified before acting).
+
 ### Fixed
+- **A world-wide run re-created tokens it had already replaced.** Since the button covers every scene, each click deleted and re-created every NPC token in the world, resetting hit points and conditions. Tokens the module creates are now tagged and skipped by later world-wide runs; selecting them still forces a replacement.
+- **Tokens in an encounter were deleted with their combatant.** A world-wide run now leaves them alone (select them to force it).
+- **A selection still overwrote every D&D Beyond actor in the world.** With tokens selected, the actor pass is limited to the actors behind them.
+- **Saving a setting while the preview was open wiped the run's state**, so every token re-imported its actor. `clearCache()` during a run is now deferred to the end of the run.
+- **"Core Rulebooks + SRD Only" could read non-official content.** It (and the fallback used when the setting cannot be read) filtered by priority alone; premium, publisher-only and manual sources without Adventure/Scene packs classify as CORE. It now requires an official source, and the settings form shows the same fallback.
+- **"New official book enabled" was announced for books the GM's mode did not use.** It is now announced as enabled only when it is actually in use, otherwise as waiting.
+- **Overwriting a D&D Beyond actor erased other modules' flags** and its sheet choice. Only the D&D Beyond Importer flags are dropped now.
+- **Custom compendium selection could save booleans instead of pack ids** if Foundry's form data reports a checkbox group as booleans; the ticked ids are read from the form itself.
+- **Players' clients indexed every compendium at startup** for nothing; only the GM does now.
+- **An unexpected error in a run vanished into the console.** The GM now gets a notification; the run lock is still released.
+- Pack labels and creature names are escaped in notifications.
+- The README's name-matching examples were wrong ("Orc War Chief" never matched); they are now verified against the matcher and say that variants apply only without an exact entry.
+- Error messages for an unreadable compendium setting named the wrong fallback.
 - **The release commit left `scripts/lib/version.js` behind.** The Release workflow committed only `module.json`, `package.json` and `CHANGELOG.md`, so tag `v1.8.6` records `CODE_VERSION` 1.8.5 while its `module.json` says 1.8.6. The published 1.8.6 ZIP is correct (it is built after the bump and was verified to announce 1.8.6); only the repository was out of step. The workflow now commits `version.js` too, and the repository is realigned.
+- `package-lock.json` still said 1.7.3: `bump-version` now updates it and the release commit includes it.
+
+### Changed
+- **Refactoring** — `main.js` from 1570 to ~750 lines, behaviour unchanged, each step behind the full test suite: the D&D Beyond / world-actor logic moved to `ActorImporter`, the compendium document cache to `CompendiumDocs`, the preview to `PreviewDialog` (with a pure `buildContent` and one shared table builder), the startup notices to `StartupNotices`, and `FolderManager`, `CompendiumManager`, `TokenReplacerError` and `escapeHtml` to their own files. Dead code and test-only pass-through getters were removed (`isProcessing`, `getSequentialCounter`, the deprecated `WOTC_MODULE_PREFIXES`, six `CompendiumManager` aliases of `SourceDetector`); priority lookups now use the detection cache instead of reclassifying inside a sort.
+- **CI** smoke test checks every tracked runtime file in the package; `dependabot-auto-merge` uses actions v7 and one failed merge no longer stops the rest.
+- **Validator** counts any complete `NPC_REPLACER.*` literal as a used key (keys also flow through helpers now); a missing key is still an error.
+- README: reverse-proxy "Cache Assets" troubleshooting, dnd5e version actually verified, corrected v13 row and core-mode description. `CLAUDE.md` and `docs/` describe the current structure. `package.json` declares the MIT licence.
+- Machine-local `.claude_settings.json` and `.auto-claude-security.json` are no longer tracked.
+- Tests: 298 → 318 (the deprecated-constant test was removed with the constant). New: end-to-end run across two scenes with a real D&D Beyond actor, the run lock, matching on the real index, creature-type filtering, tier translations, and the run-safety cases above.
+
+### Removed
+- `MIGRATION_V13.md`: entirely superseded (it listed the 1.5.0 ApplicationV2 migration as future work); `docs/COMPATIBILITY.md` covers the current state.
 
 ## [1.8.6] - 2026-10-31
 
@@ -17,8 +45,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - **Release safety:** `bump-version` updates `CODE_VERSION` together with `module.json`; the manifest validator fails if they differ; the release ZIP check now verifies **every** tracked script, language file, template and stylesheet is packaged (it checked four hard-coded files) and that the packaged `CODE_VERSION` matches the release.
-
-### Changed
 - **The button now replaces NPC tokens on every scene of the world**, not only the scene open on the canvas. Each token is replaced on its own scene; no scene needs to be open. Selecting tokens still narrows the run to those tokens. The preview gains a **Scene** column and counts the scenes involved. Tokens are tracked by uuid, since token ids are only unique within a scene. The "No active scene" check and its message were removed.
 - Tests: 287 → 298.
 
