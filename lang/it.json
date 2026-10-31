@@ -4,7 +4,7 @@
     "ProgressStart": "Sostituzione di {count} token...",
     "ProgressUpdate": "({current}/{total}) {name}",
     "Complete": "{count} token sostituiti con successo",
-    "NoTokens": "Nessun token NPC trovato nella scena corrente",
+    "NoTokens": "Nessun token PNG trovato in nessuna scena",
     "NoSelectedNPCs": "Nessun token NPC nella selezione (seleziona token NPC oppure deseleziona tutto per elaborare l'intera scena)",
     "NotFoundCount": "{count} creature non trovate nei compendi",
     "SummaryPartialFailure": "Sostituzione completata con problemi: {replaced} sostituiti, {noMatch} non trovati, {importFailed} errori di importazione, {creationFailed} errori di creazione",
@@ -12,13 +12,12 @@
     "ErrorSettingsParse": "Le impostazioni del compendio sono danneggiate. Utilizzo dei compendi predefiniti.",
     "ErrorCompendiumLoad": "Impossibile caricare il compendio: {name}",
     "ErrorFolderCreate": "Impossibile creare la cartella di importazione. Gli attori saranno importati nella radice.",
-    "NoScene": "Nessuna scena attiva trovata",
     "NoModule": "Nessun compendio D&D ufficiale trovato. Installa contenuti D&D ufficiali (Manuale dei Mostri, Avventure, ecc.)",
     "NoCompendium": "Nessun compendio disponibile per la sostituzione dei token",
     "GMOnly": "Solo il GM può sostituire i token",
     "PreviewScanning": "Scansione token...",
     "PreviewTitle": "Anteprima Sostituzione Token",
-    "PreviewSummary": "{matched} di {total} token abbinati",
+    "PreviewSummary": "{matched} di {total} token abbinati, in {scenes} scena/e",
     "PreviewColToken": "Nome Token",
     "PreviewColMatch": "Sarà abbinato come",
     "PreviewColSource": "Compendio Sorgente",
@@ -99,6 +98,8 @@
     "ActorsOverwritten": "{count} attore/i D&D Beyond sovrascritti con la versione ufficiale.",
     "ActorsOverwriteFailed": "{count} attore/i D&D Beyond non sono stati sovrascritti — dettagli nella console.",
     "NewOfficialSourcesEnabled": "Nuovo manuale D&D ufficiale rilevato e attivato automaticamente: {names}. Le sue creature ora vengono usate per la sostituzione dei token.",
-    "ActorsSkippedLoadError": "Un compendio non si è caricato, quindi gli attori D&D Beyond non sono stati aggiornati questa volta (i token vengono comunque sostituiti). Riprova quando si carica."
+    "ActorsSkippedLoadError": "Un compendio non si è caricato, quindi gli attori D&D Beyond non sono stati aggiornati questa volta (i token vengono comunque sostituiti). Riprova quando si carica.",
+    "PreviewColScene": "Scena",
+    "StaleCode": "NPC Token Replacer {installed} è installato, ma il browser sta ancora usando il codice in cache della {running}. Ricarica la pagina saltando la cache: Ctrl+Shift+R (Cmd+Shift+R su Mac), oppure riavvia l'app desktop."
   }
 }

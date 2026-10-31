@@ -10,6 +10,7 @@ import { ProgressReporter } from "./lib/progress-reporter.js";
 import { FoundryCompat } from "./lib/foundry-compat.js";
 import { SourceDetector } from "./lib/source-detector.js";
 import { buildCompendiumSelectorForm, preloadSelectorTemplates } from "./lib/compendium-selector.js";
+import { CODE_VERSION } from "./lib/version.js";
 
 /** Error with phase indicator ("import_failed", "creation_failed", "delete_failed"). */
 class TokenReplacerError extends Error {
@@ -668,13 +669,13 @@ class TokenReplacer {
     return tokenDoc.actor?.type === "npc";
   }
 
-  /** Get NPC tokens: selected if any, otherwise all scene NPCs. */
+  /**
+   * Get NPC tokens: the selected ones if any, otherwise every NPC token on every
+   * scene of the world. Each token is later replaced on its own scene
+   * (sceneOf), so scenes that are not open are handled too.
+   */
   static getNPCTokensToProcess() {
-    if (!canvas.scene) {
-      return { tokens: [], isSelection: false };
-    }
-
-    const selectedTokens = canvas.tokens.controlled;
+    const selectedTokens = canvas?.tokens?.controlled ?? [];
 
     if (selectedTokens.length > 0) {
       const selectedNPCs = selectedTokens
@@ -690,7 +691,8 @@ class TokenReplacer {
       return { tokens: [], isSelection: true };
     }
 
-    const npcTokens = canvas.scene.tokens.contents.filter(TokenReplacer.#isNPCToken);
+    const npcTokens = (game.scenes?.contents ?? [])
+      .flatMap(scene => scene.tokens.contents.filter(TokenReplacer.#isNPCToken));
     return { tokens: npcTokens, isSelection: false };
   }
 
@@ -896,11 +898,6 @@ class NPCTokenReplacerController {
       return false;
     }
 
-    if (!canvas.scene) {
-      ui.notifications.error(game.i18n.localize("NPC_REPLACER.NoScene"));
-      return false;
-    }
-
     const wotcPacks = CompendiumManager.detectWOTCCompendiums();
     if (wotcPacks.length === 0) {
       ui.notifications.error(game.i18n.localize("NPC_REPLACER.NoModule"));
@@ -926,12 +923,14 @@ class NPCTokenReplacerController {
           : "";
         rows.push(`<tr>
           <td>${escapeHtml(result.creatureName)}</td>
+          <td>${escapeHtml(TokenReplacer.sceneOf(result.tokenDoc)?.name ?? "")}</td>
           <td>${escapeHtml(result.match.entry.name)}${overwriteNote}</td>
           <td>${escapeHtml(result.match.pack.metadata.label)}</td>
         </tr>`);
       } else {
         rows.push(`<tr>
           <td>${escapeHtml(result.creatureName)}</td>
+          <td>${escapeHtml(TokenReplacer.sceneOf(result.tokenDoc)?.name ?? "")}</td>
           <td class="npc-replacer-no-match">${noMatchText}</td>
           <td>&mdash;</td>
         </tr>`);
@@ -939,7 +938,9 @@ class NPCTokenReplacerController {
     }
     const rowsHtml = rows.join("");
 
+    const sceneCount = new Set(matchResults.map(r => TokenReplacer.sceneOf(r.tokenDoc)?.id)).size;
     const summary = escapeHtml(game.i18n.format("NPC_REPLACER.PreviewSummary", {
+      scenes: sceneCount,
       matched: matched.length,
       total: matchResults.length
     }));
@@ -981,6 +982,7 @@ class NPCTokenReplacerController {
           <thead>
             <tr>
               <th>${escapeHtml(game.i18n.localize("NPC_REPLACER.PreviewColToken"))}</th>
+              <th>${escapeHtml(game.i18n.localize("NPC_REPLACER.PreviewColScene"))}</th>
               <th>${escapeHtml(game.i18n.localize("NPC_REPLACER.PreviewColMatch"))}</th>
               <th>${escapeHtml(game.i18n.localize("NPC_REPLACER.PreviewColSource"))}</th>
             </tr>
@@ -1205,7 +1207,9 @@ class NPCTokenReplacerController {
         for (const result of toReplace) {
           const { tokenDoc, creatureName } = result;
 
-          if (processedIds.has(tokenDoc.id)) {
+          // Token ids are only unique within a scene; the uuid includes the scene
+          const tokenKey = tokenDoc.uuid ?? tokenDoc.id;
+          if (processedIds.has(tokenKey)) {
             Logger.log(`Skipping already processed token: ${tokenDoc.name}`);
             continue;
           }
@@ -1215,7 +1219,7 @@ class NPCTokenReplacerController {
             continue;
           }
 
-          processedIds.add(tokenDoc.id);
+          processedIds.add(tokenKey);
 
           try {
             await TokenReplacer.replaceToken(tokenDoc, result.match.entry, result.match.pack);
@@ -1359,6 +1363,26 @@ class NPCTokenReplacerController {
     } catch (error) {
       Logger.warn(`Could not remember notified sources, the notice may repeat: ${error.message}`);
     }
+  }
+
+  /**
+   * Compare the running code with the installed manifest. After an update the
+   * browser can keep serving cached module files while module.json is already
+   * new, so the module half-works on old code; tell the GM to hard-reload.
+   * @returns {boolean} true when they match
+   */
+  static checkLoadedCodeVersion() {
+    const installed = game.modules.get(MODULE_ID)?.version;
+    if (!installed || installed === CODE_VERSION) return true;
+    Logger.warn(`Installed version ${installed} but the browser is running code ${CODE_VERSION} — cached files; hard-reload the page`);
+    if (game.user?.isGM) {
+      ui.notifications.warn("NPC_REPLACER.StaleCode", {
+        localize: true,
+        format: { installed, running: CODE_VERSION },
+        permanent: true
+      });
+    }
+    return false;
   }
 
   /** Build the window.NPCTokenReplacer debug API object. */
@@ -1523,12 +1547,13 @@ function registerActorDirectoryButton(app, html) {
 }
 
 Hooks.once("init", () => {
-  Logger.log(`Initializing NPC Token Replacer (Foundry generation ${FoundryCompat.generation || "unknown"})`);
+  Logger.log(`Initializing NPC Token Replacer v${CODE_VERSION} (Foundry generation ${FoundryCompat.generation || "unknown"})`);
   registerSettings();
   preloadSelectorTemplates();
 });
 
 Hooks.once("ready", async () => {
+  NPCTokenReplacerController.checkLoadedCodeVersion();
   try {
     await NPCTokenReplacerController.initialize();
   } catch (error) {

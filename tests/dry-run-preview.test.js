@@ -146,19 +146,20 @@ describe("NPCTokenReplacerController.showPreviewDialog", () => {
     globalThis.Dialog.confirm = OrigDialog?.confirm;
   });
 
-  it("renders a table with Token Name, Will Match As, Source Compendium columns", async () => {
+  it("renders a table with Token Name, Scene, Will Match As, Source Compendium columns", async () => {
     await NPCTokenReplacerController.showPreviewDialog(createMatchResults());
 
     expect(capturedOptions).toBeDefined();
     const content = capturedOptions.content;
     // Mock i18n.localize returns the key, so check for the localization keys
     expect(content).toContain("NPC_REPLACER.PreviewColToken");
+    expect(content).toContain("NPC_REPLACER.PreviewColScene");
     expect(content).toContain("NPC_REPLACER.PreviewColMatch");
     expect(content).toContain("NPC_REPLACER.PreviewColSource");
     // Verify it's a table with three th headers
     const thMatches = content.match(/<th>/g);
     expect(thMatches).not.toBeNull();
-    expect(thMatches.length).toBe(3);
+    expect(thMatches.length).toBe(4);
   });
 
   it("matched tokens appear before unmatched tokens in the table", async () => {
@@ -207,6 +208,7 @@ describe("NPCTokenReplacerController.showPreviewDialog", () => {
 
     // Verify i18n.format was called with correct key and counts
     expect(formatSpy).toHaveBeenCalledWith("NPC_REPLACER.PreviewSummary", {
+      scenes: expect.any(Number),
       matched: 2,
       total: 3
     });

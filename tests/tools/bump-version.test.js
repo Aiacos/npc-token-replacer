@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { nextVersion, promoteChangelog } from "../../tools/bump-version.mjs";
+import { nextVersion, promoteChangelog, setCodeVersion } from "../../tools/bump-version.mjs";
 
 /**
  * Release tooling tests.
@@ -60,4 +60,17 @@ describe("promoteChangelog", () => {
     expect(result.reason).toMatch(/Unreleased/);
   });
 
+});
+
+describe("setCodeVersion", () => {
+  // The code carries its own version so a browser running cached files can be
+  // detected; the bump must move it together with module.json.
+  it("rewrites the CODE_VERSION constant", () => {
+    const source = 'export const CODE_VERSION = "1.8.5";\n';
+    expect(setCodeVersion(source, "1.8.6")).toEqual({ content: 'export const CODE_VERSION = "1.8.6";\n', changed: true });
+  });
+
+  it("reports rather than guesses when the constant is missing", () => {
+    expect(setCodeVersion("export {};\n", "1.8.6").changed).toBe(false);
+  });
 });

@@ -107,12 +107,17 @@ jobs:
           set -euo pipefail
           ZIP="releases/${{ steps.version.outputs.module_id }}-v${{ steps.version.outputs.version }}.zip"
           CONTENTS=$(unzip -Z1 "$ZIP")
-          for file in module.json scripts/main.js scripts/lib/foundry-compat.js scripts/lib/source-detector.js; do
+          # Every tracked runtime file must ship: one missing ES module breaks the whole load
+          for file in module.json $(git ls-files 'scripts/*.js' 'lang/*.json' 'templates/*' 'styles/*.css'); do
             grep -Fxq "$file" <<< "$CONTENTS" || { echo "::error::missing from package: $file"; exit 1; }
           done
           PACKAGED_VERSION=$(unzip -p "$ZIP" module.json | jq -r '.version')
           [ "$PACKAGED_VERSION" = "${{ steps.version.outputs.version }}" ] \
             || { echo "::error::packaged module.json says $PACKAGED_VERSION"; exit 1; }
+          # The code must announce the same version, or every client would get the stale-code warning
+          PACKAGED_CODE=$(unzip -p "$ZIP" scripts/lib/version.js | sed -n 's/.*CODE_VERSION = "\([^"]*\)".*/\1/p')
+          [ "$PACKAGED_CODE" = "${{ steps.version.outputs.version }}" ] \
+            || { echo "::error::packaged CODE_VERSION says $PACKAGED_CODE"; exit 1; }
 
       - name: Point the standalone manifest at this release
         run: |

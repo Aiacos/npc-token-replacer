@@ -2,7 +2,7 @@
 
 [English](README.md) · **Italiano**
 
-Un modulo per Foundry VTT che sostituisce automaticamente i token PNG della scena con le versioni ufficiali dei compendi D&D, preservandone posizione, elevazione, dimensioni e visibilità.
+Un modulo per Foundry VTT che sostituisce automaticamente i token PNG di tutte le scene del mondo con le versioni ufficiali dei compendi D&D, preservandone posizione, elevazione, dimensioni e visibilità.
 
 ## ✨ Caratteristiche
 
@@ -147,43 +147,44 @@ giocanti, gruppi e veicoli presenti in quei compendi vengono ignorati.
 
 ## 🎯 Utilizzo
 
-1. Apri una scena con dei token PNG posizionati
-2. Apri la scheda **Attori** nella barra laterale destra
-3. **Facoltativo**: seleziona dei token specifici nella scena per sostituire solo quelli (senza selezione vengono elaborati tutti i PNG della scena)
-4. Clicca **Sostituisci Token PNG** in fondo alla scheda Attori
-5. Compare una finestra di conferma con l'elenco dei token che verranno sostituiti
-6. Clicca **Sostituisci Token** per procedere o **Annulla** per interrompere
-7. Il modulo:
+1. Apri la scheda **Attori** nella barra laterale destra — non serve avere una scena aperta
+2. **Facoltativo**: seleziona dei token specifici nella scena aperta per sostituire solo quelli (senza selezione vengono elaborati i PNG di **tutte le scene** del mondo)
+3. Clicca **Sostituisci Token PNG** in fondo alla scheda Attori
+4. Compare una finestra di conferma con l'elenco di ogni token che verrà sostituito e la sua scena
+5. Clicca **Sostituisci Token** per procedere o **Annulla** per interrompere
+6. Il modulo:
    - cerca le creature corrispondenti in tutti i compendi abilitati
+   - crea i nuovi token dal compendio nella stessa scena, mantenendo posizione, elevazione, dimensioni e visibilità originali
    - elimina i token originali
-   - crea i nuovi token dal compendio mantenendo posizione, elevazione, dimensioni e visibilità originali
-8. Una notifica riporta il risultato
+7. Una notifica riporta il risultato
 
 ### 🎯 Attori di D&D Beyond Importer
 
 Con **Sovrascrivi gli import di D&D Beyond** attivo (predefinito), il pulsante
 aggiorna anche **tutti** gli attori creati da D&D Beyond Importer nel mondo, non
-solo quelli della scena corrente:
+solo quelli che hanno un token in una scena:
 
 - ognuno viene abbinato al compendio ufficiale per **nome esatto** (una variante
   come "Goblin Warrior" non diventa mai "Goblin");
 - l'anteprima elenca, in una sezione a parte, quali attori verranno sovrascritti
   e quali non hanno una versione ufficiale e restano invariati;
-- prima vengono sovrascritti gli attori, poi vengono sostituiti i token della
-  scena, che li riusano: niente viene sovrascritto due volte;
-- funziona anche con una scena vuota.
+- prima vengono sovrascritti gli attori, poi vengono sostituiti i token, che li
+  riusano: niente viene sovrascritto due volte;
+- funziona anche se nessuna scena ha token.
 
-**Token nelle altre scene.** Un token piazzato è una copia indipendente del
-prototipo, quindi **grafica, dimensioni e nome** non cambiano quando il suo
-attore viene sovrascritto. Le **statistiche** invece seguono l'attore: un token
-collegato legge direttamente l'attore; un token non collegato è l'attore più le
-sue modifiche personali (per esempio i punti ferita attuali), che conserva. Usa
-il pulsante in ogni scena i cui token devono avere anche la grafica ufficiale.
+**Perché vengono sostituiti i token, non solo gli attori.** Un token piazzato è
+una copia indipendente del prototipo, quindi **grafica, dimensioni e nome** non
+cambiano quando il suo attore viene sovrascritto: solo sostituire il token lo fa,
+ed è per questo che il pulsante elabora tutte le scene. Le **statistiche**
+seguono comunque l'attore: un token collegato legge direttamente l'attore; un
+token non collegato è l'attore più le sue modifiche personali (per esempio i
+punti ferita attuali), che conserva. I token esclusi da un'esecuzione (perché ne
+hai selezionati altri) mantengono la grafica vecchia fino alla prossima.
 
 ### 🎯 Modalità di selezione
 
 - **Con token selezionati**: vengono sostituiti solo i PNG selezionati
-- **Senza selezione**: vengono sostituiti tutti i PNG della scena
+- **Senza selezione**: vengono sostituiti tutti i PNG di **tutte le scene** del mondo
 
 ### 🎯 Macro
 
@@ -306,7 +307,7 @@ NPCTokenReplacer.detectWOTCCompendiums();
 // Elenca i compendi attualmente abilitati
 NPCTokenReplacer.getEnabledCompendiums();
 
-// Elenca i token PNG della scena corrente
+// Elenca i token PNG della scena aperta
 NPCTokenReplacer.getNPCTokensFromScene();
 
 // Svuota l'indice dei mostri in cache (forza il ricaricamento)
@@ -336,6 +337,20 @@ Controlla il log della console per sapere quali creature non sono state trovate.
 Se una creatura esiste in un manuale ufficiale appena uscito, cerca nel log
 l'avviso su un pacchetto che **"sembra ufficiale"**: passando alla modalità
 **Tutto ciò che viene rilevato** lo userai subito.
+
+### 🐛 Il pulsante non c'è, o il modulo si comporta come una versione vecchia
+
+Dopo un aggiornamento il browser può continuare a usare i file del modulo in
+cache mentre Foundry mostra già la versione nuova. Ricarica la pagina saltando la
+cache — **Ctrl+Shift+R** (**Cmd+Shift+R** su Mac) — oppure riavvia l'app desktop.
+Dalla 1.8.6 il modulo se ne accorge da solo e mostra al GM un avviso con le due
+versioni. Per controllare a mano, esegui in console:
+
+```js
+import("/modules/npc-token-replacer/scripts/lib/version.js").then(m => console.log(m.CODE_VERSION))
+```
+
+Deve stampare la stessa versione mostrata in **Gestisci moduli**.
 
 ### 🐛 Alcuni token danno errore
 
@@ -384,7 +399,7 @@ Documentazione tecnica di supporto:
 
 | Comando | Scopo |
 |---------|-------|
-| `npm test` | Esegue la suite di test (287 test) |
+| `npm test` | Esegue la suite di test (298 test) |
 | `npm run lint` | ESLint su `scripts/`, `tools/` e `tests/` |
 | `npm run validate` | Verifica `module.json`, i file referenziati, le chiavi i18n e i percorsi dei template |
 | `npm run check` | Tutti e tre, in ordine |
