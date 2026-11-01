@@ -75,7 +75,7 @@ Tests exist to catch regressions, not to be green.
    cancelled dialogs, missing compendiums, failed imports, network timeouts.
 4. **Both compatibility paths are tested.** Anything routed through
    `FoundryCompat` needs a test with the modern API present *and* absent.
-5. **Coverage never regresses.** Currently 320 tests; a PR that lowers the
+5. **Coverage never regresses.** Currently 325 tests; a PR that lowers the
    count needs an explicit justification in the CHANGELOG.
 6. **Cache-clearing in `beforeEach`.** Static caches leak between tests; clear
    every cache the test touches.
@@ -322,6 +322,8 @@ scripts/
     ├── folder-manager.js       # FolderManager — import folder
     ├── foundry-compat.js       # FoundryCompat (feature-detected Foundry API access)
     ├── html.js                 # escapeHtml
+    ├── legacy-names.js         # LegacyNames — verified 2014 -> 2024 creature renames
+    ├── names.js                # normalizeName (leaf: shared by matcher, renames, importer)
     ├── logger.js               # Logger + MODULE_ID
     ├── name-matcher.js         # NameMatcher (multi-stage creature name matching)
     ├── preview-dialog.js       # PreviewDialog — the mandatory dry-run preview (pure buildContent + confirm)
@@ -407,7 +409,7 @@ graph TD
 
 **Selection Modes** (`enabledCompendiums` setting): `default` = every official source (the shipped default), `core` = official SRD + rulebooks only (also the fallback when the setting is unreadable), `all` = everything detected including premium and manual sources, or an explicit list of pack collection ids.
 
-**Name Matching** (`NameMatcher.findMatch`): Exact match → variant transforms (removes prefixes/suffixes) → partial word matching
+**Name Matching** (`NameMatcher.findMatch`): verified legacy rename (`LegacyNames`) → exact match → variant transforms (removes prefixes/suffixes) → partial word matching. The D&D Beyond overwrite and the world-wide actor pass accept only an exact name or a verified rename.
 
 **Token Replacement** (`TokenReplacer.replaceToken`): Handles wildcard token art paths (`*.webp`), resolves the world actor, creates tokens with preserved properties on the token's own scene (`tokenDoc.parent`, never `canvas.scene` — the preview is non-modal).
 

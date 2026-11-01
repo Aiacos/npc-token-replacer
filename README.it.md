@@ -170,7 +170,12 @@ aggiorna anche **tutti** gli attori creati da D&D Beyond Importer nel mondo, non
 solo quelli che hanno un token in una scena:
 
 - ognuno viene abbinato al compendio ufficiale per **nome esatto** (una variante
-  come "Goblin Warrior" non diventa mai "Goblin");
+  come "Goblin Warrior" non diventa mai "Goblin"), oppure tramite una breve
+  tabella di **rinomine verificate** dai manuali 2014 al Monster Manual 2024 —
+  per esempio il "Broom of Animated Attack" di Curse of Strahd è l'"Animated
+  Broom" 2024, e le varianti "Swarm of Insects (Spiders)" sono lo "Swarm of
+  Insects" 2024. Le creature che non sono veri equivalenti (come "Night Hag
+  (Coven Variant)") sono escluse di proposito;
 - l'anteprima elenca, in una sezione a parte, quali attori verranno sovrascritti
   e quali non hanno una versione ufficiale e restano invariati;
 - prima vengono sovrascritti gli attori, poi vengono sostituiti i token, che li
@@ -413,7 +418,7 @@ Documentazione tecnica di supporto:
 
 | Comando | Scopo |
 |---------|-------|
-| `npm test` | Esegue la suite di test (320 test) |
+| `npm test` | Esegue la suite di test (325 test) |
 | `npm run lint` | ESLint su `scripts/`, `tools/` e `tests/` |
 | `npm run validate` | Verifica `module.json`, i file referenziati, le chiavi i18n e i percorsi dei template |
 | `npm run check` | Tutti e tre, in ordine |

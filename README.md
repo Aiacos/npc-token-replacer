@@ -170,7 +170,12 @@ With **Overwrite D&D Beyond Imports** on (the default), the button also updates
 token on a scene:
 
 - each one is matched to the official compendium by **exact name** (a variant
-  such as "Goblin Warrior" is never turned into "Goblin");
+  such as "Goblin Warrior" is never turned into "Goblin"), or by a short table
+  of **verified renames** from 2014 books to the 2024 Monster Manual — for
+  example Curse of Strahd's "Broom of Animated Attack" is the 2024 "Animated
+  Broom", and the "Swarm of Insects (Spiders)" variants are the 2024 "Swarm of
+  Insects". Creatures that are not true equivalents (such as "Night Hag (Coven
+  Variant)") are left out on purpose;
 - the preview lists, in a separate section, which actors will be overwritten and
   which have no official version and stay unchanged;
 - actors are overwritten first, then the tokens are replaced and reuse them —
@@ -456,7 +461,7 @@ A global debug API is exposed via `window.NPCTokenReplacer` for console access.
 
 | Command | Purpose |
 |---------|---------|
-| `npm test` | Run the unit suite (320 tests) |
+| `npm test` | Run the unit suite (325 tests) |
 | `npm run lint` | ESLint over `scripts/`, `tools/` and `tests/` |
 | `npm run validate` | Verify `module.json`, referenced files, i18n keys and template paths |
 | `npm run check` | All three, in order |
