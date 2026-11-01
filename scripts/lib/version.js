@@ -4,4 +4,4 @@
  * differ. At runtime it is compared with the installed manifest: a mismatch
  * means the browser is running cached files from an older release.
  */
-export const CODE_VERSION = "1.8.7";
+export const CODE_VERSION = "1.8.8";

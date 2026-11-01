@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.8.8] - 2026-11-01
+
 ### Added
 - **Verified 2014 → 2024 renames** (`scripts/lib/legacy-names.js`). D&D Beyond Importer keeps 2014 and adventure names for some creatures the 2024 Monster Manual reprinted under another name, so their actors were never overwritten (no exact name) and a duplicate was imported instead. A short table now maps them, used by name matching, by the D&D Beyond overwrite and by the world-wide actor pass: "Broom of Animated Attack" → "Animated Broom" (identical stat block to Candlekeep's Animated Broom, which 5eTools records as reprinted as the 2024 Animated Broom) and "Swarm of Insects (Beetles/Centipedes/Spiders/Wasps)" → "Swarm of Insects" (2014 variants of an entry reprinted in 2024). Non-equivalents such as "Night Hag (Coven Variant)" are deliberately excluded. Pairs were checked against the creatures actually left unmatched in a live world.
 - `lib/names.js` holds the one name normalization, shared without import cycles.
