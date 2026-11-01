@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **Ties between books of the same priority picked the Dungeon Master's Guide over the Monster Manual.** Both are core books (priority 2) and the tie was broken alphabetically by compendium id, so `dnd-dungeon-masters-guide` won all 32 creatures the two books share. Some DMG copies are incomplete — in a live world "Animated Broom" was imported from the DMG with no actions at all. At equal priority the Monster Manual (the bestiary) now wins; higher-priority adventure and expansion books still beat it.
+- Tests: 318 → 320.
+
 ## [1.8.7] - 2026-10-31
 
 A methodical review of the whole module (runtime, architecture, tests, docs and

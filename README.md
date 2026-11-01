@@ -102,6 +102,10 @@ system to select the best match:
 
 This ensures you always get the best available token art and creature data.
 
+Within the same priority the **Monster Manual wins**: the DMG and PHB also ship
+creature actors, and some of them are incomplete (the DMG's "Animated Broom" has
+no actions). Remaining ties are broken by compendium id, so results are stable.
+
 A package outside the whitelist never receives an implicit priority. If it is
 picked up by one of the opt-in signals, it is classified from what its module
 actually ships — an Adventure compendium means adventure content (4), Scene
@@ -452,7 +456,7 @@ A global debug API is exposed via `window.NPCTokenReplacer` for console access.
 
 | Command | Purpose |
 |---------|---------|
-| `npm test` | Run the unit suite (318 tests) |
+| `npm test` | Run the unit suite (320 tests) |
 | `npm run lint` | ESLint over `scripts/`, `tools/` and `tests/` |
 | `npm run validate` | Verify `module.json`, referenced files, i18n keys and template paths |
 | `npm run check` | All three, in order |

@@ -75,7 +75,7 @@ Tests exist to catch regressions, not to be green.
    cancelled dialogs, missing compendiums, failed imports, network timeouts.
 4. **Both compatibility paths are tested.** Anything routed through
    `FoundryCompat` needs a test with the modern API present *and* absent.
-5. **Coverage never regresses.** Currently 318 tests; a PR that lowers the
+5. **Coverage never regresses.** Currently 320 tests; a PR that lowers the
    count needs an explicit justification in the CHANGELOG.
 6. **Cache-clearing in `beforeEach`.** Static caches leak between tests; clear
    every cache the test touches.
@@ -403,7 +403,7 @@ graph TD
    - WotC/Foundry Gaming authorship **and** a protected premium package declaring the active system → `verified` tier, **trusted by default** like the whitelist. Authorship alone can be typed into any manifest; `protected` packages go through Foundry's premium distribution. The GM is notified once (`notifyNewOfficialSources`).
    - Authorship alone (`publisher`), premium content from other publishers (`premium`), or package ids in `additionalSources` (`manual`) → detected, listed in the picker and (for `publisher`) announced once, but only used under "Everything Detected" or an explicit selection.
 
-**Priority System** (`SourceDetector.classify`): 4 tiers (Adventure > Expansion > Core > Fallback). Known packages keep their curated priority; unknown packages are classified from what their module actually ships — an Adventure pack means adventure content, Scene packs mean a setting book, neither means a rulebook.
+**Priority System** (`SourceDetector.classify`): 4 tiers (Adventure > Expansion > Core > Fallback); within a tier the Monster Manual wins (`SourceDetector.bestiaryRank`, the DMG/PHB ship some incomplete creature actors), then compendium id. Known packages keep their curated priority; unknown packages are classified from what their module actually ships — an Adventure pack means adventure content, Scene packs mean a setting book, neither means a rulebook.
 
 **Selection Modes** (`enabledCompendiums` setting): `default` = every official source (the shipped default), `core` = official SRD + rulebooks only (also the fallback when the setting is unreadable), `all` = everything detected including premium and manual sources, or an explicit list of pack collection ids.
 

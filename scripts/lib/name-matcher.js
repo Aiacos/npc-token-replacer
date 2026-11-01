@@ -1,4 +1,5 @@
 import { Logger } from "./logger.js";
+import { SourceDetector } from "./source-detector.js";
 
 // Late-bound dependency — set by main.js after CompendiumManager is defined
 let _CompendiumManager = null;
@@ -70,12 +71,14 @@ class NameMatcher {
       });
     }
 
-    // O(n) max-scan — no mutation of input array
-    // Tie-break by pack collection name for deterministic results
+    // O(n) max-scan — no mutation of input array.
+    // Ties: the bestiary first, then pack collection name for determinism.
+    const rank = m => SourceDetector.bestiaryRank(m.pack.metadata?.packageName);
     const best = matches.reduce((a, b) => {
       const pa = getPriority(a);
       const pb = getPriority(b);
       if (pb !== pa) return pb > pa ? b : a;
+      if (rank(a) !== rank(b)) return rank(a) < rank(b) ? a : b;
       return a.pack.collection < b.pack.collection ? a : b;
     });
     Logger.debug(`  Selected: ${best.pack.metadata.label} (priority ${getPriority(best)})`);

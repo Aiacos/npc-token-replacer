@@ -106,6 +106,22 @@ describe("selectBestMatch", () => {
     mockCompendiumManager.getCompendiumPriority.mockReturnValue(4);
     expect(NameMatcher.selectBestMatch([a, b])).toBe(a); // "aaa" < "bbb"
   });
+
+  // Live world: the DMG and the Monster Manual both ship "Animated Broom" at the
+  // same (core) priority; the DMG copy has no items. Alphabetically the DMG won
+  // all 32 such ties. The bestiary is the authoritative stat block.
+  it("prefers the Monster Manual over another book at the same priority", () => {
+    const dmg = { entry: { name: "Animated Broom" }, pack: { collection: "dnd-dungeon-masters-guide.actors", metadata: { packageName: "dnd-dungeon-masters-guide", label: "DMG" } }, priority: 2 };
+    const mm = { entry: { name: "Animated Broom" }, pack: { collection: "dnd-monster-manual.actors", metadata: { packageName: "dnd-monster-manual", label: "MM" } }, priority: 2 };
+    expect(NameMatcher.selectBestMatch([dmg, mm])).toBe(mm);
+    expect(NameMatcher.selectBestMatch([mm, dmg])).toBe(mm);
+  });
+
+  it("still lets a higher-priority book beat the Monster Manual", () => {
+    const mm = { entry: { name: "Strahd Zombie" }, pack: { collection: "dnd-monster-manual.actors", metadata: { packageName: "dnd-monster-manual", label: "MM" } }, priority: 2 };
+    const adventure = { entry: { name: "Strahd Zombie" }, pack: { collection: "dnd-ravenloft-horrors-within.actors", metadata: { packageName: "dnd-ravenloft-horrors-within", label: "Ravenloft" } }, priority: 4 };
+    expect(NameMatcher.selectBestMatch([mm, adventure])).toBe(adventure);
+  });
 });
 
 // ---------------------------------------------------------------------------

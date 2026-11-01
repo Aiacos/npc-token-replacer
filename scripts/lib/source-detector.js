@@ -133,6 +133,18 @@ class SourceDetector {
   static get KNOWN_MODULE_LABELS() { return KNOWN_MODULE_LABELS; }
   static get KNOWN_PRIORITIES() { return KNOWN_PRIORITIES; }
 
+  /**
+   * Tie-break between books of the same priority: the bestiary carries the
+   * authoritative stat blocks. The DMG and PHB also ship creature actors, some
+   * of them item-less stubs (the DMG "Animated Broom"), and alphabetical order
+   * would otherwise let "dnd-dungeon-masters-guide" win every tie.
+   * @param {string} packageName
+   * @returns {number} lower is preferred
+   */
+  static bestiaryRank(packageName) {
+    return packageName === "dnd-monster-manual" ? 0 : 1;
+  }
+
   /** Active system id, defaulting to dnd5e when the game object is unavailable. */
   static get #systemId() {
     return globalThis.game?.system?.id ?? "dnd5e";

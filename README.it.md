@@ -101,6 +101,11 @@ livelli per scegliere la versione migliore:
 
 Così ottieni sempre la migliore grafica e i migliori dati disponibili.
 
+A parità di priorità **vince il Monster Manual**: anche il DMG e il PHB contengono
+attori di creature, e alcuni sono incompleti (l'"Animated Broom" del DMG non ha
+azioni). Gli eventuali pareggi restanti si risolvono con l'id del compendio, così il
+risultato è sempre lo stesso.
+
 Un pacchetto fuori dalla whitelist non riceve mai una priorità implicita. Se
 viene raccolto da uno dei segnali opzionali, viene classificato in base a cosa
 contiene davvero: un compendio Adventure significa avventura (4), i compendi
@@ -408,7 +413,7 @@ Documentazione tecnica di supporto:
 
 | Comando | Scopo |
 |---------|-------|
-| `npm test` | Esegue la suite di test (318 test) |
+| `npm test` | Esegue la suite di test (320 test) |
 | `npm run lint` | ESLint su `scripts/`, `tools/` e `tests/` |
 | `npm run validate` | Verifica `module.json`, i file referenziati, le chiavi i18n e i percorsi dei template |
 | `npm run check` | Tutti e tre, in ordine |
