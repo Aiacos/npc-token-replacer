@@ -1,4 +1,7 @@
 import { Logger } from "./logger.js";
+import { SourceDetector } from "./source-detector.js";
+import { normalizeName } from "./names.js";
+import { LegacyNames } from "./legacy-names.js";
 
 // Late-bound dependency — set by main.js after CompendiumManager is defined
 let _CompendiumManager = null;
@@ -44,13 +47,7 @@ class NameMatcher {
 
   /** Lowercase, strip special chars, normalize whitespace (Unicode-safe). */
   static normalizeName(name) {
-    if (!name) return "";
-    return name
-      .toLowerCase()
-      .trim()
-      .replace(/-/g, " ")
-      .replace(/[^\p{L}\p{N}\s]/gu, "")
-      .replace(/\s+/g, " ");
+    return normalizeName(name);
   }
 
   /** Pick highest-priority match. Tie-breaks by pack collection name for determinism. */
@@ -70,12 +67,14 @@ class NameMatcher {
       });
     }
 
-    // O(n) max-scan — no mutation of input array
-    // Tie-break by pack collection name for deterministic results
+    // O(n) max-scan — no mutation of input array.
+    // Ties: the bestiary first, then pack collection name for determinism.
+    const rank = m => SourceDetector.bestiaryRank(m.pack.metadata?.packageName);
     const best = matches.reduce((a, b) => {
       const pa = getPriority(a);
       const pb = getPriority(b);
       if (pb !== pa) return pb > pa ? b : a;
+      if (rank(a) !== rank(b)) return rank(a) < rank(b) ? a : b;
       return a.pack.collection < b.pack.collection ? a : b;
     });
     Logger.debug(`  Selected: ${best.pack.metadata.label} (priority ${getPriority(best)})`);
@@ -88,7 +87,8 @@ class NameMatcher {
    * Prioritizes adventures/expansions > Monster Manual > SRD.
    */
   static findMatch(creatureName, index) {
-    const normalizedSearch = NameMatcher.normalizeName(creatureName);
+    // A verified 2014 -> 2024 rename is searched under its current name
+    const normalizedSearch = LegacyNames.canonical(NameMatcher.normalizeName(creatureName));
 
     if (!normalizedSearch) {
       Logger.log("Empty creature name provided");

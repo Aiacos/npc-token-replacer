@@ -102,6 +102,10 @@ system to select the best match:
 
 This ensures you always get the best available token art and creature data.
 
+Within the same priority the **Monster Manual wins**: the DMG and PHB also ship
+creature actors, and some of them are incomplete (the DMG's "Animated Broom" has
+no actions). Remaining ties are broken by compendium id, so results are stable.
+
 A package outside the whitelist never receives an implicit priority. If it is
 picked up by one of the opt-in signals, it is classified from what its module
 actually ships — an Adventure compendium means adventure content (4), Scene
@@ -166,7 +170,12 @@ With **Overwrite D&D Beyond Imports** on (the default), the button also updates
 token on a scene:
 
 - each one is matched to the official compendium by **exact name** (a variant
-  such as "Goblin Warrior" is never turned into "Goblin");
+  such as "Goblin Warrior" is never turned into "Goblin"), or by a short table
+  of **verified renames** from 2014 books to the 2024 Monster Manual — for
+  example Curse of Strahd's "Broom of Animated Attack" is the 2024 "Animated
+  Broom", and the "Swarm of Insects (Spiders)" variants are the 2024 "Swarm of
+  Insects". Creatures that are not true equivalents (such as "Night Hag (Coven
+  Variant)") are left out on purpose;
 - the preview lists, in a separate section, which actors will be overwritten and
   which have no official version and stay unchanged;
 - actors are overwritten first, then the tokens are replaced and reuse them —
@@ -452,7 +461,7 @@ A global debug API is exposed via `window.NPCTokenReplacer` for console access.
 
 | Command | Purpose |
 |---------|---------|
-| `npm test` | Run the unit suite (318 tests) |
+| `npm test` | Run the unit suite (325 tests) |
 | `npm run lint` | ESLint over `scripts/`, `tools/` and `tests/` |
 | `npm run validate` | Verify `module.json`, referenced files, i18n keys and template paths |
 | `npm run check` | All three, in order |

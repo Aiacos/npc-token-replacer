@@ -18,6 +18,7 @@ import { CompendiumDocs } from "./lib/compendium-docs.js";
 import { ActorImporter } from "./lib/actor-importer.js";
 import { PreviewDialog } from "./lib/preview-dialog.js";
 import { StartupNotices } from "./lib/startup-notices.js";
+import { LegacyNames } from "./lib/legacy-names.js";
 
 /**
  * Handles token replacement: extract properties, import actors, create new tokens.
@@ -308,8 +309,9 @@ class NPCTokenReplacerController {
 
   /**
    * Pair every D&D Beyond actor in the world with its official version, by
-   * exact normalized name only: overwriting is destructive, so a variant
-   * ("Goblin Warrior" -> "Goblin") is never applied to a whole actor.
+   * exact normalized name — or a verified 2014 -> 2024 rename (LegacyNames).
+   * Overwriting is destructive, so a variant ("Goblin Warrior" -> "Goblin") is
+   * never applied to a whole actor.
    * @param {Set<string>|null} scopeActorIds when the GM selected tokens, only their actors
    * @returns {{actor: Actor, match: {entry, pack}|null}[]} unmatched actors are kept, for the preview
    */
@@ -327,7 +329,7 @@ class NPCTokenReplacerController {
       .filter(actor => !scopeActorIds || scopeActorIds.has(actor.id))
       .map(actor => ({
         actor,
-        match: NameMatcher.selectBestMatch(indexMap?.get(NameMatcher.normalizeName(actor.name)) ?? [])
+        match: NameMatcher.selectBestMatch(indexMap?.get(LegacyNames.canonical(NameMatcher.normalizeName(actor.name))) ?? [])
       }));
   }
 

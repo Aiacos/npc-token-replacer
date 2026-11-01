@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Verified 2014 → 2024 renames** (`scripts/lib/legacy-names.js`). D&D Beyond Importer keeps 2014 and adventure names for some creatures the 2024 Monster Manual reprinted under another name, so their actors were never overwritten (no exact name) and a duplicate was imported instead. A short table now maps them, used by name matching, by the D&D Beyond overwrite and by the world-wide actor pass: "Broom of Animated Attack" → "Animated Broom" (identical stat block to Candlekeep's Animated Broom, which 5eTools records as reprinted as the 2024 Animated Broom) and "Swarm of Insects (Beetles/Centipedes/Spiders/Wasps)" → "Swarm of Insects" (2014 variants of an entry reprinted in 2024). Non-equivalents such as "Night Hag (Coven Variant)" are deliberately excluded. Pairs were checked against the creatures actually left unmatched in a live world.
+- `lib/names.js` holds the one name normalization, shared without import cycles.
+
+### Fixed
+- **Ties between books of the same priority picked the Dungeon Master's Guide over the Monster Manual.** Both are core books (priority 2) and the tie was broken alphabetically by compendium id, so `dnd-dungeon-masters-guide` won all 32 creatures the two books share. Some DMG copies are incomplete — in a live world "Animated Broom" was imported from the DMG with no actions at all. At equal priority the Monster Manual (the bestiary) now wins; higher-priority adventure and expansion books still beat it.
+- Tests: 318 → 325.
+
 ## [1.8.7] - 2026-10-31
 
 A methodical review of the whole module (runtime, architecture, tests, docs and

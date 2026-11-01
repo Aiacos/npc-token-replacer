@@ -3,6 +3,7 @@ import { NameMatcher } from "./name-matcher.js";
 import { FolderManager } from "./folder-manager.js";
 import { CompendiumDocs } from "./compendium-docs.js";
 import { TokenReplacerError } from "./errors.js";
+import { LegacyNames } from "./legacy-names.js";
 
 /**
  * Resolves the world Actor a replaced token points at, and owns the D&D Beyond
@@ -37,7 +38,8 @@ class ActorImporter {
         // world via importFromCompendium(<its own DDB compendium>), so real DDB
         // actors always carry one and would otherwise look already-official
         ActorImporter.#importedActors.push(a);
-        const key = NameMatcher.normalizeName(a.name);
+        // Indexed under the 2024 name, so a legacy-named DDB actor is found as the target
+        const key = LegacyNames.canonical(NameMatcher.normalizeName(a.name));
         if (!ActorImporter.#importedActorsByName.has(key)) ActorImporter.#importedActorsByName.set(key, a);
       } else {
         const uuid = a._stats?.compendiumSource || a.flags?.core?.sourceId;
